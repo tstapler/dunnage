@@ -1,0 +1,17 @@
+[package]
+name = "metascope-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "btrfs metadata-cost scanner and allocation health logic for metascope"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+ignore.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
