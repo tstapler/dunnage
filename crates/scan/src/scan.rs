@@ -6,33 +6,39 @@
 //! deterministic regardless of thread scheduling. The one exception is hard links: with several
 //! threads the directory that "owns" a multiply-linked inode is whichever thread saw it first.
 
-use crate::estimate::{EntryInfo, Kind, Stats};
+use crate::btrfs_tree::BtrfsTreeBackend;
+use crate::estimate::Stats;
+use crate::index::{Backend, CollectRequest, DirInfo};
+use crate::walker::{CacheConfig, WalkerBackend};
 use crate::{Error, Result};
-use ignore::{DirEntry, WalkBuilder, WalkState};
 use serde::Serialize;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::hash::{Hash, Hasher};
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const LINK_SHARDS: usize = 64;
 const MAX_LOCKFILE_BYTES: u64 = 32 << 20;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackendChoice {
+    /// Tree search when running as root on btrfs, otherwise the walker.
+    Auto,
+    Walker,
+    BtrfsTree,
+}
 
 #[derive(Debug, Clone)]
 pub struct ScanOptions {
     pub roots: Vec<PathBuf>,
-    /// Apply .gitignore/.ignore filters. Off by default: those filters hide exactly the
-    /// directories (`node_modules`, `target/`) that cost the most metadata.
-    pub respect_gitignore: bool,
-    /// Descend into other mounts and btrfs subvolumes (distinct `st_dev`).
+    pub backend: BackendChoice,
+    /// Descend into other mounts and btrfs subvolumes (distinct `st_dev`). Walker only.
     pub cross_fs: bool,
     pub max_duration: Option<Duration>,
     /// Walker threads; 0 picks 3x CPUs (capped at 64) because the walk is I/O-bound.
     pub threads: usize,
+    /// Walker incremental cache; `None` disables it.
+    pub cache: Option<CacheConfig>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
@@ -173,137 +179,14 @@ pub struct ScanReport {
     /// True when `max_duration` cut the walk short, so figures are partial.
     pub truncated: bool,
     pub errors: u64,
+    pub backend: String,
+    /// Whether `extents` in every `Stats` is read from the filesystem (true) or estimated.
+    pub extents_exact: bool,
+    pub dirs_listed: u64,
+    pub dirs_cached: u64,
+    pub notes: Vec<String>,
     pub walk_ms: u128,
     pub total_ms: u128,
-}
-
-#[derive(Default)]
-struct DirInfo {
-    stats: Stats,
-    mtime: i64,
-    has_package_json: bool,
-    has_cargo_toml: bool,
-    git_file: bool,
-}
-
-impl DirInfo {
-    fn merge(&mut self, o: &DirInfo) {
-        self.stats.merge(&o.stats);
-        self.mtime = self.mtime.max(o.mtime);
-        self.has_package_json |= o.has_package_json;
-        self.has_cargo_toml |= o.has_cargo_toml;
-        self.git_file |= o.git_file;
-    }
-}
-
-struct Shared {
-    parts: Mutex<Vec<HashMap<PathBuf, DirInfo>>>,
-    errors: AtomicU64,
-    stop: AtomicBool,
-    deadline: Option<Instant>,
-    links: [Mutex<HashSet<(u64, u64)>>; LINK_SHARDS],
-}
-
-impl Shared {
-    fn first_sighting(&self, dev: u64, ino: u64) -> bool {
-        self.links[(ino as usize) % LINK_SHARDS]
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert((dev, ino))
-    }
-
-    fn expired(&self) -> bool {
-        if self.stop.load(Ordering::Relaxed) {
-            return true;
-        }
-        if self.deadline.is_some_and(|d| Instant::now() > d) {
-            self.stop.store(true, Ordering::Relaxed);
-            return true;
-        }
-        false
-    }
-}
-
-/// Per-thread accumulator; flushed into `Shared` when the walker drops the visitor.
-struct Local<'a> {
-    dirs: HashMap<PathBuf, DirInfo>,
-    errors: u64,
-    visited: u64,
-    shared: &'a Shared,
-}
-
-impl Drop for Local<'_> {
-    fn drop(&mut self) {
-        self.shared.errors.fetch_add(self.errors, Ordering::Relaxed);
-        let dirs = std::mem::take(&mut self.dirs);
-        self.shared
-            .parts
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(dirs);
-    }
-}
-
-impl Local<'_> {
-    fn visit(&mut self, item: std::result::Result<DirEntry, ignore::Error>) -> WalkState {
-        self.visited += 1;
-        if self.visited.is_multiple_of(1024) && self.shared.expired() {
-            return WalkState::Quit;
-        }
-        let Ok(entry) = item else {
-            self.errors += 1;
-            return WalkState::Continue;
-        };
-        let Ok(md) = entry.metadata() else {
-            self.errors += 1;
-            return WalkState::Continue;
-        };
-        let kind = kind_of(md.file_type());
-        let first_link =
-            kind == Kind::Dir || md.nlink() <= 1 || self.shared.first_sighting(md.dev(), md.ino());
-        let info = EntryInfo {
-            kind,
-            size: md.len(),
-            allocated: md.blocks() * 512,
-            name_len: entry.file_name().len() as u64,
-            first_link,
-            counts_dir_entry: entry.depth() > 0,
-        };
-        let path = entry.path();
-        if kind == Kind::Dir {
-            let d = self.dirs.entry(path.to_path_buf()).or_default();
-            d.stats.add_entry(&info);
-            d.mtime = md.mtime();
-        } else if let Some(parent) = path.parent() {
-            if !self.dirs.contains_key(parent) {
-                self.dirs.insert(parent.to_path_buf(), DirInfo::default());
-            }
-            if let Some(d) = self.dirs.get_mut(parent) {
-                d.stats.add_entry(&info);
-                if kind == Kind::File {
-                    match entry.file_name().to_str() {
-                        Some("package.json") => d.has_package_json = true,
-                        Some("Cargo.toml") => d.has_cargo_toml = true,
-                        Some(".git") => d.git_file = true,
-                        _ => {}
-                    }
-                }
-            }
-        }
-        WalkState::Continue
-    }
-}
-
-fn kind_of(ft: std::fs::FileType) -> Kind {
-    if ft.is_dir() {
-        Kind::Dir
-    } else if ft.is_symlink() {
-        Kind::Symlink
-    } else if ft.is_file() {
-        Kind::File
-    } else {
-        Kind::Other
-    }
 }
 
 fn special_category(
@@ -375,10 +258,8 @@ fn age_secs(mtime: i64) -> u64 {
 fn build_report(
     roots: &[PathBuf],
     mut dirs: Vec<(PathBuf, DirInfo)>,
-    truncated: bool,
-    errors: u64,
-    walk_ms: u128,
     started: Instant,
+    walk_ms: u128,
 ) -> ScanReport {
     // Path ordering is component-wise, so every directory's descendants follow it contiguously.
     dirs.sort_by(|a, b| a.0.cmp(&b.0));
@@ -541,8 +422,13 @@ fn build_report(
         build_roots,
         duplicates,
         totals,
-        truncated,
-        errors,
+        truncated: false,
+        errors: 0,
+        backend: String::new(),
+        extents_exact: false,
+        dirs_listed: 0,
+        dirs_cached: 0,
+        notes: Vec::new(),
         walk_ms,
         total_ms: started.elapsed().as_millis(),
     }
@@ -571,67 +457,43 @@ pub fn scan(opts: &ScanOptions) -> Result<ScanReport> {
         })?);
     }
     let roots = dedupe_roots(&roots);
-    let Some((first, rest)) = roots.split_first() else {
+    if roots.is_empty() {
         return Err(Error::Other("no scan roots given".into()));
-    };
+    }
 
     let started = Instant::now();
-    let mut builder = WalkBuilder::new(first);
-    for r in rest {
-        builder.add(r);
-    }
     let threads = if opts.threads == 0 {
-        std::thread::available_parallelism()
-            .map_or(4, usize::from)
-            .min(16)
+        (std::thread::available_parallelism().map_or(4, usize::from) * 3).min(64)
     } else {
         opts.threads
     };
-    builder
-        .hidden(false)
-        .follow_links(false)
-        .same_file_system(!opts.cross_fs)
-        .threads(threads);
-    if !opts.respect_gitignore {
-        builder.standard_filters(false);
-    }
-
-    let shared = Shared {
-        parts: Mutex::new(Vec::new()),
-        errors: AtomicU64::new(0),
-        stop: AtomicBool::new(false),
+    let req = CollectRequest {
+        roots: &roots,
+        cross_fs: opts.cross_fs,
         deadline: opts.max_duration.map(|d| started + d),
-        links: std::array::from_fn(|_| Mutex::new(HashSet::new())),
+        threads,
     };
-    builder.build_parallel().run(|| {
-        let mut local = Local {
-            dirs: HashMap::new(),
-            errors: 0,
-            visited: 0,
-            shared: &shared,
-        };
-        Box::new(move |item| local.visit(item))
-    });
+    let walker = WalkerBackend {
+        cache: opts.cache.clone(),
+    };
+    let backend: &dyn Backend = match opts.backend {
+        BackendChoice::Walker => &walker,
+        BackendChoice::BtrfsTree => &BtrfsTreeBackend,
+        BackendChoice::Auto if rustix::process::geteuid().is_root() => &BtrfsTreeBackend,
+        BackendChoice::Auto => &walker,
+    };
+    let collected = backend.collect(&req)?;
     let walk_ms = started.elapsed().as_millis();
 
-    let mut merged: HashMap<PathBuf, DirInfo> = HashMap::new();
-    for part in shared
-        .parts
-        .into_inner()
-        .unwrap_or_else(PoisonError::into_inner)
-    {
-        for (k, v) in part {
-            merged.entry(k).or_default().merge(&v);
-        }
-    }
-    Ok(build_report(
-        &roots,
-        merged.into_iter().collect(),
-        shared.stop.load(Ordering::Relaxed),
-        shared.errors.load(Ordering::Relaxed),
-        walk_ms,
-        started,
-    ))
+    let mut report = build_report(&roots, collected.dirs, started, walk_ms);
+    report.truncated = collected.truncated;
+    report.errors = collected.errors;
+    report.backend = backend.name().to_string();
+    report.extents_exact = backend.extents_exact();
+    report.dirs_listed = collected.dirs_listed;
+    report.dirs_cached = collected.dirs_cached;
+    report.notes = collected.notes;
+    Ok(report)
 }
 
 #[cfg(test)]
@@ -650,10 +512,11 @@ mod tests {
     fn opts(root: &Path) -> ScanOptions {
         ScanOptions {
             roots: vec![root.to_path_buf()],
-            respect_gitignore: false,
+            backend: BackendChoice::Walker,
             cross_fs: false,
             max_duration: None,
             threads: 2,
+            cache: None,
         }
     }
 
@@ -745,24 +608,6 @@ mod tests {
         assert_eq!(
             r.totals.node_modules.inodes + r.totals.cargo_target.inodes,
             0
-        );
-    }
-
-    #[test]
-    fn respect_gitignore_hides_ignored_dirs() {
-        let root = tmp("ignore");
-        fs::create_dir_all(root.join("repo/.git")).unwrap();
-        fs::write(root.join("repo/.gitignore"), "build\n").unwrap();
-        fs::create_dir_all(root.join("repo/build")).unwrap();
-        fs::write(root.join("repo/build/o"), "1").unwrap();
-        let all = scan(&opts(&root)).unwrap();
-        let mut o = opts(&root);
-        o.respect_gitignore = true;
-        let some = scan(&o).unwrap();
-        let _ = fs::remove_dir_all(&root);
-        assert_eq!(
-            all.totals.combined().inodes - some.totals.combined().inodes,
-            2
         );
     }
 

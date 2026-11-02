@@ -34,7 +34,7 @@ Each directory entry is `lstat`ed once. Per-bucket (depth-limited roll-up) count
 | directory entries, name bytes | exact | one per link |
 | size, allocated bytes | exact | `st_size`, `st_blocks*512` |
 | inline files/bytes | inferred | `st_blocks == 0 && st_size > 0` |
-| extent count | **estimate, lower bound** | `ceil(size / 128 MiB)`; ignores fragmentation, compression (128 KiB extents), reflinks |
+| extent count | walker: **estimate, lower bound**; tree search: exact | walker: `ceil(size / 128 MiB)`, ignores fragmentation, compression (128 KiB extents), reflinks; tree search: count of `EXTENT_DATA` items |
 | metadata bytes | **estimate** | item-size model below |
 
 Model (logical bytes; every item pays a 25-byte leaf item header):
@@ -50,18 +50,102 @@ and block-group trees, nodatacow (no csums), DUP/RAID (on-disk is 2x logical for
 The model's item sizes come from the btrfs on-disk format as I recall it and are unverified
 against `btrfs inspect-internal dump-tree`; calibration (below) is the planned check.
 
-Why not FIEMAP / `compsize`: FIEMAP returns exact extent counts per file but costs one ioctl per
-file (hundreds of thousands here) and needs a libc dependency; `compsize`/`btrfs inspect-internal
-dump-tree` need root. v0 trades accuracy for a root-free, single-pass walk. FIEMAP is the next
-accuracy step, applied only to the top buckets.
+Why not FIEMAP: it returns exact extent counts per file but costs one ioctl per file (millions
+here). The tree-search backend below reads the same facts for the whole subvolume in a few
+thousand large ioctls instead, at the price of needing root.
+
+## Backends
+
+`scan` consumes per-directory counters (`index::DirInfo`) from a `Backend` (`index.rs`). Everything
+after collection (build-dir and worktree classification, duplicate clusters, reporting) is shared
+and backend-independent, so a TUI or daemon can reuse either backend.
+
+### Walker (no root) with incremental cache
+
+Implemented in `walker.rs`, `cache.rs`.
+
+- Traversal: custom thread pool (LIFO work stack, 3x CPUs capped at 64 because the work is I/O
+  bound). Per directory: `fstatat(AT_FDCWD, path)` for inode and mtime; on a miss, `openat` with
+  `O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_NOATIME` (falls back without `O_NOATIME` on EPERM, which the
+  kernel returns for files you do not own), one `getdents` pass, and `fstatat(dirfd, name)` for each
+  non-directory child. Subdirectories are identified by `d_type` and are not lstat'ed by their
+  parent, so each directory costs exactly one lstat from its own work item.
+- Cache (`~/.cache/metascope/walker.cache`, one file for all roots): a record per directory with
+  inode, mtime (sec, nsec), listing time, the counters for its non-directory children, marker
+  flags, and subdirectory names. A record is reused when inode and mtime match and it is younger
+  than `--cache-max-age-hours` (default 24). A hit costs one lstat and no open/readdir/per-file
+  lstat. Atomic replace on save (temp file + rename).
+- What stays exact on a hit: entry names, entry counts, subdirectories, marker files. Creating,
+  deleting or renaming an entry bumps the parent's mtime.
+- What can go stale on a hit: size, allocated bytes and extents of files edited in place (a write
+  does not change the directory mtime), and hard-link ownership. The max-age bound and `--rescan`
+  limit this; counts that drive the ranking (inodes, dirs, entries) are unaffected.
+- Racy timestamps: a directory modified within 2 s of being listed is stored as already expired,
+  because a second change in the same timestamp tick would be invisible (same issue as git's racy
+  index). The unit test `recently_modified_dirs_are_not_trusted` covers it.
+- Truncated runs keep old records for unvisited directories; complete runs drop records under the
+  scanned roots that were not seen (deleted directories).
+
+Why not inotify to keep the index live: it needs one watch per directory. This machine has
+`fs.inotify.max_user_watches` = 532,480 (VERIFIED: `/proc/sys/fs/inotify/max_user_watches`), and a
+walk of `~/Programming` alone lists 413,720 directories today (VERIFIED, scan output below) with
+about 610K reported for the full tree (coordinator's prototype). Raising the limit needs root and
+costs kernel memory per watch (INFERRED). The cache's mtime check gets most of the benefit without
+any watches.
+
+### btrfs tree search (root)
+
+Implemented in `btrfs_tree.rs`; **prototype**. Read-only: `BTRFS_IOC_TREE_SEARCH_V2` only searches.
+
+- Needs `CAP_SYS_ADMIN`. Subvolume id comes from the `subvolid=` mount option; the mount root is
+  assumed to be the subvolume root (not true for bind mounts of a subdirectory).
+- Streams keys `(objectid, type, offset)` from `(256, 0, 0)` in 4 MiB batches (grows on
+  `EOVERFLOW`), resuming at the successor of the last key. Modern kernels compare whole keys against
+  the min/max, so resuming is exact (INFERRED from kernel source recollection; not exercised live).
+- One pass suffices because an inode's items are contiguous and ordered
+  INODE_ITEM < INODE_REF < INODE_EXTREF < XATTR < DIR_ITEM < DIR_INDEX < EXTENT_DATA.
+- Exact outputs per directory: inode count by type, links (every INODE_REF/EXTREF, so hard links
+  are visible), name bytes, size and `nbytes` from the inode item, regular/prealloc extent count
+  (holes excluded), inline extent bytes. Paths come from parent inode plus ref name; orphans and
+  other-subvolume stubs are dropped.
+- Not counted: xattr items and their bytes, DIR_ITEM/DIR_INDEX item counts (the cost model derives
+  them from links), the csum tree itself (still modeled as about 1 B per KiB).
+- Cost shape (INFERRED): the tree is ordered by inode number, not path, so the pass always reads
+  the whole subvolume and filters to the requested roots afterwards. It should beat the walker on
+  whole-home or whole-fs scans and lose on a small subtree.
+- Incremental option (not built, INFERRED): the search key has `min_transid`, so a later pass can
+  ask only for items changed since the last generation. Deletions are invisible to that, so it
+  needs an occasional full pass or the fanotify daemon below.
+- Verified here: the ioctl request number is accepted by the running kernel (an unprivileged call
+  returns EPERM, not ENOTTY/EINVAL), and framing, aggregation and path reconstruction pass unit
+  tests on synthetic buffers. Not verified: any run against a real tree, because this session has no
+  root (`sudo -n` asks for a password). Run `sudo metascope scan ~/Programming --backend btrfs` to
+  get the real timing and exact counts.
+
+### Optional later daemon: fanotify (needs root)
+
+A small root daemon keeps the walker cache live, so a scan is nearly free. It is an optimization,
+not a correctness dependency, because the cache is revalidated by mtime anyway.
+
+- `fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME)` with a `FAN_MARK_FILESYSTEM` mark on the
+  mount: one mark covers every directory, avoiding the inotify per-directory watch limit.
+  `FAN_REPORT_DFID_NAME` (kernel 5.9+; this kernel is 6.6) reports the parent directory's file
+  handle plus the entry name for `FAN_CREATE`, `FAN_DELETE`, `FAN_MOVED_FROM`, `FAN_MOVED_TO` and
+  `FAN_ATTRIB`; `FAN_CLOSE_WRITE` marks size changes without the storm that `FAN_MODIFY` causes.
+- Needs `CAP_SYS_ADMIN` for the filesystem mark and `CAP_DAC_READ_SEARCH` for
+  `open_by_handle_at` to turn the handle into a path. On btrfs each subvolume has its own `f_fsid`
+  and handles are subvolume-relative, so multi-subvolume behavior must be tested (INFERRED risk).
+- The daemon marks touched directories dirty in the cache (or re-lists just them). On
+  `FAN_Q_OVERFLOW` it drops back to the mtime revalidation pass. It must ignore its own cache
+  writes (excluded path or a bounded debounce).
+- Alerting from the daemon reuses the state-change-only design in the roadmap.
 
 ### Attribution model
 
-`scan` takes roots (default `~/Programming ~/code ~/dotfiles`, those that exist) and walks them with
-the `ignore` crate's parallel walker. Gitignore filters are off by default because they hide
-`node_modules/` and `target/`; `--respect-gitignore` turns them on. The walk records only
-per-directory counters plus marker flags (`package.json`, `Cargo.toml`, `.git` file). A pure pass
-over that map then classifies, so results do not depend on thread scheduling:
+`scan` takes roots (default `~/Programming ~/code ~/dotfiles`, those that exist). There is no
+gitignore filtering: ignored directories (`node_modules/`, `target/`) are the point. A backend
+records only per-directory counters plus marker flags (`package.json`, `Cargo.toml`, `.git`
+file). A pure pass over that map then classifies, so results do not depend on thread scheduling:
 
 - **Build dirs** (rules from `disk-cleanup.py`): `node_modules` with a sibling `package.json`;
   `target` with a sibling `Cargo.toml`. Outermost match wins, and everything beneath it is counted
@@ -86,19 +170,27 @@ vs `/home`); `--cross-fs` lifts it, including onto non-btrfs mounts.
 
 ### Performance
 
-The walk is I/O-bound (one `lstat` per entry, random fs-tree reads), so the default thread count is
-3x CPUs capped at 64, not CPU count. Measured on this machine (24 CPUs) during the incident, with
-a concurrent cleanup deleting files, so inode counts drifted between runs:
+All numbers are from this machine (24 CPUs, NVMe, kernel 6.6.128) on 2026-11-01 while a cleanup was
+deleting `node_modules`, so tree sizes drift between sessions. Page cache was warm for every run
+below; a cold-cache run needs `drop_caches` (root), so **cold timings are UNMEASURED here**.
 
-| Run | Result |
+| Run (`~/Programming`, release build) | Result |
 |---|---|
-| prior single-threaded walk, `~/Programming`, cold cache | about 411k inodes in 292 s, truncated |
-| parallel, 16 threads vs 64 threads, 60 s cap, same tree | 67k vs 94k inodes/s |
-| parallel, 64 threads, `~/Programming` | 7.49M inodes complete in 98 s |
-| parallel, default roots, warm cache | 8.96M inodes in 14 s |
+| first single-threaded walker, `~/Programming`, cold-ish cache | 411k inodes in 292 s, then truncated |
+| earlier `ignore`-crate parallel walk, 7.49M inodes, 64 threads | 98 s complete (tree since shrunk by cleanup) |
+| current walker, `--no-cache`, 413,720 dirs, 3.4M inodes | walk 806 ms, total 2.2 s |
+| current walker, first cached run (builds a 70 MB cache) | walk 1.44 s |
+| current walker, warm cache, 0 dirs listed | walk 1.24 s, total 2.8 s |
+| warm cache after adding and removing one directory | 1 dir listed, 413,719 cached, walk 1.25 s |
+| btrfs tree search | UNMEASURED (needs root) |
 
-The Python prototype's discovery phase reportedly took about 1000 s on a cold cache (reported by
-the coordinator, not re-run here). Cold-cache numbers depend on what the page cache holds.
+Reading this honestly: with a warm page cache the cache is **not** faster than a plain walk
+(0.8 s vs 1.2 s), because decoding 70 MB of records costs about as much as the kernel serving
+cached `readdir`/`lstat`. The cache is a bet on cold I/O, where each skipped `readdir` and file
+lstat is a random metadata read; that benefit is INFERRED from the earlier 85 s warm versus 17 min
+cold figures for a Python walk (coordinator's measurements), not measured with this tool. The
+2 s gap between "walk" and "total" is classification, lockfile hashing and sorting, and is the next
+thing to optimize now that the walk is fast.
 
 ### Calibration plan
 
@@ -113,7 +205,8 @@ Cost classes: S small, M medium, L large. Blockers are named, not timed.
 | Item | Class | Blocker |
 |---|---|---|
 | ratatui TUI over `ScanReport` (drill-down, sort toggle) | M | none; consume `metascope-core` only |
-| FIEMAP extent counts for top buckets | S | libc dependency decision |
+| Run and time the btrfs tree-search backend; add `min_transid` incremental passes | M | root session (sudo) to run it |
+| fanotify daemon keeping the walker cache live (design above) | L | root service; owner decision on running a daemon |
 | Guided remediation: `btrfs balance -dusage=0/5/10/20/40` escalation with `-dlimit`, idle IO class, skip if balance or scrub running | L | needs root path (polkit or sudo helper); owner decision; dry-run default |
 | Alerting on state changes only (`notify-send`; ntfy push) | M | owner decision: ntfy topic/server and auth |
 | Dead-man's-switch heartbeat | S | same ntfy decision |

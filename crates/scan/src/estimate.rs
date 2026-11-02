@@ -1,8 +1,9 @@
 //! Per-directory btrfs metadata-cost model. See docs/design.md for derivation and limits.
 //!
-//! EXACT (from lstat): inode, file, dir, symlink and directory-entry counts, name bytes,
-//! apparent size, allocated bytes. ESTIMATED: extent count (lower bound, no FIEMAP yet),
-//! and every byte figure derived from the item sizes below.
+//! EXACT (from lstat or the btrfs tree): inode, file, dir, symlink and directory-entry counts,
+//! name bytes, apparent size, allocated bytes. `extents` is a lower-bound ESTIMATE from the
+//! walker backend and EXACT from the btrfs tree-search backend. Every byte figure derived from
+//! the item sizes below is an estimate of the on-disk cost.
 
 use serde::Serialize;
 
@@ -56,8 +57,8 @@ pub struct Stats {
     pub name_bytes: u64,
     pub size_bytes: u64,
     pub allocated_bytes: u64,
-    /// Estimated (lower bound): ceil(size / 128 MiB) per non-inline file.
-    pub extents_est: u64,
+    /// Walker: ceil(size / 128 MiB) per non-inline file (lower bound). Tree search: exact.
+    pub extents: u64,
     pub inline_files: u64,
     pub inline_bytes: u64,
 }
@@ -103,7 +104,7 @@ impl Stats {
                     self.inline_files += 1;
                     self.inline_bytes += e.size;
                 } else if e.size > 0 {
-                    self.extents_est += e.size.div_ceil(MAX_EXTENT_BYTES);
+                    self.extents += e.size.div_ceil(MAX_EXTENT_BYTES);
                 }
             }
             Kind::Other => {}
@@ -111,6 +112,70 @@ impl Stats {
         if e.kind == Kind::File {
             self.size_bytes += e.size;
             self.allocated_bytes += e.allocated;
+        }
+    }
+
+    /// Like [`Stats::add_entry`] but with extent facts read from the btrfs tree:
+    /// `extents` regular/prealloc extent items, `inline_len` for an inline extent.
+    pub fn add_entry_exact(&mut self, e: &EntryInfo, extents: u64, inline_len: Option<u64>) {
+        if e.counts_dir_entry {
+            self.dir_entries += 1;
+            self.name_bytes += e.name_len;
+        }
+        if !e.first_link {
+            return;
+        }
+        self.inodes += 1;
+        match e.kind {
+            Kind::Dir => self.dirs += 1,
+            Kind::Symlink => {
+                self.symlinks += 1;
+                self.inline_files += 1;
+                self.inline_bytes += e.size;
+            }
+            Kind::File => {
+                self.files += 1;
+                self.extents += extents;
+                if let Some(n) = inline_len {
+                    self.inline_files += 1;
+                    self.inline_bytes += n;
+                }
+                self.size_bytes += e.size;
+                self.allocated_bytes += e.allocated;
+            }
+            Kind::Other => {}
+        }
+    }
+
+    pub fn to_array(&self) -> [u64; 11] {
+        [
+            self.inodes,
+            self.files,
+            self.dirs,
+            self.symlinks,
+            self.dir_entries,
+            self.name_bytes,
+            self.size_bytes,
+            self.allocated_bytes,
+            self.extents,
+            self.inline_files,
+            self.inline_bytes,
+        ]
+    }
+
+    pub fn from_array(a: [u64; 11]) -> Self {
+        Self {
+            inodes: a[0],
+            files: a[1],
+            dirs: a[2],
+            symlinks: a[3],
+            dir_entries: a[4],
+            name_bytes: a[5],
+            size_bytes: a[6],
+            allocated_bytes: a[7],
+            extents: a[8],
+            inline_files: a[9],
+            inline_bytes: a[10],
         }
     }
 
@@ -123,7 +188,7 @@ impl Stats {
         self.name_bytes += o.name_bytes;
         self.size_bytes += o.size_bytes;
         self.allocated_bytes += o.allocated_bytes;
-        self.extents_est += o.extents_est;
+        self.extents += o.extents;
         self.inline_files += o.inline_files;
         self.inline_bytes += o.inline_bytes;
     }
@@ -136,12 +201,12 @@ impl Stats {
         let link_items = self.dir_entries
             * (3 * ITEM_HEADER + INODE_REF_FIXED + 2 * DIR_ITEM_FIXED)
             + 3 * self.name_bytes;
-        let regular_extents = self.extents_est * (ITEM_HEADER + FILE_EXTENT_ITEM);
+        let regular_extents = self.extents * (ITEM_HEADER + FILE_EXTENT_ITEM);
         let inline =
             self.inline_files * (ITEM_HEADER + FILE_EXTENT_INLINE_HEADER) + self.inline_bytes;
         MetadataCost {
             fs_tree_bytes: inode_items + link_items + regular_extents + inline,
-            extent_tree_bytes: self.extents_est * (ITEM_HEADER + EXTENT_TREE_ITEM),
+            extent_tree_bytes: self.extents * (ITEM_HEADER + EXTENT_TREE_ITEM),
             csum_tree_bytes: self.allocated_bytes / 1024 * CSUM_BYTES_PER_KIB,
         }
     }
@@ -166,10 +231,7 @@ mod tests {
     fn regular_file_counts_one_extent_and_one_entry() {
         let mut s = Stats::default();
         s.add_entry(&entry(Kind::File, 10_000, 12_288));
-        assert_eq!(
-            (s.inodes, s.files, s.extents_est, s.dir_entries),
-            (1, 1, 1, 1)
-        );
+        assert_eq!((s.inodes, s.files, s.extents, s.dir_entries), (1, 1, 1, 1));
         assert_eq!(s.inline_files, 0);
     }
 
@@ -181,21 +243,21 @@ mod tests {
             3 * MAX_EXTENT_BYTES + 1,
             3 * MAX_EXTENT_BYTES + 4096,
         ));
-        assert_eq!(s.extents_est, 4);
+        assert_eq!(s.extents, 4);
     }
 
     #[test]
     fn zero_allocated_nonempty_file_is_inline() {
         let mut s = Stats::default();
         s.add_entry(&entry(Kind::File, 300, 0));
-        assert_eq!((s.inline_files, s.inline_bytes, s.extents_est), (1, 300, 0));
+        assert_eq!((s.inline_files, s.inline_bytes, s.extents), (1, 300, 0));
     }
 
     #[test]
     fn empty_file_has_no_extent() {
         let mut s = Stats::default();
         s.add_entry(&entry(Kind::File, 0, 0));
-        assert_eq!((s.inodes, s.extents_est, s.inline_files), (1, 0, 0));
+        assert_eq!((s.inodes, s.extents, s.inline_files), (1, 0, 0));
     }
 
     #[test]
@@ -205,7 +267,7 @@ mod tests {
         let mut link = entry(Kind::File, 10_000, 12_288);
         link.first_link = false;
         s.add_entry(&link);
-        assert_eq!((s.inodes, s.dir_entries, s.extents_est), (1, 2, 1));
+        assert_eq!((s.inodes, s.dir_entries, s.extents), (1, 2, 1));
         assert_eq!(s.size_bytes, 10_000);
     }
 
@@ -238,6 +300,24 @@ mod tests {
         assert_eq!(c.extent_tree_bytes, 78);
         assert_eq!(c.csum_tree_bytes, 4);
         assert_eq!(c.total(), 420 + 78 + 4);
+    }
+
+    #[test]
+    fn exact_entry_uses_tree_extents_and_inline() {
+        let mut s = Stats::default();
+        s.add_entry_exact(&entry(Kind::File, 1 << 20, 1 << 20), 7, None);
+        s.add_entry_exact(&entry(Kind::File, 100, 0), 0, Some(100));
+        assert_eq!(
+            (s.extents, s.inline_files, s.inline_bytes, s.files),
+            (7, 1, 100, 2)
+        );
+    }
+
+    #[test]
+    fn array_roundtrip() {
+        let mut s = Stats::default();
+        s.add_entry(&entry(Kind::File, 10_000, 12_288));
+        assert_eq!(Stats::from_array(s.to_array()), s);
     }
 
     #[test]

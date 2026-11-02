@@ -2,9 +2,13 @@
 //! TUI) consume these types; nothing here prints or parses arguments.
 
 pub mod btrfs;
+pub mod btrfs_tree;
+pub mod cache;
 pub mod estimate;
 pub mod health;
+pub mod index;
 pub mod scan;
+pub mod walker;
 
 /// Errors surfaced by the library.
 #[derive(Debug, thiserror::Error)]

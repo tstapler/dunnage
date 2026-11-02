@@ -98,16 +98,26 @@ pub fn read_allocation(fs_dir: &Path) -> Result<Allocation> {
     })
 }
 
-/// Returns the source device of the longest-prefix btrfs mount containing `path`.
-/// btrfs reports an anonymous st_dev, so the mount table is the only portable way to map back.
-pub fn btrfs_source_for_path(mountinfo: &str, path: &Path) -> Option<String> {
-    let mut best: Option<(usize, String)> = None;
+/// A btrfs mount found in the mount table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mount {
+    pub mount_point: PathBuf,
+    pub source: String,
+    /// From the `subvolid=` superblock option; `None` if the kernel did not report it.
+    pub subvolid: Option<u64>,
+}
+
+/// Longest-prefix btrfs mount containing `path`. btrfs reports an anonymous st_dev, so the mount
+/// table is the only portable way to map a path back to its device and subvolume.
+pub fn btrfs_mount_for_path(mountinfo: &str, path: &Path) -> Option<Mount> {
+    let mut best: Option<Mount> = None;
     for line in mountinfo.lines() {
         let Some((left, right)) = line.split_once(" - ") else {
             continue;
         };
         let mut right = right.split_whitespace();
-        let (fstype, source) = (right.next()?, right.next()?);
+        let (fstype, source, super_opts) =
+            (right.next()?, right.next()?, right.next().unwrap_or(""));
         if fstype != "btrfs" {
             continue;
         }
@@ -116,12 +126,24 @@ pub fn btrfs_source_for_path(mountinfo: &str, path: &Path) -> Option<String> {
         if path.starts_with(mp)
             && best
                 .as_ref()
-                .is_none_or(|(len, _)| mp.as_os_str().len() > *len)
+                .is_none_or(|b| mp.as_os_str().len() > b.mount_point.as_os_str().len())
         {
-            best = Some((mp.as_os_str().len(), source.to_string()));
+            best = Some(Mount {
+                mount_point: mp.to_path_buf(),
+                source: source.to_string(),
+                subvolid: super_opts
+                    .split(',')
+                    .find_map(|o| o.strip_prefix("subvolid="))
+                    .and_then(|v| v.parse().ok()),
+            });
         }
     }
-    best.map(|(_, source)| source)
+    best
+}
+
+/// Source device of the btrfs mount containing `path`.
+pub fn btrfs_source_for_path(mountinfo: &str, path: &Path) -> Option<String> {
+    btrfs_mount_for_path(mountinfo, path).map(|m| m.source)
 }
 
 /// Finds `<sysfs_root>/<uuid>` whose `devices/` contains the basename of `source`.
@@ -191,8 +213,8 @@ mod tests {
     }
 
     const MOUNTINFO: &str = "\
-25 1 0:28 /@ / rw,relatime shared:1 - btrfs /dev/nvme0n1p2 rw,ssd
-40 25 0:30 /@home /home rw,relatime shared:2 - btrfs /dev/nvme0n1p2 rw,ssd
+25 1 0:28 /@ / rw,relatime shared:1 - btrfs /dev/nvme0n1p2 rw,ssd,subvolid=256,subvol=/@
+40 25 0:30 /@home /home rw,relatime shared:2 - btrfs /dev/nvme0n1p2 rw,ssd,subvolid=257,subvol=/@home
 41 25 0:5 / /dev rw - devtmpfs dev rw
 42 25 0:50 / /mnt/other rw - ext4 /dev/sdb1 rw
 ";
@@ -201,6 +223,17 @@ mod tests {
     fn mount_lookup_picks_longest_btrfs_prefix() {
         let src = btrfs_source_for_path(MOUNTINFO, Path::new("/home/me/x")).unwrap();
         assert_eq!(src, "/dev/nvme0n1p2");
+    }
+
+    #[test]
+    fn mount_lookup_reports_subvolume() {
+        let m = btrfs_mount_for_path(MOUNTINFO, Path::new("/home/me/x")).unwrap();
+        assert_eq!(
+            (m.mount_point, m.subvolid),
+            (PathBuf::from("/home"), Some(257))
+        );
+        let root = btrfs_mount_for_path(MOUNTINFO, Path::new("/etc")).unwrap();
+        assert_eq!(root.subvolid, Some(256));
     }
 
     #[test]
