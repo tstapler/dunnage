@@ -55,14 +55,54 @@ file (hundreds of thousands here) and needs a libc dependency; `compsize`/`btrfs
 dump-tree` need root. v0 trades accuracy for a root-free, single-pass walk. FIEMAP is the next
 accuracy step, applied only to the top buckets.
 
-Ignore handling: default honors `.gitignore`/`.ignore` (the `ignore` crate), which hides
-`node_modules/` and `target/`. `--include-ignored` counts everything. Subvolume boundaries have a
-distinct `st_dev`, so the default same-filesystem rule also stops at subvolumes (for example `/`
+### Attribution model
+
+`scan` takes roots (default `~/Programming ~/code ~/dotfiles`, those that exist) and walks them with
+the `ignore` crate's parallel walker. Gitignore filters are off by default because they hide
+`node_modules/` and `target/`; `--respect-gitignore` turns them on. The walk records only
+per-directory counters plus marker flags (`package.json`, `Cargo.toml`, `.git` file). A pure pass
+over that map then classifies, so results do not depend on thread scheduling:
+
+- **Build dirs** (rules from `disk-cleanup.py`): `node_modules` with a sibling `package.json`;
+  `target` with a sibling `Cargo.toml`. Outermost match wins, and everything beneath it is counted
+  to that category. `.git` directories are their own category.
+- **Checkouts and worktrees**: a directory with a `.git` directory is a checkout. A `.git` file
+  containing `gitdir: <main>/.git/worktrees/<name>` marks a linked worktree of `<main>`; any other
+  `.git` file (submodules) is treated as a checkout. Each entry belongs to its nearest enclosing
+  checkout, so a worktree nested under `<repo>/.claude/worktrees/` is not charged to `<repo>`.
+  Rows are rolled up to a family per main repo (`--by repo`, default) or listed per checkout
+  (`--by checkout`). Paths outside any checkout group by first component under the scan root.
+- **Duplicate clusters**: build dirs of one kind whose sibling lockfile (`package-lock.json`,
+  `npm-shrinkwrap.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock[b]`, `Cargo.lock`) has identical
+  content. This is evidence of the same dependency set, not a tree comparison: member inode counts
+  can differ (the output shows min..max). "Redundant" is total minus the largest member. Build dirs
+  with no readable lockfile are never clustered.
+- Each build root also carries `age_secs` (its own directory mtime), for the future `clean` guard.
+
+Hard links are counted once per `(dev, ino)`; with parallel threads the owning directory of a
+multiply-linked inode is whichever thread sees it first (matters for pnpm-style stores).
+The default same-filesystem rule stops at subvolume boundaries (distinct `st_dev`, for example `/`
 vs `/home`); `--cross-fs` lifts it, including onto non-btrfs mounts.
+
+### Performance
+
+The walk is I/O-bound (one `lstat` per entry, random fs-tree reads), so the default thread count is
+3x CPUs capped at 64, not CPU count. Measured on this machine (24 CPUs) during the incident, with
+a concurrent cleanup deleting files, so inode counts drifted between runs:
+
+| Run | Result |
+|---|---|
+| prior single-threaded walk, `~/Programming`, cold cache | about 411k inodes in 292 s, truncated |
+| parallel, 16 threads vs 64 threads, 60 s cap, same tree | 67k vs 94k inodes/s |
+| parallel, 64 threads, `~/Programming` | 7.49M inodes complete in 98 s |
+| parallel, default roots, warm cache | 8.96M inodes in 14 s |
+
+The Python prototype's discovery phase reportedly took about 1000 s on a cold cache (reported by
+the coordinator, not re-run here). Cold-cache numbers depend on what the page cache holds.
 
 ### Calibration plan
 
-Sum scans of every subvolume with `--include-ignored` and compare `total_metadata_cost` with
+Sum scans of every subvolume and compare `total_metadata_cost` with
 metadata `bytes_used`. The ratio is the unmodeled share (slack, xattrs, other trees). Apply it as a
 documented scale factor only after it is measured on more than one machine state.
 
@@ -80,7 +120,47 @@ Cost classes: S small, M medium, L large. Blockers are named, not timed.
 | `btrfs device stats` error counters (sysfs `devinfo/<id>/error_stats`) | S | none |
 | Git-worktree-aware cleanup (stale > 14 d since last commit, skip dirty/locked, `git worktree remove`, `target/`, `node_modules`) | L | port the logic in `dotfiles/stapler-scripts/disk-cleanup`; confirmation UX |
 | Cache cleanup (npm, cargo registry, go build, gradle, pip, docker prune) | M | per-cache safety review |
+| `clean` subcommand (below) | L | port the discovery rules; owner review of the guard list |
 | MCP server | S | owner decision whether wanted |
 
 Rules for mutating features: dry-run by default, explicit flag to apply, never act while a balance
 or scrub is running, and re-read the changed state afterwards.
+
+## `clean` subcommand (design only, not implemented)
+
+Purpose: reclaim metadata by deleting rebuildable build dirs, newest-duplicate-first, using the
+same classification as `scan`. Replaces `stapler-scripts/disk-cleanup` and the Python prototype.
+
+```
+metascope clean [PATHS...] [--kinds node-modules,cargo-target,worktrees] [--min-age 60m]
+                [--keep-newest N] [--only-duplicates] [--apply] [--json]
+```
+
+- **Dry run by default.** Without `--apply` it prints what would be removed with inode and
+  estimated-metadata savings, and exits 0. `--apply` is the only way anything is deleted; there is
+  no `--force` shorthand and no interactive "yes to all".
+- **Selection** (reuses `scan::BuildRoot`): a `node_modules` with a sibling `package.json`, or a
+  `target` with a sibling `Cargo.toml`, and nothing else. A path is never deleted just for being
+  named `target`.
+- **Guards, all checked again immediately before each delete** (the scan can be minutes old):
+  - skip build dirs whose mtime is newer than `--min-age` (default 60 minutes, from the prototype);
+  - skip if the owning checkout has a running build (a process holds a file open under it, or
+    `Cargo.lock`/`.cargo-lock` is held);
+  - skip worktrees with uncommitted changes or a `locked` marker (logic from `disk-cleanup`);
+  - refuse paths that resolve outside the scan roots, symlinks, and other filesystems;
+  - never touch `.git`, source files, or lockfiles.
+- **Duplicate-aware ordering:** with `--only-duplicates`, keep the `--keep-newest N` (default 1)
+  members of each lockfile cluster and delete the rest, biggest redundancy first.
+- **Worktree removal** is a separate kind: `git worktree remove` (not `rm -rf`), only for clean
+  worktrees older than 14 days since last commit, and `git worktree prune` afterwards.
+- **Execution:** parallel unlink per build dir, deepest-first; per-path result recorded (removed,
+  skipped with reason, error). Stop and report on the first `ENOSPC`-style failure rather than
+  retrying in a loop, since deletes on a metadata-full btrfs can themselves fail until a
+  transaction commits.
+- **Verification:** after `--apply`, re-read `status` and print before/after unallocated and
+  metadata `bytes_used`. btrfs frees deleted metadata at transaction commit and only returns
+  chunks to unallocated via balance, so a successful delete does not by itself raise unallocated;
+  the output says so and suggests the remediation step instead of claiming success.
+- **Audit:** `--json` and an append-only log under `$XDG_STATE_HOME/metascope/clean.jsonl`.
+- **Tests:** guard predicates are pure functions over a scan report and are unit-tested; deletion
+  runs only against a tempdir fixture in tests.
