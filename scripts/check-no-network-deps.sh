@@ -2,7 +2,7 @@
 # check-no-network-deps.sh [repo-root] | --selftest
 # No HTTP/socket crate may be a direct dependency of a workspace member or appear in disk-cleanup's resolved
 # tree (metascope-core's transitive tree included), and no `std::net` use may exist under crates/.
-set -u
+set -u -o pipefail
 net_crates='reqwest ureq hyper curl isahc attohttpc surf tokio async-std'
 
 check() {
@@ -43,6 +43,8 @@ selftest() {
   sed -i '/^\[dependencies\]/,$d' "$d/r/crates/app/Cargo.toml"
   printf 'fn main() { let _ = std::net::TcpStream::connect("127.0.0.1:1"); }\n' > "$d/r/crates/app/src/main.rs"
   expect 1 "a std::net::TcpStream use fails naming the file" "crates/app/src/main.rs" "$self" "$d/r"
+  printf '\n[dependencies]\n[dependencies]\n' >> "$d/r/crates/app/Cargo.toml"
+  expect 2 "an unparsable manifest fails closed instead of passing" "cargo metadata failed" "$self" "$d/r"
   echo "selftest: $n ok, $bad bad"; [ $bad = 0 ]
 }
 

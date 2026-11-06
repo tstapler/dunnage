@@ -2,7 +2,7 @@
 # check-core-deps.sh [repo-root] | --selftest
 # disk-cleanup-core must not depend directly on rustix or libc, nor use them or raw deletion calls in source.
 # Direct dependencies only: metascope-core (a read-only library) lists both transitively and that is accepted.
-set -u
+set -u -o pipefail
 forbidden_deps='rustix libc'
 forbidden_src='rustix::|libc::|std::fs::remove|unlinkat'
 
@@ -45,6 +45,8 @@ selftest() {
   sed -i '/^\[dependencies\]/,$d' "$d/r/crates/core/Cargo.toml"
   printf 'pub fn g() { unsafe { libc::unlink(std::ptr::null()); } }\n' >> "$d/r/crates/core/src/lib.rs"
   expect 1 "a planted libc::unlink fails with file and line" "crates/core/src/lib.rs:3" "$self" "$d/r"
+  printf '\n[dependencies]\n[dependencies]\n' >> "$d/r/crates/core/Cargo.toml"
+  expect 2 "an unparsable manifest fails closed instead of passing" "cargo metadata failed" "$self" "$d/r"
   echo "selftest: $n ok, $bad bad"; [ $bad = 0 ]
 }
 
