@@ -6,3 +6,15 @@ license.workspace = true
 
 [lints]
 workspace = true
+
+[features]
+default = []
+test-support = []
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+disk-cleanup-core = { path = ".", features = ["test-support"] }

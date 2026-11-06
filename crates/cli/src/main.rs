@@ -339,17 +339,33 @@ fn remove_stale_worktree(repo: &Path, path: &Path, mode: Mode) -> bool {
 /// this only needs to reach `~/code/<host>/<owner>/<repo>` (per this
 /// machine's repo-placement convention), not walk arbitrary project trees.
 fn find_git_repos(root: &Path) -> Vec<PathBuf> {
-    walkdir::WalkDir::new(root)
-        .max_depth(4)
-        .into_iter()
-        .filter_map(Result::ok)
-        // A linked worktree's `.git` is a *file* pointing back at the main
-        // repo's `.git/worktrees/<name>`, not a directory. Matching it too
-        // would make `git worktree list` run once per worktree instead of
-        // once per repo, multiplying every result by its own worktree count.
-        .filter(|e| e.file_type().is_dir() && e.file_name() == ".git")
-        .filter_map(|e| e.path().parent().map(Path::to_path_buf))
-        .collect()
+    const MAX_DEPTH: usize = 4;
+    let mut repos = Vec::new();
+    let mut stack = vec![(root.to_path_buf(), 0usize)];
+    while let Some((dir, depth)) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.filter_map(Result::ok) {
+            // `file_type` does not follow symlinks, so links are never descended.
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if !file_type.is_dir() {
+                continue;
+            }
+            // A linked worktree's `.git` is a *file* pointing back at the main
+            // repo's `.git/worktrees/<name>`, not a directory. Matching it too
+            // would make `git worktree list` run once per worktree instead of
+            // once per repo, multiplying every result by its own worktree count.
+            if entry.file_name() == ".git" {
+                repos.push(dir.clone());
+            } else if depth + 1 < MAX_DEPTH {
+                stack.push((entry.path(), depth + 1));
+            }
+        }
+    }
+    repos
 }
 
 #[cfg(test)]
