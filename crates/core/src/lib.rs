@@ -3,6 +3,20 @@
 //! without touching a real machine. The CLI crate does all the I/O and
 //! calls into this crate to decide what's safe to remove.
 
+pub mod apply_token;
+pub mod delete_types;
+pub mod flavor;
+pub mod floor_rule;
+pub mod ids;
+
+pub use apply_token::ApplyToken;
+pub use delete_types::{
+    first_line_capped, AbortFlag, AllowedTarget, DeleteError, DeleteFailure, DeletePolicy,
+    DirEntryInfo, FileKind, Freed, NamePattern, StatInfo, CMD_MSG_MAX,
+};
+pub use flavor::build_flavor;
+pub use ids::{AllocatedBytes, ApparentBytes, Identity, RootDev};
+
 use std::path::PathBuf;
 
 /// A Claude Code agent worktree (`.claude/worktrees/agent-*`) considered for
