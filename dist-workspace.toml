@@ -9,12 +9,10 @@ members = ["cargo:."]
 [dist]
 cargo-dist-version = "0.32.0"
 ci = "github"
-installers = ["shell", "homebrew"]
-tap = "tstapler/homebrew-tap"
-publish-jobs = ["homebrew"]
-targets = [
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-  "x86_64-unknown-linux-gnu",
-  "aarch64-unknown-linux-gnu",
-]
+installers = ["shell"]
+# Apple targets, aarch64 Linux and the Homebrew tap publish are re-enabled in
+# Task 5.3.2b / Story 5.3.1, so a tag push cannot publish an unverified deleter.
+# installers = ["shell", "homebrew"]
+# tap = "tstapler/homebrew-tap"
+# publish-jobs = ["homebrew"]
+targets = ["x86_64-unknown-linux-gnu"]

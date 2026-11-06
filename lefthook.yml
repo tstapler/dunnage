@@ -6,12 +6,15 @@ pre-commit:
   commands:
     rust-fmt:
       glob: "*.rs"
-      run: cargo fmt --check
+      run: cargo fmt --all -- --check
     rust-clippy:
       glob: "*.rs"
       run: cargo clippy --workspace --all-targets -- -D warnings
+    core-deps:
+      glob: "{crates/core/**,**/Cargo.toml,scripts/check-core-deps.sh}"
+      run: scripts/check-core-deps.sh
 
 pre-push:
   commands:
-    rust-test:
-      run: cargo test --workspace
+    gate-a:
+      run: make gate GATE=A
