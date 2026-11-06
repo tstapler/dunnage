@@ -38,6 +38,8 @@ thiserror = "2"
 rustix = { version = "1", features = ["fs", "process"] }
 libc = "0.2"
 toml = "0.8"
+# TEMPORARY until Task 0.1.2b (git rev + ignored local patch)
+metascope-core = { path = "../metascope/crates/core" }
 
 # The block `dist init` writes; check-release-features.sh builds with it.
 [profile.dist]
