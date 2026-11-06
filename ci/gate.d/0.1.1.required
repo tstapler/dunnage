@@ -1,0 +1,3 @@
+# <first-gate> <last-gate|-> <command>
+A - scripts/check-core-deps.sh
+A - scripts/check-no-network-deps.sh
