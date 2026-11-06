@@ -161,7 +161,7 @@ file). A pure pass over that map then classifies, so results do not depend on th
   content. This is evidence of the same dependency set, not a tree comparison: member inode counts
   can differ (the output shows min..max). "Redundant" is total minus the largest member. Build dirs
   with no readable lockfile are never clustered.
-- Each build root also carries `age_secs` (its own directory mtime), for the future `clean` guard.
+- Each build root also carries `age_secs` (its own directory mtime).
 
 Hard links are counted once per `(dev, ino)`; with parallel threads the owning directory of a
 multiply-linked inode is whichever thread sees it first (matters for pnpm-style stores).
@@ -211,49 +211,11 @@ Cost classes: S small, M medium, L large. Blockers are named, not timed.
 | Alerting on state changes only (`notify-send`; ntfy push) | M | owner decision: ntfy topic/server and auth |
 | Dead-man's-switch heartbeat | S | same ntfy decision |
 | `btrfs device stats` error counters (sysfs `devinfo/<id>/error_stats`) | S | none |
-| Git-worktree-aware cleanup (stale > 14 d since last commit, skip dirty/locked, `git worktree remove`, `target/`, `node_modules`) | L | port the logic in `dotfiles/stapler-scripts/disk-cleanup`; confirmation UX |
-| Cache cleanup (npm, cargo registry, go build, gradle, pip, docker prune) | M | per-cache safety review |
-| `clean` subcommand (below) | L | port the discovery rules; owner review of the guard list |
 | MCP server | S | owner decision whether wanted |
 
 Rules for mutating features: dry-run by default, explicit flag to apply, never act while a balance
 or scrub is running, and re-read the changed state afterwards.
 
-## `clean` subcommand (design only, not implemented)
+## Cleaning
 
-Purpose: reclaim metadata by deleting rebuildable build dirs, newest-duplicate-first, using the
-same classification as `scan`. Replaces `stapler-scripts/disk-cleanup` and the Python prototype.
-
-```
-metascope clean [PATHS...] [--kinds node-modules,cargo-target,worktrees] [--min-age 60m]
-                [--keep-newest N] [--only-duplicates] [--apply] [--json]
-```
-
-- **Dry run by default.** Without `--apply` it prints what would be removed with inode and
-  estimated-metadata savings, and exits 0. `--apply` is the only way anything is deleted; there is
-  no `--force` shorthand and no interactive "yes to all".
-- **Selection** (reuses `scan::BuildRoot`): a `node_modules` with a sibling `package.json`, or a
-  `target` with a sibling `Cargo.toml`, and nothing else. A path is never deleted just for being
-  named `target`.
-- **Guards, all checked again immediately before each delete** (the scan can be minutes old):
-  - skip build dirs whose mtime is newer than `--min-age` (default 60 minutes, from the prototype);
-  - skip if the owning checkout has a running build (a process holds a file open under it, or
-    `Cargo.lock`/`.cargo-lock` is held);
-  - skip worktrees with uncommitted changes or a `locked` marker (logic from `disk-cleanup`);
-  - refuse paths that resolve outside the scan roots, symlinks, and other filesystems;
-  - never touch `.git`, source files, or lockfiles.
-- **Duplicate-aware ordering:** with `--only-duplicates`, keep the `--keep-newest N` (default 1)
-  members of each lockfile cluster and delete the rest, biggest redundancy first.
-- **Worktree removal** is a separate kind: `git worktree remove` (not `rm -rf`), only for clean
-  worktrees older than 14 days since last commit, and `git worktree prune` afterwards.
-- **Execution:** parallel unlink per build dir, deepest-first; per-path result recorded (removed,
-  skipped with reason, error). Stop and report on the first `ENOSPC`-style failure rather than
-  retrying in a loop, since deletes on a metadata-full btrfs can themselves fail until a
-  transaction commits.
-- **Verification:** after `--apply`, re-read `status` and print before/after unallocated and
-  metadata `bytes_used`. btrfs frees deleted metadata at transaction commit and only returns
-  chunks to unallocated via balance, so a successful delete does not by itself raise unallocated;
-  the output says so and suggests the remediation step instead of claiming success.
-- **Audit:** `--json` and an append-only log under `$XDG_STATE_HOME/metascope/clean.jsonl`.
-- **Tests:** guard predicates are pure functions over a scan report and are unit-tested; deletion
-  runs only against a tempdir fixture in tests.
+There is no `metascope clean`: cleaning lives in `tstapler/disk-cleanup`; this tool stays read-only.
