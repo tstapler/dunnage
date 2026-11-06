@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = ["crates/cli", "crates/core"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+
+# Rust 1.74+ workspace lints — set once here instead of per-crate boilerplate.
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+
+[workspace.dependencies]
+clap = { version = "4", features = ["derive"] }
+walkdir = "2"
+anyhow = "1"
