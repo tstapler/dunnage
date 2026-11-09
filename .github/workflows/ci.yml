@@ -13,10 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - name: tools for the contract and token-site checks
+        run: |
+          sudo apt-get install -y --no-install-recommends jq
+          cargo install ast-grep --locked --version 0.44.0
       - name: fmt
         run: cargo fmt --all --check
       - name: core deps
@@ -25,3 +31,18 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: test
         run: cargo test --workspace
+      - name: contract frozen
+        run: |
+          base=HEAD~1
+          if [ "${{ github.event_name }}" = pull_request ]; then base="origin/${{ github.base_ref }}"; fi
+          scripts/check-contract-frozen.sh --base "$base"
+      - name: contract-frozen selftest
+        run: scripts/check-contract-frozen.sh --selftest
+      - name: token sites selftest
+        run: scripts/check-token-sites.sh --selftest
+      - name: token sites (Task 2.1.6a changes 0 to 1)
+        run: scripts/check-token-sites.sh --expect-sites 0
+      - name: release features selftest
+        run: scripts/check-release-features.sh --selftest
+      - name: release features
+        run: scripts/check-release-features.sh
