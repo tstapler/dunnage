@@ -6,6 +6,10 @@
 //! only does I/O (walking directories, shelling out to git/du/docker/etc.)
 //! and reports what it did or would do.
 
+#![forbid(unsafe_code)]
+
+mod version;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -52,6 +56,10 @@ impl Mode {
 }
 
 fn main() -> anyhow::Result<()> {
+    if version::requested(std::env::args_os().skip(1)) {
+        println!("{}", version::line());
+        return Ok(());
+    }
     let cli = Cli::parse();
     let mode = Mode::from_dry_run_flag(cli.dry_run);
 

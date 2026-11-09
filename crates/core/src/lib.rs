@@ -3,6 +3,8 @@
 //! without touching a real machine. The CLI crate does all the I/O and
 //! calls into this crate to decide what's safe to remove.
 
+#![forbid(unsafe_code)]
+
 pub mod apply_token;
 pub mod delete_types;
 pub mod flavor;
