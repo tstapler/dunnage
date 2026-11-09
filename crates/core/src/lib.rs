@@ -5,23 +5,37 @@
 
 #![forbid(unsafe_code)]
 
+pub mod allowed;
 pub mod apply_token;
 pub mod audit_types;
+pub mod cache_targets;
 pub mod candidate;
 pub mod delete_types;
 pub mod dirs;
+pub mod docker;
+pub mod executor;
 pub mod flavor;
 pub mod floor_rule;
+pub mod guard;
 pub mod ids;
 pub mod kind;
 pub mod outcome;
+pub mod plan;
 pub mod plan_state;
 pub mod platform;
+pub mod ports;
+pub mod preflight;
 pub mod reasons;
+pub mod roots;
 mod serde_remote;
 pub mod snapshot_types;
 pub mod summary;
+pub mod target;
+pub mod targets;
+#[cfg(feature = "test-support")]
+pub mod testing;
 
+pub use allowed::{Allowed, WorktreeRemoval, WrongKind};
 pub use apply_token::ApplyToken;
 pub use audit_types::{
     AuditRecord, BreakGlass, Intent, ItemResult, RunEnd, RunRoots, RunStart, AUDIT_SCHEMA,
