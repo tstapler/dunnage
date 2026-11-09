@@ -6,17 +6,26 @@
 #![forbid(unsafe_code)]
 
 pub mod apply_token;
+pub mod audit_types;
 pub mod candidate;
 pub mod delete_types;
+pub mod dirs;
 pub mod flavor;
 pub mod floor_rule;
 pub mod ids;
 pub mod kind;
 pub mod outcome;
+pub mod plan_state;
+pub mod platform;
 pub mod reasons;
 mod serde_remote;
+pub mod snapshot_types;
+pub mod summary;
 
 pub use apply_token::ApplyToken;
+pub use audit_types::{
+    AuditRecord, BreakGlass, Intent, ItemResult, RunEnd, RunRoots, RunStart, AUDIT_SCHEMA,
+};
 pub use candidate::{
     BtrfsFacts, BuildDirFacts, BuildDirFlavor, CacheFacts, Candidate, DockerFacts, KindFacts,
     Locator, SteamFacts, WorktreeFacts, CANDIDATE_SCHEMA,
@@ -25,11 +34,19 @@ pub use delete_types::{
     first_line_capped, AbortFlag, AllowedTarget, DeleteError, DeleteFailure, DeletePolicy,
     DirEntryInfo, FileKind, Freed, NamePattern, StatInfo, CMD_MSG_MAX,
 };
+pub use dirs::Dirs;
 pub use flavor::build_flavor;
 pub use ids::{AllocatedBytes, AppId, ApparentBytes, CandidateId, DockerId, Identity, RootDev};
 pub use kind::{selector_of, Kind, Risk, SelectorId};
 pub use outcome::{Outcome, SkipReason, Status};
+pub use plan_state::{
+    BuildInfo, ItemKey, SaveOutcome, SavedPlan, SavedSelection, StampSummary, ITEM_KEY_MAX,
+};
+pub use platform::{MountEntry, Platform, Tri};
 pub use reasons::{errno_phrase, FatalError, Warning};
+pub use snapshot_types::{AllocSnapshot, FsSnapshot, Settled, SpaceUse};
+pub use summary::{Cause, CauseKind, DiskVerdict, RunSummary, StageTimings, WalkerCounters};
+
 use std::path::PathBuf;
 
 /// A Claude Code agent worktree (`.claude/worktrees/agent-*`) considered for
