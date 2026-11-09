@@ -6,19 +6,30 @@
 #![forbid(unsafe_code)]
 
 pub mod apply_token;
+pub mod candidate;
 pub mod delete_types;
 pub mod flavor;
 pub mod floor_rule;
 pub mod ids;
+pub mod kind;
+pub mod outcome;
+pub mod reasons;
+mod serde_remote;
 
 pub use apply_token::ApplyToken;
+pub use candidate::{
+    BtrfsFacts, BuildDirFacts, BuildDirFlavor, CacheFacts, Candidate, DockerFacts, KindFacts,
+    Locator, SteamFacts, WorktreeFacts, CANDIDATE_SCHEMA,
+};
 pub use delete_types::{
     first_line_capped, AbortFlag, AllowedTarget, DeleteError, DeleteFailure, DeletePolicy,
     DirEntryInfo, FileKind, Freed, NamePattern, StatInfo, CMD_MSG_MAX,
 };
 pub use flavor::build_flavor;
-pub use ids::{AllocatedBytes, ApparentBytes, Identity, RootDev};
-
+pub use ids::{AllocatedBytes, AppId, ApparentBytes, CandidateId, DockerId, Identity, RootDev};
+pub use kind::{selector_of, Kind, Risk, SelectorId};
+pub use outcome::{Outcome, SkipReason, Status};
+pub use reasons::{errno_phrase, FatalError, Warning};
 use std::path::PathBuf;
 
 /// A Claude Code agent worktree (`.claude/worktrees/agent-*`) considered for
