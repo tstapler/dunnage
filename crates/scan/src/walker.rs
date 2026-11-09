@@ -82,6 +82,12 @@ fn now_secs() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
+/// `st_dev` is `u64` on Linux but `i32` on Darwin; widen so device ids compare uniformly.
+#[allow(clippy::unnecessary_cast)]
+fn dev_of(st: &Stat) -> u64 {
+    st.st_dev as u64
+}
+
 fn entry_kind(ft: FileType) -> Kind {
     match ft {
         FileType::Directory => Kind::Dir,
@@ -123,6 +129,8 @@ impl Ctx<'_> {
 
     fn open_dir(&self, path: &Path) -> rustix::io::Result<OwnedFd> {
         let base = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+        // O_NOATIME exists only on Linux-family targets; elsewhere open without it.
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         if !self.noatime_denied.load(Ordering::Relaxed) {
             match openat(CWD, path, base | OFlags::NOATIME, Mode::empty()) {
                 Err(rustix::io::Errno::PERM) => self.noatime_denied.store(true, Ordering::Relaxed),
@@ -182,7 +190,7 @@ impl Ctx<'_> {
                     }
                 },
             };
-            let first = cst.st_nlink <= 1 || self.first_sighting(cst.st_dev, cst.st_ino);
+            let first = cst.st_nlink <= 1 || self.first_sighting(dev_of(&cst), cst.st_ino);
             rec.files.add_entry(&entry_info(&cst, bytes.len(), first));
             scratch.note_file_name(bytes, ft == FileType::RegularFile);
         }
@@ -207,7 +215,7 @@ impl Ctx<'_> {
         if FileType::from_raw_mode(st.st_mode) != FileType::Directory {
             return;
         }
-        if !w.is_root && !self.cross_fs && st.st_dev != w.root_dev {
+        if !w.is_root && !self.cross_fs && dev_of(&st) != w.root_dev {
             return;
         }
         let fresh = |r: &Rec| {
@@ -338,7 +346,7 @@ impl Backend for WalkerBackend {
             })?;
             seeds.push(Work {
                 path: root.clone(),
-                root_dev: st.st_dev,
+                root_dev: dev_of(&st),
                 is_root: true,
             });
         }
