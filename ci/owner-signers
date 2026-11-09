@@ -1,0 +1,5 @@
+# SSH allowed-signers file for scripts/check-test-authorship.sh (format: ssh-keygen(1) ALLOWED SIGNERS).
+# One line per owner key:  owner <key-type> <base64-public-key>
+# The owner adds the PUBLIC half of a DEDICATED signing key here, in the same commit that re-pins
+# ci/delete_adversarial.sha256, and signs test-author-v<N> on that commit. Until a key is listed the
+# authorship check stays red. Do not use a key an implementing session can read (not an unencrypted ~/.ssh key).

@@ -1,0 +1,3 @@
+# <first-gate> <last-gate|-> <command>   (Story 2.1.1: independent authorship of the delete-engine suites)
+A - scripts/check-test-authorship.sh
+A - scripts/check-case-table.sh

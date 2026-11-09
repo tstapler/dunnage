@@ -1,0 +1,7 @@
+# Review convention only: a local-only repo enforces nothing from this file. Enforcement of independent
+# authorship is the owner-signed test-author-v<N> tag (scripts/check-test-authorship.sh).
+/crates/adapters/tests/delete_adversarial.rs   @tstapler
+/crates/core/tests/floor_rule.rs               @tstapler
+/ci/delete_adversarial.sha256                  @tstapler
+/ci/owner-signers                              @tstapler
+/crates/adapters/src/delete.rs                 @tstapler
