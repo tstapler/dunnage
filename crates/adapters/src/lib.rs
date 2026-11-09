@@ -4,6 +4,7 @@ pub mod delete;
 pub mod dirops;
 #[cfg(feature = "test-support")]
 pub mod testing;
+pub mod treestat;
 
 pub use delete::delete_tree;
 pub use dirops::{
