@@ -135,6 +135,7 @@ dependencies = [
  "disk-cleanup-core",
  "libc",
  "rustix",
+ "tempfile",
  "thiserror",
  "toml",
 ]
