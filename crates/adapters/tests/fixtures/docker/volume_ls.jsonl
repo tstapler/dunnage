@@ -1,0 +1,3 @@
+{"Availability":"N/A","Driver":"local","Group":"N/A","Labels":"com.docker.volume.anonymous=","Links":"N/A","Mountpoint":"/var/lib/docker/volumes/6172cc6c87931dcd5be1f68ae091dd13a7eb815c933310ca25870ae15ff029ef/_data","Name":"6172cc6c87931dcd5be1f68ae091dd13a7eb815c933310ca25870ae15ff029ef","Scope":"local","Size":"N/A","Status":"N/A"}
+{"Availability":"N/A","Driver":"local","Group":"N/A","Labels":"","Links":"N/A","Mountpoint":"/var/lib/docker/volumes/dc-spike-named/_data","Name":"dc-spike-named","Scope":"local","Size":"N/A","Status":"N/A"}
+{"Availability":"N/A","Driver":"local","Group":"N/A","Labels":"","Links":"N/A","Mountpoint":"/var/lib/docker/volumes/dc-spike-pg/_data","Name":"dc-spike-pg","Scope":"local","Size":"N/A","Status":"N/A"}

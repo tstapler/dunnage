@@ -1,0 +1,3 @@
+[{"CreatedAt":"2026-11-06T13:35:25-08:00","Driver":"local","Labels":null,"Mountpoint":"/var/lib/docker/volumes/dc-spike-named/_data","Name":"dc-spike-named","Options":null,"Scope":"local"}]
+[{"CreatedAt":"2026-11-06T13:35:29-08:00","Driver":"local","Labels":null,"Mountpoint":"/var/lib/docker/volumes/dc-spike-pg/_data","Name":"dc-spike-pg","Options":null,"Scope":"local"}]
+[{"CreatedAt":"2026-11-06T13:35:26-08:00","Driver":"local","Labels":{"com.docker.volume.anonymous":""},"Mountpoint":"/var/lib/docker/volumes/6172cc6c87931dcd5be1f68ae091dd13a7eb815c933310ca25870ae15ff029ef/_data","Name":"6172cc6c87931dcd5be1f68ae091dd13a7eb815c933310ca25870ae15ff029ef","Options":null,"Scope":"local"}]
