@@ -1,0 +1,68 @@
+# cargo-mutants 27.1.0, base d73e62c, 263 mutants: 51 missed, 176 caught, 21 unviable, 15 timeouts (Story 2.1.5, Task 2.1.5b). Killing tests are agent T's work.
+# command: cargo mutants --no-shuffle -j 3 -f crates/adapters/src/delete.rs -f crates/adapters/src/dirops.rs -f crates/core/src/floor_rule.rs
+MISSED crates/adapters/src/delete.rs:148:9: delete match arm Some(libc::ENOENT) in classify
+MISSED crates/adapters/src/delete.rs:149:20: replace match guard is_abort_errno(n) with false in classify
+MISSED crates/adapters/src/delete.rs:149:20: replace match guard is_abort_errno(n) with true in classify
+MISSED crates/adapters/src/delete.rs:256:9: replace Engine<'_, D>::open_frame -> Result<(), DeleteFailure> with Ok(())
+MISSED crates/adapters/src/delete.rs:275:67: replace != with == in Engine<'_, D>::open_frame
+MISSED crates/adapters/src/delete.rs:293:27: replace - with + in Engine<'_, D>::open_frame
+MISSED crates/adapters/src/delete.rs:293:27: replace - with / in Engine<'_, D>::open_frame
+MISSED crates/adapters/src/delete.rs:293:31: replace - with / in Engine<'_, D>::open_frame
+MISSED crates/adapters/src/delete.rs:352:19: replace += with *= in Engine<'_, D>::note_failure
+MISSED crates/adapters/src/delete.rs:357:9: replace Engine<'_, D>::check_abort -> Result<(), DeleteFailure> with Ok(())
+MISSED crates/adapters/src/delete.rs:364:9: replace Engine<'_, D>::fatal -> DeleteFailure with Default::default()
+MISSED crates/adapters/src/delete.rs:452:46: replace > with < in Engine<'_, D>::scan_with
+MISSED crates/adapters/src/delete.rs:452:46: replace > with == in Engine<'_, D>::scan_with
+MISSED crates/adapters/src/delete.rs:452:46: replace > with >= in Engine<'_, D>::scan_with
+MISSED crates/adapters/src/delete.rs:467:9: replace Engine<'_, D>::remove_leaf -> Result<(), DeleteFailure> with Ok(())
+MISSED crates/adapters/src/delete.rs:472:52: replace += with *= in Engine<'_, D>::remove_leaf
+MISSED crates/adapters/src/delete.rs:472:52: replace += with -= in Engine<'_, D>::remove_leaf
+MISSED crates/adapters/src/delete.rs:525:40: replace += with *= in Engine<'_, D>::descend
+MISSED crates/adapters/src/delete.rs:525:40: replace += with -= in Engine<'_, D>::descend
+MISSED crates/adapters/src/delete.rs:532:30: replace > with == in Engine<'_, D>::descend
+MISSED crates/adapters/src/delete.rs:583:21: delete match arm Some(libc::ENOTDIR) in Engine<'_, D>::finish
+MISSED crates/adapters/src/delete.rs:619:50: replace > with < in Engine<'_, D>::run
+MISSED crates/adapters/src/delete.rs:619:50: replace > with == in Engine<'_, D>::run
+MISSED crates/adapters/src/dirops.rs:74:9: replace <impl std::fmt::Display for ScopeViolation>::fmt -> std::fmt::Result with Ok(Default::default())
+MISSED crates/adapters/src/dirops.rs:107:46: replace && with || in abs_is_clean
+MISSED crates/adapters/src/dirops.rs:112:5: replace map_open_error -> DeleteError with Default::default()
+MISSED crates/adapters/src/dirops.rs:128:5: replace open_verified_root -> Result<VerifiedRoot<D::Dir>, DeleteError> with Ok(VerifiedRoot::new())
+MISSED crates/adapters/src/dirops.rs:252:33: replace & with ^ in from_stat
+MISSED crates/adapters/src/dirops.rs:252:33: replace & with | in from_stat
+MISSED crates/adapters/src/dirops.rs:271:40: replace | with & in stat_info
+MISSED crates/adapters/src/dirops.rs:271:40: replace | with ^ in stat_info
+MISSED crates/adapters/src/dirops.rs:281:42: replace & with ^ in stat_info
+MISSED crates/adapters/src/dirops.rs:281:42: replace & with | in stat_info
+MISSED crates/adapters/src/dirops.rs:287:34: replace & with ^ in stat_info
+MISSED crates/adapters/src/dirops.rs:287:34: replace & with | in stat_info
+MISSED crates/adapters/src/dirops.rs:287:62: replace != with == in stat_info
+MISSED crates/adapters/src/dirops.rs:296:5: replace stat_info -> io::Result<StatInfo> with Ok(Default::default())
+MISSED crates/adapters/src/dirops.rs:300:5: replace plain_stat -> io::Result<StatInfo> with Ok(Default::default())
+MISSED crates/adapters/src/dirops.rs:317:9: replace <impl Iterator for RealReadDir>::next -> Option<Self::Item> with None
+MISSED crates/core/src/floor_rule.rs:35:64: replace && with || in matches_pattern
+MISSED crates/core/src/floor_rule.rs:35:75: replace > with < in matches_pattern
+MISSED crates/core/src/floor_rule.rs:35:75: replace > with == in matches_pattern
+MISSED crates/core/src/floor_rule.rs:35:75: replace > with >= in matches_pattern
+MISSED crates/core/src/floor_rule.rs:36:36: delete ! in matches_pattern
+MISSED crates/core/src/floor_rule.rs:36:50: replace && with || in matches_pattern
+MISSED crates/core/src/floor_rule.rs:37:41: delete ! in matches_pattern
+MISSED crates/core/src/floor_rule.rs:37:55: replace && with || in matches_pattern
+MISSED crates/core/src/floor_rule.rs:37:63: replace != with == in matches_pattern
+MISSED crates/core/src/floor_rule.rs:92:21: delete match arm NamePattern::SteamInstallDir in DeletePolicy::validate
+MISSED crates/core/src/floor_rule.rs:92:59: replace == with != in DeletePolicy::validate
+MISSED crates/core/src/floor_rule.rs:93:50: replace >= with < in DeletePolicy::validate
+TIMEOUT crates/adapters/src/delete.rs:483:20: replace == with != in Engine<'_, D>::remove_leaf
+TIMEOUT crates/adapters/src/delete.rs:484:49: replace < with == in Engine<'_, D>::remove_leaf
+TIMEOUT crates/adapters/src/delete.rs:484:49: replace < with > in Engine<'_, D>::remove_leaf
+TIMEOUT crates/adapters/src/delete.rs:516:66: replace += with *= in Engine<'_, D>::descend
+TIMEOUT crates/adapters/src/delete.rs:516:66: replace += with -= in Engine<'_, D>::descend
+TIMEOUT crates/adapters/src/delete.rs:523:20: replace != with == in Engine<'_, D>::descend
+TIMEOUT crates/adapters/src/delete.rs:532:30: replace > with < in Engine<'_, D>::descend
+TIMEOUT crates/adapters/src/delete.rs:532:30: replace > with >= in Engine<'_, D>::descend
+TIMEOUT crates/adapters/src/delete.rs:541:48: replace += with -= in Engine<'_, D>::descend
+TIMEOUT crates/adapters/src/delete.rs:619:50: replace > with >= in Engine<'_, D>::run
+TIMEOUT crates/adapters/src/delete.rs:620:17: replace && with || in Engine<'_, D>::run
+TIMEOUT crates/adapters/src/delete.rs:620:50: replace <= with > in Engine<'_, D>::run
+TIMEOUT crates/adapters/src/dirops.rs:369:28: replace == with != in <impl DirOps for RealDirOps>::open_dir
+TIMEOUT crates/adapters/src/dirops.rs:391:9: replace <impl DirOps for RealDirOps>::read_dir -> io::Result<RealReadDir> with Ok(Default::default())
+TIMEOUT crates/adapters/src/dirops.rs:397:9: replace <impl DirOps for RealDirOps>::unlinkat -> io::Result<()> with Ok(())

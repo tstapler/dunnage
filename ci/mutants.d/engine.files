@@ -1,0 +1,4 @@
+# Story 2.1.5 (Task 2.1.5b): the delete engine, its directory port and rule F
+crates/adapters/src/delete.rs
+crates/adapters/src/dirops.rs
+crates/core/src/floor_rule.rs
