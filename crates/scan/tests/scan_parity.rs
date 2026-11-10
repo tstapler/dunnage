@@ -144,7 +144,7 @@ fn fixture_should_match_its_recorded_checksum_list_When_regenerated() {
         .arg(&fx.root)
         .output()
         .unwrap();
-    let expected = fs::read_to_string(parity_dir().join("fixture.manifest")).unwrap();
+    let expected = fs::read_to_string(parity_dir().join("fixture.checksums")).unwrap();
     assert_eq!(String::from_utf8_lossy(&out.stdout), expected);
 }
 

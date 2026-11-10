@@ -16,5 +16,5 @@ args=(scan --backend walker --no-cache --threads 1)
 "$bin" "${args[@]}" --json "$root" > "$out/expected.json"
 "$bin" "${args[@]}" "$root" > "$out/expected.txt"
 printf '%s\n' "$root" > "$out/expected.root"
-"$out/fixture-manifest.sh" "$root" > "$out/fixture.manifest"
+"$out/fixture-manifest.sh" "$root" > "$out/fixture.checksums"
 echo "captured $(wc -l < "$out/expected.json") json lines, root $root"
