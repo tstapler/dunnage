@@ -234,10 +234,12 @@ pub fn options(jobs: usize) -> RunOptions {
                 dirty: false,
                 metascope_rev: "none".into(),
                 patched: false,
+                metascope_dirty: false,
             },
             stamp: None,
             break_glass: None,
             roots: RunRoots::default(),
+            verdict_start: None,
         },
     }
 }

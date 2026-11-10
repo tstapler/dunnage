@@ -102,6 +102,7 @@ pub struct RunMeta {
     pub stamp: Option<StampSummary>,
     pub break_glass: Option<BreakGlass>,
     pub roots: RunRoots,
+    pub verdict_start: Option<DiskVerdict>,
 }
 
 #[derive(Debug, Clone)]
@@ -410,6 +411,7 @@ impl<'a> Executor<'a> {
             stamp: self.opts.meta.stamp.clone(),
             break_glass: self.opts.meta.break_glass.clone(),
             roots: self.opts.meta.roots.clone(),
+            verdict_start: self.opts.meta.verdict_start,
         };
         if let Err(e) = env.audit.run_start(&start) {
             let fatal = audit_unwritable(env, e.raw_os_error().unwrap_or(5));

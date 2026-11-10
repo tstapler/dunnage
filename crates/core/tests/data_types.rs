@@ -36,6 +36,7 @@ fn audit_record_should_roundtrip_each_line_type_with_a_type_tag() {
             dirty: false,
             metascope_rev: "def".into(),
             patched: false,
+            metascope_dirty: false,
         },
         stamp: Some(StampSummary {
             gate: "A".into(),
@@ -48,6 +49,7 @@ fn audit_record_should_roundtrip_each_line_type_with_a_type_tag() {
             tty_confirmed: true,
         }),
         roots: RunRoots::default(),
+        verdict_start: None,
     });
     let intent = AuditRecord::Intent(Intent::of(&c, "r1", 6));
     let end = AuditRecord::RunEnd(RunEnd {
