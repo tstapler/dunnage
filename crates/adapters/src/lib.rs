@@ -4,6 +4,7 @@ pub mod command;
 pub mod config;
 pub mod delete;
 pub mod dirops;
+pub mod fiemap;
 pub mod probe;
 pub mod settle;
 pub mod snapshots;
@@ -20,6 +21,7 @@ pub use dirops::{
 };
 
 pub use command::RealCommandRunner;
+pub use fiemap::FiemapProbe;
 pub use probe::RealProbe;
 pub use snapshots::{SnapshotInfo, SnapshotLayout};
 pub use space_meter::RealSpaceMeter;
