@@ -62,6 +62,9 @@ pub struct BuildInfo {
     pub metascope_rev: String,
     /// A local `[patch]` was in force when it was built.
     pub patched: bool,
+    /// `crates/scan` had uncommitted changes when it was built.
+    #[serde(default)]
+    pub metascope_dirty: bool,
 }
 
 /// The verified gate stamp of the running binary.

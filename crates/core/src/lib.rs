@@ -18,6 +18,7 @@ pub mod executor;
 pub mod explore;
 pub mod flavor;
 pub mod floor_rule;
+pub mod gate_stamp;
 pub mod guard;
 pub mod ids;
 pub mod kind;
@@ -57,6 +58,10 @@ pub use delete_types::{
     DirEntryInfo, FileKind, Freed, NamePattern, StatInfo, CMD_MSG_MAX,
 };
 pub use dirs::Dirs;
+pub use gate_stamp::{
+    break_glass_reason, break_glass_warning, check_stamp, required_gate, GateStamp, StampRefusal,
+    BREAK_GLASS_NO_TTY, BREAK_GLASS_NO_TTY_CODE, BREAK_GLASS_WORD, STAMP_SCHEMA,
+};
 pub use flavor::build_flavor;
 pub use ids::{AllocatedBytes, AppId, ApparentBytes, CandidateId, DockerId, Identity, RootDev};
 pub use kind::{selector_of, Kind, Risk, SelectorId};

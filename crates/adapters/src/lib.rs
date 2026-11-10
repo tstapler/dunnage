@@ -7,6 +7,7 @@ pub mod dirops;
 pub mod discover_build;
 pub mod discover_cache;
 pub mod fiemap;
+pub mod gate_stamp;
 pub mod mtime_probe;
 pub mod probe;
 pub mod settle;
