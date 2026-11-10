@@ -17,7 +17,10 @@ SITE_UNCONF=crates/cli/src/wiring/confine.rs # the one place that may call uncon
 GUARD=crates/core/src/guard.rs               # the one place that may call Allowed::new
 WITNESS_TYPES='ApplyToken|Allowed|WorktreeRemoval'
 # the only adapters files that may contain `unsafe` (a ZST such as ApplyToken can be forged by any unsafe pointer cast)
-UNSAFE_OK='^crates/adapters/src/(dirops|space_meter|lock|signals)\.rs:|^crates/adapters/src/probe/'
+UNSAFE_OK='^crates/adapters/src/(dirops|space_meter|lock|signals)\.rs:|^crates/adapters/src/probe/|^crates/scan/src/btrfs_tree\.rs:'
+# the scan crate is a leaf that cannot name a witness type (check-scan-deps.sh); its one ioctl module builds the
+# BTRFS_IOC_TREE_SEARCH_V2 request header with slice::from_raw_parts, and only that identifier in that file is exempt
+FORGE_OK='^crates/scan/src/btrfs_tree\.rs:[0-9]+:from_raw_parts$'
 
 SELF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")
 
@@ -231,9 +234,9 @@ main() {
   # a literal is allowed only inside grant/for_tests of the definition file; elsewhere `Self(..)` is some other type
   flag "ApplyToken tuple or struct literal outside grant/for_tests of apply_token.rs" < <(printf '%s\n' "$H_literal" | awk -F: -v def="$DEF_TOKEN" '$1 == def || $3 !~ /^Self/' | grep . || true)
   flag "impl ApplyToken has a constructor other than grant/for_tests" <<< "$H_ctorfn"
-  flag "memory-forging primitive" < <(printf '%s\n%s\n%s\n%s\n' "$(printf '%s\n' "$H_ident" | awk -F: '$3 !~ /^(grant|unconfined|for_tests)$/')" "$H_ptrread" "$H_useptr" "$H_union" | grep . || true)
+  flag "memory-forging primitive" < <(printf '%s\n%s\n%s\n%s\n' "$(printf '%s\n' "$H_ident" | awk -F: '$3 !~ /^(grant|unconfined|for_tests)$/')" "$H_ptrread" "$H_useptr" "$H_union" | grep -Ev -- "$FORGE_OK" | grep . || true)
   flag "pointer type or unsafe block names a witness type (a ZST can be forged from any pointer)" < <(printf '%s\n%s\n' "$H_ptrtype" "$H_unsafewitness" | grep . || true)
-  flag "unsafe outside the adapters files that need it (dirops, space_meter, lock, signals, probe/)" < <(not_in "$H_unsafe" "$UNSAFE_OK")
+  flag "unsafe outside the adapters files that need it (dirops, space_meter, lock, signals, probe/; scan: btrfs_tree.rs only)" < <(not_in "$H_unsafe" "$UNSAFE_OK")
   local c
   for c in core cli; do
     local f=crates/$c/src/lib.rs; [ "$c" = cli ] && f=crates/cli/src/main.rs
@@ -342,6 +345,9 @@ selftest() {
     [zst-ptr-glob-use]="memory-forging primitive"
     [zst-union]="memory-forging primitive"
     [zst-wrong-file]="unsafe outside the adapters files"
+    [scan-second-unsafe]="unsafe outside the adapters files"
+    [scan-forge-other-file]="memory-forging primitive"
+    [scan-transmute-in-btrfs-tree]="memory-forging primitive"
   )
   expect_fail() {  # $1 name, $2 dir, $3 sites; the failure must carry the diagnostic WANT[name], not a tool error
     local out; out=$("$SELF" --expect-sites "${3:-1}" "$2" 2>&1)
@@ -421,6 +427,15 @@ fn f(p: *const ApplyToken) { let _ = unsafe { read(p) }; }'
   # positive: `unsafe` in a listed adapters file (probe/) that does not name a witness passes
   cp -r "$t/clean" "$t/pos2"; mkdir -p "$t/pos2/crates/adapters/src/probe"; printf 'fn f() { unsafe { libc::geteuid() }; }\n' > "$t/pos2/crates/adapters/src/probe/basic.rs"
   if "$SELF" --expect-sites 1 "$t/pos2" >/dev/null 2>&1; then echo "ok: unsafe in adapters/src/probe/ that names no witness type is allowed"; else echo "SELFTEST BAD: probe/ unsafe false positive"; rc=1; fi
+  # scan crate (ADR-007 decision 6): its btrfs_tree.rs unsafe (ioctl, from_raw_parts) passes; nothing wider does
+  scan_unsafe='fn h(k: &K, b: &mut [u8]) { let raw = unsafe { std::slice::from_raw_parts((k as *const K).cast::<u8>(), 8) }; b[..8].copy_from_slice(raw); }
+fn i(fd: i32) { let _ = unsafe { libc::ioctl(fd, 0, 0) }; }'
+  cp -r "$t/clean" "$t/pos3"; mkdir -p "$t/pos3/crates/scan/src"; printf '%s\n' "$scan_unsafe" > "$t/pos3/crates/scan/src/btrfs_tree.rs"
+  if "$SELF" --expect-sites 1 "$t/pos3" >/dev/null 2>&1; then echo "ok: the scan crate's btrfs_tree.rs ioctl and from_raw_parts are allowed"; else echo "SELFTEST BAD: scan btrfs_tree.rs unsafe false positive"; rc=1; fi
+  neg scan-second-unsafe crates/scan/src/walker.rs 'fn a() { unsafe { } }'
+  neg scan-forge-other-file crates/scan/src/walker.rs 'fn a(p: *const u8) { let _ = std::slice::from_raw_parts(p, 1); }'
+  d="$t/n-scan-transmute-in-btrfs-tree"; cp -r "$t/pos3" "$d"; printf 'fn a() { let _: u64 = unsafe { std::mem::transmute(0u64) }; }\n' >> "$d/crates/scan/src/btrfs_tree.rs"
+  expect_fail scan-transmute-in-btrfs-tree "$d"
   # fail-closed on a blind scan: a tree where the definition files are missing
   mkdir -p "$t/blind/crates/cli/src"; echo 'fn main() {}' > "$t/blind/crates/cli/src/main.rs"
   if out=$("$SELF" --expect-sites 0 "$t/blind" 2>&1); then echo "SELFTEST BAD: blind tree passed"; rc=1; else echo "ok: a tree without the definition sites fails (scan cannot be vacuous)"; fi
