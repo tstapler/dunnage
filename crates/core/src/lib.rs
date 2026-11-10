@@ -29,6 +29,7 @@ pub mod ports;
 pub mod preflight;
 pub mod reasons;
 pub mod roots;
+pub mod selector;
 mod serde_remote;
 pub mod shell_quote;
 pub mod snapshot_types;
