@@ -255,6 +255,12 @@ fn from_stat(st: &rustix::fs::Stat) -> StatInfo {
     }
 }
 
+// `AtFlags::EMPTY_PATH` exists only on Linux/Android; elsewhere `plain_stat` already picks `fstat` for an empty name.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+const FSTAT_FLAGS: AtFlags = AtFlags::EMPTY_PATH;
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+const FSTAT_FLAGS: AtFlags = AtFlags::empty();
+
 #[cfg(target_os = "linux")]
 fn stat_info(fd: &OwnedFd, name: &OsStr, flags: AtFlags) -> io::Result<StatInfo> {
     use rustix::fs::StatxFlags;
@@ -368,7 +374,7 @@ impl DirOps for RealDirOps {
 
     fn fstat(&self, d: &RealDir) -> io::Result<StatInfo> {
         self.check_read()?;
-        stat_info(&d.fd, OsStr::new(""), AtFlags::EMPTY_PATH)
+        stat_info(&d.fd, OsStr::new(""), FSTAT_FLAGS)
     }
 
     fn stat_at(&self, d: &RealDir, name: &OsStr) -> io::Result<StatInfo> {
