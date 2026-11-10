@@ -44,6 +44,7 @@ pub fn classify_path(path: &Path) -> Option<BuildKind> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use std::fs;
