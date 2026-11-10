@@ -1,9 +1,15 @@
-#![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::many_single_char_names,
+    non_snake_case
+)]
 //! `KindSelector` and `Selection` (Task 1.1.4c).
 
 mod common;
 
 use common::{build_dir, docker_cache, run, FakeTarget, Rig, DAY};
+use disk_cleanup_core::plan::Planned;
 use disk_cleanup_core::selector::{
     default_min_age_secs, Discard, DockerVolumes, KindSelector, Selection, SelectorError,
 };
@@ -16,7 +22,7 @@ fn parse(s: &str) -> Result<KindSelector, SelectorError> {
 }
 
 fn ids(s: &KindSelector) -> Vec<&'static str> {
-    let mut v: Vec<_> = s.ids().map(|i| i.id()).collect();
+    let mut v: Vec<_> = s.ids().map(SelectorId::id).collect();
     v.sort_unstable();
     v
 }
@@ -135,7 +141,6 @@ fn except_and_min_size_and_per_kind_min_age_defaults_should_apply_When_14d_14d_3
             .map(|i| i.planned)
     };
     assert!(by_id(small_old_id).is_none(), "under --min-size: absent");
-    use disk_cleanup_core::plan::Planned;
     assert_eq!(by_id(big_old.id()), Some(Planned::Will));
     assert_eq!(
         by_id(big_young.id()),

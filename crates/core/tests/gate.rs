@@ -120,7 +120,10 @@ fn kind_gate_should_carry_typed_reasons_and_the_kinds_available_column_should_de
 #[test]
 fn a_list_only_gate_should_show_the_items_without_making_them_removable() {
     let rig = Rig::new();
-    rig.runner.on(&["docker", "info"], Ok(Default::default()));
+    rig.runner.on(
+        &["docker", "info"],
+        Ok(disk_cleanup_core::ports::CmdOutput::default()),
+    );
     let t = DockerLike {
         items: vec![docker_cache(1, 1 << 20)],
         untested: true,

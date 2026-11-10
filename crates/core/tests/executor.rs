@@ -1,4 +1,9 @@
-#![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::many_single_char_names,
+    non_snake_case
+)]
 //! The `Executor` over fakes (Story 1.1.4): plan mode, ordering, audit, abort, the pool, the gate.
 
 mod common;
