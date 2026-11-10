@@ -105,7 +105,7 @@ pub struct RootSet {
 
 /// Absolute, no `.` or `..`, no empty component, no trailing `/` (except `/` itself). The string-level rule of
 /// Story 0.1.3 C3: `starts_with` is never applied to anything else.
-fn lexically_clean(p: &Path) -> bool {
+pub(crate) fn lexically_clean(p: &Path) -> bool {
     let Some(s) = p.to_str() else { return false };
     let Some(rest) = s.strip_prefix('/') else {
         return false;

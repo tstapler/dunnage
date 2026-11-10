@@ -25,8 +25,6 @@ pub struct Allowed {
 }
 
 impl Allowed {
-    // Story 1.1.3 adds the one call site, in guard.rs.
-    #[allow(dead_code)]
     pub(crate) fn new(path: PathBuf, ident: Identity, kind: Kind) -> Allowed {
         Allowed { path, ident, kind }
     }
