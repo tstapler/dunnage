@@ -41,6 +41,15 @@ impl WalkHooks for ListFails {
     }
 }
 
+/// A scoped thread reports completion slightly before the kernel removes its task, so give exits 500 ms to land;
+/// a thread that is still running stays in the count.
+fn settle(before: usize) {
+    let t = Instant::now();
+    while thread_count() != before && t.elapsed() < Duration::from_millis(500) {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
 #[test]
 fn walks_should_leave_no_threads_behind_and_a_tiny_walk_should_return_promptly() {
     let roots = vec![PathBuf::from(ROOT)];
@@ -85,6 +94,7 @@ fn walks_should_leave_no_threads_behind_and_a_tiny_walk_should_return_promptly()
                     .unwrap();
             }
         }
+        settle(before);
         assert_eq!(thread_count(), before, "walk {i} left a thread behind");
     }
     assert!(

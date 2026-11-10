@@ -87,9 +87,9 @@ fn delete_tree_should_return_OutsideScope_and_leave_the_sibling_untouched_When_c
 ) {
     let w = world();
     let before = snapshot(&w.base.join("outside"));
-    // Handles to the sibling are opened by an unconfined value (reads only) so that the engine, not the
-    // opening step, is what meets the guard.
-    let open_ops = RealDirOps::unconfined(&ApplyToken::for_tests());
+    // The handles are opened through a wider root that contains both trees, so that the narrower ops value
+    // given to `delete_tree`, not the opening step, is what meets the guard.
+    let open_ops = RealDirOps::confined_to(&w.base);
     let root = open_verified_root(&open_ops, &w.base, ident(&w.base)).unwrap();
     let parent = open_parent(&open_ops, &root, Path::new("outside/app")).unwrap();
 
