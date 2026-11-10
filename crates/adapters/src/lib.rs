@@ -5,6 +5,7 @@ pub mod config;
 pub mod delete;
 pub mod dirops;
 pub mod discover_build;
+pub mod discover_cache;
 pub mod fiemap;
 pub mod mtime_probe;
 pub mod probe;
