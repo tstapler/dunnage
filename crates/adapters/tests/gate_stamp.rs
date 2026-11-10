@@ -199,6 +199,12 @@ fn read_stamp_and_sha256_file_should_read_what_gate_sh_writes() {
 #[test]
 fn stamp_refusal_should_offer_both_the_rebuild_and_the_audited_break_glass() {
     let t = disk_cleanup_core::StampRefusal::Absent.text();
-    assert!(t.contains("If the disk has room for a build, run 'make gate"), "{t}");
-    assert!(t.contains("DISK_CLEANUP_UNGATED=<reason>") && t.contains("type BYPASS"), "{t}");
+    assert!(
+        t.contains("If the disk has room for a build, run 'make gate"),
+        "{t}"
+    );
+    assert!(
+        t.contains("DISK_CLEANUP_UNGATED=<reason>") && t.contains("type BYPASS"),
+        "{t}"
+    );
 }

@@ -105,7 +105,8 @@ fn break_glass_should_proceed_with_the_header_warning_and_audit_field_and_refuse
 }
 
 #[test]
-fn stamp_refusal_text_should_offer_both_the_rebuild_and_the_audited_break_glass_and_end_with_nothing_deleted() {
+fn stamp_refusal_text_should_offer_both_the_rebuild_and_the_audited_break_glass_and_end_with_nothing_deleted(
+) {
     for r in [
         StampRefusal::Absent,
         StampRefusal::UnknownSchema { found: 3 },
@@ -121,9 +122,18 @@ fn stamp_refusal_text_should_offer_both_the_rebuild_and_the_audited_break_glass_
         },
     ] {
         let t = r.text();
-        assert!(t.contains("If the disk has room for a build, run 'make gate"), "{t}");
-        assert!(t.contains("DISK_CLEANUP_UNGATED=<reason>") && t.contains("type BYPASS"), "{t}");
-        assert!(t.contains("recorded in the audit log") && t.ends_with("Nothing was deleted."), "{t}");
+        assert!(
+            t.contains("If the disk has room for a build, run 'make gate"),
+            "{t}"
+        );
+        assert!(
+            t.contains("DISK_CLEANUP_UNGATED=<reason>") && t.contains("type BYPASS"),
+            "{t}"
+        );
+        assert!(
+            t.contains("recorded in the audit log") && t.ends_with("Nothing was deleted."),
+            "{t}"
+        );
         assert_eq!(r.exit_code(), 64);
     }
 }
