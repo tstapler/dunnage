@@ -25,6 +25,7 @@ impl SpaceInfo {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct Allocation {
     pub data: SpaceInfo,
     pub metadata: SpaceInfo,
