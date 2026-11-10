@@ -60,6 +60,7 @@ pub use plan_state::{
     BuildInfo, ItemKey, SaveOutcome, SavedPlan, SavedSelection, StampSummary, ITEM_KEY_MAX,
 };
 pub use platform::{MountEntry, Platform, Tri};
+pub use preflight::{PreflightVerdict, Starvation};
 pub use reasons::{errno_phrase, FatalError, Warning};
 pub use snapshot_types::{AllocSnapshot, FsSnapshot, Settled, SpaceUse};
 pub use summary::{Cause, CauseKind, DiskVerdict, RunSummary, StageTimings, WalkerCounters};
