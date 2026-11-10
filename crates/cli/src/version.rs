@@ -3,11 +3,17 @@
 
 use std::ffi::OsString;
 
+use crate::wiring::audit::build_info;
+
 pub fn line() -> String {
+    let b = build_info();
     format!(
-        "disk-cleanup {} {}",
-        env!("CARGO_PKG_VERSION"),
-        disk_cleanup_core::build_flavor()
+        "disk-cleanup {} {} commit {}{}{}",
+        b.bin_version,
+        disk_cleanup_core::build_flavor(),
+        b.git_commit,
+        if b.dirty { " dirty" } else { "" },
+        if b.metascope_dirty { " scan-dirty" } else { "" },
     )
 }
 

@@ -24,7 +24,10 @@ fn child_probe() {
     let var = std::env::var("DISK_CLEANUP_UNGATED").ok();
     let r = break_glass(var.as_deref(), &open_controlling_tty);
     let (word, code) = match r {
-        Ok(bg) => (format!("OK tty_confirmed={} reason={}", bg.tty_confirmed, bg.reason), 0),
+        Ok(bg) => (
+            format!("OK tty_confirmed={} reason={}", bg.tty_confirmed, bg.reason),
+            0,
+        ),
         Err(BreakGlassRefusal::NoTerminal) => ("NO_TTY".to_string(), 64),
         Err(BreakGlassRefusal::NotConfirmed) => ("NOT_CONFIRMED".to_string(), 64),
         Err(BreakGlassRefusal::NotRequested) => ("NOT_REQUESTED".to_string(), 64),
@@ -111,7 +114,10 @@ fn break_glass_should_exit_64_without_a_controlling_terminal_and_proceed_only_wi
         return;
     }
     let (code, line) = under_pty("BYPASS\n");
-    assert_eq!(line, "OK tty_confirmed=true reason=rebuilt locally for Gate B");
+    assert_eq!(
+        line,
+        "OK tty_confirmed=true reason=rebuilt locally for Gate B"
+    );
     assert_eq!(code, Some(0));
     for wrong in ["bypass\n", "yes\n", "BYPASS now\n", "\n", "\u{4}"] {
         let (code, line) = under_pty(wrong);
@@ -188,4 +194,11 @@ fn read_stamp_and_sha256_file_should_read_what_gate_sh_writes() {
     assert_eq!((s.schema, s.gate.as_str()), (STAMP_SCHEMA, "B"));
     std::fs::write(&p, r#"{"schema":7,"x":1}"#).unwrap();
     assert_eq!(read_stamp(&p).unwrap().schema, 7);
+}
+
+#[test]
+fn stamp_refusal_should_offer_both_the_rebuild_and_the_audited_break_glass() {
+    let t = disk_cleanup_core::StampRefusal::Absent.text();
+    assert!(t.contains("If the disk has room for a build, run 'make gate"), "{t}");
+    assert!(t.contains("DISK_CLEANUP_UNGATED=<reason>") && t.contains("type BYPASS"), "{t}");
 }
