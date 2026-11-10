@@ -5,6 +5,9 @@ pub mod config;
 pub mod delete;
 pub mod dirops;
 pub mod probe;
+pub mod snapshots;
+pub mod space_meter;
+pub mod statvfs;
 #[cfg(feature = "test-support")]
 pub mod testing;
 pub mod treestat;
@@ -16,3 +19,5 @@ pub use dirops::{
 
 pub use command::RealCommandRunner;
 pub use probe::RealProbe;
+pub use snapshots::{SnapshotInfo, SnapshotLayout};
+pub use space_meter::RealSpaceMeter;

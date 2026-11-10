@@ -28,7 +28,8 @@ fn snap(unallocated_mib: u64, headroom_mib: u64) -> FsSnapshot {
 }
 
 #[test]
-fn preflight_should_refuse_with_exit_3_When_unallocated_600mib_and_headroom_32mib_and_pass_at_200mib() {
+fn preflight_should_refuse_with_exit_3_When_unallocated_600mib_and_headroom_32mib_and_pass_at_200mib(
+) {
     let v = check(&snap(600, 32), &[Kind::Cache]);
     assert_eq!(
         v,
@@ -40,11 +41,23 @@ fn preflight_should_refuse_with_exit_3_When_unallocated_600mib_and_headroom_32mi
     let fatal = v.fatal().unwrap();
     assert_eq!(fatal, FatalError::Starved);
     assert_eq!(fatal.exit_code(), 3);
-    assert_eq!(check(&snap(600, 200), &[Kind::Cache]), PreflightVerdict::Proceed);
+    assert_eq!(
+        check(&snap(600, 200), &[Kind::Cache]),
+        PreflightVerdict::Proceed
+    );
     // the AND: either figure alone is enough, and the thresholds are inclusive on the safe side
-    assert_eq!(check(&snap(1024, 0), &[Kind::Cache]), PreflightVerdict::Proceed);
-    assert_eq!(check(&snap(0, 64), &[Kind::Cache]), PreflightVerdict::Proceed);
-    assert!(matches!(check(&snap(1023, 63), &[Kind::Cache]), PreflightVerdict::Refuse(_)));
+    assert_eq!(
+        check(&snap(1024, 0), &[Kind::Cache]),
+        PreflightVerdict::Proceed
+    );
+    assert_eq!(
+        check(&snap(0, 64), &[Kind::Cache]),
+        PreflightVerdict::Proceed
+    );
+    assert!(matches!(
+        check(&snap(1023, 63), &[Kind::Cache]),
+        PreflightVerdict::Refuse(_)
+    ));
 }
 
 #[test]

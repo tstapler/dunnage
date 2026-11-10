@@ -231,6 +231,7 @@ version = "0.1.0"
 dependencies = [
  "disk-cleanup-adapters",
  "disk-cleanup-core",
+ "disk-cleanup-scan",
  "libc",
  "rustix",
  "tempfile",
