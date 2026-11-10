@@ -27,6 +27,10 @@ jobs:
         run: cargo fmt --all --check
       - name: core deps
         run: scripts/check-core-deps.sh
+      - name: no stray unlink selftest
+        run: scripts/check-no-stray-unlink.sh --selftest
+      - name: no stray unlink
+        run: scripts/check-no-stray-unlink.sh
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: test

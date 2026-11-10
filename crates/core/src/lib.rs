@@ -44,6 +44,10 @@ pub use apply_token::ApplyToken;
 pub use audit_types::{
     AuditRecord, BreakGlass, Intent, ItemResult, RunEnd, RunRoots, RunStart, AUDIT_SCHEMA,
 };
+pub use cache_targets::{
+    cache_table, cache_table_with_availability, CacheRow, CacheSource, OsSet, RowAvailability,
+    CACHE_ROWS,
+};
 pub use candidate::{
     BtrfsFacts, BuildDirFacts, BuildDirFlavor, CacheFacts, Candidate, DockerFacts, KindFacts,
     Locator, SteamFacts, WorktreeFacts, CANDIDATE_SCHEMA,
