@@ -197,7 +197,7 @@ proptest! {
 
         prop_assert!(fs::symlink_metadata(&a.nm).is_err());
         prop_assert!(fs::symlink_metadata(&b.nm).is_err());
-        prop_assert_eq!(listing(&a.nm.parent().unwrap().to_path_buf()), listing(&b.nm.parent().unwrap().to_path_buf()));
+        prop_assert_eq!(listing(a.nm.parent().unwrap()), listing(b.nm.parent().unwrap()));
         prop_assert_eq!(hash_tree(&a.sentinel), sentinel_before);
         prop_assert_eq!(hash_tree(&a.sentinel), hash_tree(&b.sentinel));
     }

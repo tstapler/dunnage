@@ -127,5 +127,8 @@ fn ten_thousand_levels_should_delete_with_soft_nofile_256_and_never_hold_more_th
         String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("1 passed"), "child did not run the test: {stdout}");
+    assert!(
+        stdout.contains("1 passed"),
+        "child did not run the test: {stdout}"
+    );
 }
