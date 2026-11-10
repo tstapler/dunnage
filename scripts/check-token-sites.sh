@@ -16,13 +16,316 @@ SITE_GRANT=crates/cli/src/wiring/token.rs    # the one place that may call grant
 SITE_UNCONF=crates/cli/src/wiring/confine.rs # the one place that may call unconfined
 GUARD=crates/core/src/guard.rs               # the one place that may call Allowed::new
 WITNESS_TYPES='ApplyToken|Allowed|WorktreeRemoval'
-# the only adapters files that may contain `unsafe` (a ZST such as ApplyToken can be forged by any unsafe pointer cast)
-UNSAFE_OK='^crates/adapters/src/(dirops|space_meter|lock|signals)\.rs:|^crates/adapters/src/probe/|^crates/scan/src/btrfs_tree\.rs:'
+# the only adapters files that may contain `unsafe` (fiemap.rs also answers to the content rule below) (a ZST such as ApplyToken can be forged by any unsafe pointer cast)
+UNSAFE_OK='^crates/adapters/src/(dirops|space_meter|lock|signals|fiemap)\.rs:|^crates/adapters/src/probe/|^crates/scan/src/btrfs_tree\.rs:'
 # the scan crate is a leaf that cannot name a witness type (check-scan-deps.sh); its one ioctl module builds the
 # BTRFS_IOC_TREE_SEARCH_V2 request header with slice::from_raw_parts, and only that identifier in that file is exempt
 FORGE_OK='^crates/scan/src/btrfs_tree\.rs:[0-9]+:from_raw_parts$'
 
 SELF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")
+
+FIEMAP=crates/adapters/src/fiemap.rs         # the one `unsafe` file for shared-extent attribution (ADR-004); read-only by content
+
+# The content rule for $FIEMAP: an ALLOW list of names, so an unlisted sibling spelling fails by not being listed
+# (reference and evasion list: tui/tools/fiemap_scan.py of the plan). Written to a temp file and run with `python3 -I`.
+write_fiemap_scan() {  # $1 = path
+  cat > "$1" <<'PYEOF'
+"""Reference for the content rule that `scripts/check-token-sites.sh` applies to the one `unsafe` file,
+`adapters/src/fiemap.rs` (plan Task 1.2.2d, ADR-004 outcome 3; Story 6.3.2 extends the allow table). An ALLOW list, not a deny list: the file may name
+only the external paths, imported members, macros and attributes below, so an unlisted sibling spelling (`renameat`, `remove_file`,
+`fchmod`, `OFlags::WRONLY`, `libc::syscall`, a macro-built call) fails by not being listed. A second layer rejects identifiers that
+contain a write-like word. The text is tokenised (strings and comments removed by a small Rust lexer, so `"//"` cannot hide code).
+Usage: python3 -I fiemap_scan.py <file.rs>            prints "file:line: rule: text" per hit, exit 1 on any hit
+       python3 -I fiemap_scan.py --selftest <scratch>  plants the evasions and the clean files, exit 0 when all behave"""
+import os
+import re
+import sys
+
+ALLOWED_PATHS = {  # every external path the file may spell, as a `use` leaf or fully qualified
+    "rustix::fs::open", "rustix::fs::lstat", "rustix::fs::fstat", "rustix::fs::statfs",
+    "rustix::fs::OFlags", "rustix::fs::Mode", "rustix::fs::FileType",
+    "libc::ioctl", "libc::c_int", "libc::c_ulong", "libc::c_void",
+    "core::mem::size_of", "core::mem::zeroed",
+    "std::io", "std::io::Error", "std::os::fd::AsRawFd", "std::os::fd::OwnedFd", "std::path::Path",
+    "std::time::Duration", "std::time::Instant", "std::sync::atomic::AtomicBool", "std::sync::atomic::Ordering",
+    "disk_cleanup_core::ports::ExtentProbe", "disk_cleanup_core::ports::ExtentAttribution",
+    "disk_cleanup_core::ports::Unavailable", "disk_cleanup_core::ports::ItemExtents",
+    "disk_cleanup_core::ports::SharedExtent", "disk_cleanup_core::explore::SharedEstimate",
+}
+ALLOWED_MEMBERS = {  # Type::member of a name imported from rustix or libc
+    "OFlags::RDONLY", "OFlags::NOFOLLOW", "OFlags::NONBLOCK", "OFlags::CLOEXEC", "Mode::empty",
+    "FileType::RegularFile", "FileType::Symlink", "FileType::Directory", "FileType::from_raw_mode",
+}
+ALLOWED_MACROS = {"matches", "debug_assert", "debug_assert_eq", "assert", "assert_eq", "cfg", "format", "vec"}
+ALLOWED_ATTRS = {"repr", "derive", "cfg", "allow", "inline", "must_use", "test"}
+EXTERNAL_ROOTS = {"rustix", "libc", "std", "core", "alloc", "nix", "crate", "super", "disk_cleanup_core",
+                  "disk_cleanup_adapters", "metascope_core"}
+CAPABILITY_ROOTS = {"rustix", "libc"}
+SECOND_LAYER = ("unlink", "rename", "remove", "write", "trunc", "fallocate", "chmod", "chown", "syscall", "wronly", "rdwr",
+                "creat", "append", "applytoken", "allowedtarget", "delete", "dirops", "mkdir", "symlink", "linkat",
+                "utime", "xattr", "mount", "flag_sync", "openoptions", "transmute")
+PUNCT2 = ("::", "->", "=>", "!=", "==", "<=", ">=", "&&", "||", "..")
+
+
+class Bad(Exception):
+    pass
+
+
+def lex(src):
+    """-> list of (kind, text, line); kinds: id, num, p, str, chr, life. Raises Bad on an unterminated string or comment."""
+    i, n, line, out = 0, len(src), 1, []
+    while i < n:
+        c = src[i]
+        if c == "\n":
+            line += 1; i += 1; continue
+        if c in " \t\r":
+            i += 1; continue
+        if src.startswith("//", i):
+            while i < n and src[i] != "\n":
+                i += 1
+            continue
+        if src.startswith("/*", i):
+            depth, i = 1, i + 2
+            while depth:
+                if i >= n:
+                    raise Bad(f"{line}: unterminated block comment")
+                if src.startswith("/*", i): depth += 1; i += 2
+                elif src.startswith("*/", i): depth -= 1; i += 2
+                else:
+                    line += src[i] == "\n"; i += 1
+            continue
+        m = re.match(r'(?:br|cr|r|b|c)?(#*)"', src[i:]) if c in "rbc\"" else None
+        if m and (c == '"' or src[i:i + 1] in "rbc"):
+            hashes, raw = m.group(1), "r" in src[i:i + m.end()]
+            i += m.end()
+            if raw or hashes:
+                end = '"' + hashes
+                j = src.find(end, i)
+                if j < 0: raise Bad(f"{line}: unterminated raw string")
+                line += src[i:j].count("\n"); i = j + len(end)
+            else:
+                while True:
+                    if i >= n: raise Bad(f"{line}: unterminated string")
+                    if src[i] == "\\": i += 2; continue
+                    if src[i] == '"': i += 1; break
+                    line += src[i] == "\n"; i += 1
+            out.append(("str", "", line)); continue
+        if c == "'":
+            m = re.match(r"'(?:\\.[^']*|[^\\'])'", src[i:])
+            if m: i += m.end(); out.append(("chr", "", line)); continue
+            m = re.match(r"'[A-Za-z_][A-Za-z0-9_]*", src[i:])
+            if m: i += m.end(); out.append(("life", m.group(0), line)); continue
+            raise Bad(f"{line}: stray quote")
+        m = re.match(r"(?:r#)?[A-Za-z_][A-Za-z0-9_]*", src[i:])
+        if m: i += m.end(); out.append(("id", m.group(0), line)); continue
+        m = re.match(r"0[xob][0-9a-fA-F_]+[A-Za-z0-9_]*|[0-9][0-9_]*(?:\.[0-9_]+)?(?:[eE][+-]?[0-9_]+)?[A-Za-z0-9_]*", src[i:])
+        if m: i += m.end(); out.append(("num", m.group(0), line)); continue
+        if ord(c) > 127: raise Bad(f"{line}: non-ASCII character outside a string or comment")
+        two = src[i:i + 2]
+        if two in PUNCT2: out.append(("p", two, line)); i += 2; continue
+        out.append(("p", c, line)); i += 1
+    return out
+
+
+def use_leaves(t, i):
+    """Expand the use tree starting after `use` at index i; returns (leaves, next index, problems)."""
+    leaves, probs = [], []
+
+    def tree(i, prefix):
+        path = list(prefix)
+        while i < len(t):
+            k, x, ln = t[i]
+            if k == "id" and x not in ("as", "self"):
+                path.append(x); i += 1
+                if t[i][1] == "::": i += 1; continue
+                break
+            if x == "self": i += 1; break
+            if x == "*": probs.append((ln, "glob import")); i += 1; return i
+            if x == "{":
+                i += 1
+                while t[i][1] != "}":
+                    i = tree(i, path)
+                    if t[i][1] == ",": i += 1
+                return i + 1
+            if x == "::": i += 1; continue
+            break
+        if i < len(t) and t[i][1] == "as":
+            probs.append((t[i][2], "use ... as alias")); i += 2
+        leaves.append(("::".join(path), t[min(i, len(t) - 1)][2]))
+        return i
+
+    i = tree(i, [])
+    return leaves, i, probs
+
+
+def second_arg(t, i):
+    """Token texts of the second top-level argument of the call whose '(' is t[i]."""
+    depth, args, cur = 0, [], []
+    for _, x, _ in t[i:]:
+        depth += x in ("(", "[", "{")
+        depth -= x in (")", "]", "}")
+        if depth == 0:
+            break
+        if depth == 1 and x == ",":
+            args.append(cur); cur = []
+        elif not (depth == 1 and x == "("):
+            cur.append(x)
+    args.append(cur)
+    return args[1] if len(args) > 1 else []
+
+
+def scan(src, name="fiemap.rs"):
+    hits = []
+
+    def hit(ln, rule, text): hits.append(f"{name}:{ln}: {rule}: {text}")
+
+    try:
+        t = lex(src)
+    except Bad as e:
+        return [f"{name}: lex: {e}"]
+    imported = {}  # local name -> full path
+    i = 0
+    while i < len(t):
+        k, x, ln = t[i]
+        if k == "id" and x == "use":
+            leaves, j, probs = use_leaves(t, i + 1)
+            for pl, pt in probs: hit(pl, "use", pt)
+            for path, pln in leaves:
+                if path not in ALLOWED_PATHS and not path.startswith(("super", "self", "crate")) and path.split("::")[0] in EXTERNAL_ROOTS:
+                    hit(pln, "path", f"{path} is not on the allow list")
+                if path.split("::")[0] in ("crate", "super"): hit(pln, "path", f"{path}: crate/super paths are not allowed")
+                imported[path.split("::")[-1]] = path.split("::")[0]
+            while j < len(t) and t[j][1] != ";": j += 1
+            i = j + 1; continue
+        i += 1
+    ioctl_calls, defs = 0, 0
+    i = 0
+    while i < len(t):
+        k, x, ln = t[i]
+        if k == "id":
+            if x == "use":
+                while t[i][1] != ";": i += 1
+                i += 1; continue
+            low = x.lower()
+            for w in SECOND_LAYER:
+                if w in low: hit(ln, "second-layer", f"identifier {x} contains {w}")
+            if x in ("extern", "macro_rules", "asm", "global_asm", "include", "include_str", "include_bytes", "paste"):
+                hit(ln, "construct", x)
+            prev = t[i - 1][1] if i else ""
+            if prev != "::" and prev != ".":  # start of a path
+                segs, j = [x], i + 1
+                while j + 1 < len(t) and t[j][1] == "::":
+                    if t[j + 1][1] == "<":  # turbofish: skip balanced <...>
+                        d, j = 0, j + 1
+                        while True:
+                            d += t[j][1] == "<"; d -= t[j][1] == ">"; j += 1
+                            if d == 0: break
+                        continue
+                    segs.append(t[j + 1][1]); j += 2
+                if segs[0] in EXTERNAL_ROOTS:
+                    full = "::".join(segs)
+                    if segs[0] in ("crate", "super") or full not in ALLOWED_PATHS:
+                        hit(ln, "path", f"{'::'.join(segs)} is not on the allow list")
+                elif imported.get(segs[0]) in CAPABILITY_ROOTS and len(segs) >= 2 and "::".join(segs[:2]) not in ALLOWED_MEMBERS:
+                    hit(ln, "member", f"{'::'.join(segs[:2])} is not on the allow list")
+            if x == "ioctl" and i + 1 < len(t) and t[i + 1][1] == "(":
+                ioctl_calls += 1
+                ok = second_arg(t, i + 1) == ["FS_IOC_FIEMAP"]
+                if not ok: hit(ln, "ioctl", "the one ioctl call must be ioctl(fd, FS_IOC_FIEMAP, ...)")
+            if x == "FS_IOC_FIEMAP" and t[i - 1][1] == "const":
+                defs += 1
+                if not (t[i + 1][1] == ":" and any(tok[1] == "0xC020660B" or tok[1].lower().replace("_", "") == "0xc020660b" for tok in t[i + 2:i + 12])):
+                    hit(ln, "ioctl", "FS_IOC_FIEMAP must be defined as 0xC020660B")
+            if x == "fm_flags":
+                nxt = t[i + 1][1] if i + 1 < len(t) else ""
+                val = t[i + 2][1] if i + 2 < len(t) else ""
+                if nxt in (":", "=") and val not in ("0", "u32", "u64", "c_uint"): hit(ln, "flags", "fm_flags may only be set to 0")
+            if i + 2 < len(t) and t[i + 1][1] == "!" and t[i + 2][1] in ("(", "[", "{") and x not in ALLOWED_MACROS and x not in ("macro_rules",):
+                hit(ln, "macro", f"{x}! is not on the allow list")
+        elif x == "$":
+            hit(ln, "construct", "$ (macro metavariable)")
+        elif x == "#" and i + 1 < len(t):
+            j = i + 1 + (t[i + 1][1] == "!")
+            if t[j][1] == "[" and t[j + 1][1] not in ALLOWED_ATTRS and t[j + 1][1] not in ("forbid", "deny"):
+                hit(ln, "attr", f"#[{t[j + 1][1]}] is not on the allow list")
+        i += 1
+    if ioctl_calls > 1: hit(0, "ioctl", f"{ioctl_calls} ioctl calls (exactly one allowed)")
+    if defs > 1: hit(0, "ioctl", "FS_IOC_FIEMAP defined more than once")
+    return hits
+
+
+CLEAN_FULL = '''//! the probe; "//" inside a string is not a comment
+use rustix::fs::{lstat, open, statfs, FileType, Mode, OFlags};
+use libc::{c_int, c_ulong};
+use core::mem::size_of;
+use std::os::fd::AsRawFd;
+use std::time::{Duration, Instant};
+use disk_cleanup_core::ports::{ExtentAttribution, ExtentProbe, Unavailable};
+const FS_IOC_FIEMAP: c_ulong = 0xC020_660B;
+const FIEMAP_EXTENT_SHARED: u32 = 0x0000_2000;
+#[repr(C)] struct Fiemap { fm_start: u64, fm_length: u64, fm_flags: u32, fm_extent_count: u32 }
+fn probe(p: &std::path::Path, budget: Duration) -> bool {
+    let t0 = Instant::now();
+    let st = lstat(p).ok();
+    let fd = open(p, OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK, Mode::empty()).ok();
+    let mut fm = Fiemap { fm_start: 0, fm_length: u64::MAX, fm_flags: 0, fm_extent_count: 0 };
+    let _ = size_of::<Fiemap>();
+    let _ = matches!(st.map(|s| FileType::from_raw_mode(s.st_mode)), Some(FileType::RegularFile));
+    let r = unsafe { libc::ioctl(fd.unwrap().as_raw_fd() as c_int, FS_IOC_FIEMAP, &mut fm as *mut Fiemap) };
+    r == 0 && t0.elapsed() < budget && fm.fm_extent_count & FIEMAP_EXTENT_SHARED == 0
+}
+'''
+CLEAN_MIN = 'use disk_cleanup_core::ports::ExtentProbe;\nfn f() { let _ = "std::fs::remove_file"; /* rustix::fs::unlinkat */ }\n'
+EVASIONS = {
+    "01_renameat": 'fn f(){ rustix::fs::renameat(a, b, c, d); }',
+    "02_remove_file": 'use std::fs::remove_file; fn f(){ remove_file("a"); }',
+    "03_fchmod": 'use rustix::fs::fchmod; fn f(){ }',
+    "04_oflags_wronly": 'use rustix::fs::{open, Mode, OFlags}; fn f(){ open(p, OFlags::WRONLY, Mode::empty()); }',
+    "05_libc_syscall": 'fn f(){ unsafe { libc::syscall(87, p) }; }',
+    "06_macro_built_call": 'macro_rules! m { ($f:ident) => { rustix::fs::$f(p) } } fn f(){ m!(unlink); }',
+    "07_alias": 'use rustix::fs::open as o; fn f(){ }',
+    "08_glob": 'use rustix::fs::*; fn f(){ }',
+    "09_extern_block": 'extern "C" { fn unlink(p: *const i8) -> i32; } fn f(){}',
+    "10_libc_write": 'fn f(){ unsafe { libc::write(1, p, 1) }; }',
+    "11_second_ioctl": 'const FS_IOC_FIEMAP: c_ulong = 0xC020660B; fn f(){ unsafe { libc::ioctl(fd, 0x40086602, p) }; }',
+    "12_sync_flag": 'fn f(){ let fm = Fiemap { fm_flags: FIEMAP_FLAG_SYNC }; }',
+    "13_asm": 'fn f(){ unsafe { core::arch::asm!("syscall"); } }',
+    "14_include": 'include!("../delete.rs");',
+    "15_string_hides_code": 'fn f(){ let s = "//"; std::fs::remove_file(p); }',
+    "16_path_attr": '#[path = "../delete.rs"] mod d;',
+    "17_apply_token": 'fn f(t: ApplyToken){}',
+    "18_unlisted_macro": 'fn f(){ mymac!(p); }',
+    "19_raw_ident": 'fn f(){ r#unlinkat(p); }',
+    "20_transmute": 'fn f(){ unsafe { core::mem::transmute::<u8, u8>(1) }; }',
+    "21_process": 'use std::process::Command; fn f(){ Command::new("rm"); }',
+    "22_crate_path": 'fn f(){ crate::delete::tree(p); }',
+    "23_oflags_create": 'use rustix::fs::OFlags; fn f(){ let _ = OFlags::CREATE; }',
+    "24_flags_nonzero": 'fn f(){ let fm = Fiemap { fm_flags: 1 }; }',
+    "25_write_all_method": 'fn f(){ file.write_all(b"x"); }',
+}
+
+
+def selftest(root):
+    d = os.path.join(root, "fiemap-selftest"); fail = 0
+    os.makedirs(d, exist_ok=True)
+    for name, text in EVASIONS.items():
+        if not scan(text, name):
+            print("MISSED:", name); fail = 1
+    for name, text in (("clean_full", CLEAN_FULL), ("clean_min", CLEAN_MIN)):
+        h = scan(text, name)
+        if h: print("FALSE POSITIVE:", *h, sep="\n"); fail = 1
+    print(f"controls: {len(EVASIONS)} evasions planted, clean files: 2, failures: {fail}")
+    return fail
+
+
+if __name__ == "__main__":
+    if sys.argv[1] == "--selftest":
+        sys.exit(selftest(sys.argv[2]))
+    out = scan(open(sys.argv[1]).read(), os.path.basename(sys.argv[1]))
+    print("\n".join(out) if out else "ok")
+    sys.exit(1 if out else 0)
+PYEOF
+}
 
 find_sg() {  # prints the ast-grep binary, or nothing
   local b
@@ -238,6 +541,12 @@ main() {
   flag "memory-forging primitive" < <(printf '%s\n%s\n%s\n%s\n' "$(printf '%s\n' "$H_ident" | awk -F: '$3 !~ /^(grant|unconfined|for_tests)$/')" "$H_ptrread" "$H_useptr" "$H_union" | grep -Ev -- "$FORGE_OK" | grep . || true)
   flag "pointer type or unsafe block names a witness type (a ZST can be forged from any pointer)" < <(printf '%s\n%s\n' "$H_ptrtype" "$H_unsafewitness" | grep . || true)
   flag "unsafe outside the adapters files that need it (dirops, space_meter, lock, signals, probe/; scan: btrfs_tree.rs only)" < <(not_in "$H_unsafe" "$UNSAFE_OK")
+  if [ -f "$FIEMAP" ]; then
+    need python3
+    write_fiemap_scan "$tmp/fiemap_scan.py"
+    local l
+    while IFS= read -r l; do [ -n "$l" ] && bad "$FIEMAP content rule: $l"; done < <(python3 -I "$tmp/fiemap_scan.py" "$FIEMAP" | grep -v '^ok$' || true)
+  fi
   local c
   for c in core cli; do
     local f=crates/$c/src/lib.rs; [ "$c" = cli ] && f=crates/cli/src/main.rs
@@ -443,6 +752,26 @@ fn i(fd: i32) { let _ = unsafe { libc::ioctl(fd, 0, 0) }; }'
   neg scan-forge-other-file crates/scan/src/walker.rs 'fn a(p: *const u8) { let _ = std::slice::from_raw_parts(p, 1); }'
   d="$t/n-scan-transmute-in-btrfs-tree"; cp -r "$t/pos3" "$d"; printf 'fn a() { let _: u64 = unsafe { std::mem::transmute(0u64) }; }\n' >> "$d/crates/scan/src/btrfs_tree.rs"
   expect_fail scan-transmute-in-btrfs-tree "$d"
+  # fiemap.rs: the only new `unsafe` file; read-only by content (python selftest holds the 25 evasions)
+  write_fiemap_scan "$t/fiemap_scan.py"
+  if out=$(python3 -I "$t/fiemap_scan.py" --selftest "$t" 2>&1) && printf '%s' "$out" | grep -q 'failures: 0'; then echo "ok: $out"; else echo "SELFTEST BAD: fiemap content-rule controls: $out"; rc=1; fi
+  fiemap_clean='use std::io;\nuse rustix::fs::{lstat, open, OFlags, Mode};\nfn f() { let _ = unsafe { libc::ioctl(3, FS_IOC_FIEMAP, 0) }; }\nconst FS_IOC_FIEMAP: libc::c_ulong = 0xC020_660B;'
+  cp -r "$t/clean" "$t/pos4"; printf '%b\n' "$fiemap_clean" > "$t/pos4/crates/adapters/src/fiemap.rs"
+  if out=$("$SELF" --expect-sites 1 "$t/pos4" 2>&1); then echo "ok: unsafe in adapters/src/fiemap.rs that names only allowed items passes"; else echo "SELFTEST BAD: fiemap.rs false positive: $out"; rc=1; fi
+  WANT[fiemap-remove-file]="fiemap.rs content rule"
+  d="$t/n-fiemap-remove-file"; cp -r "$t/pos4" "$d"; printf 'fn g() { std::fs::remove_file("x"); }\n' >> "$d/crates/adapters/src/fiemap.rs"
+  expect_fail fiemap-remove-file "$d"
+  WANT[fiemap-second-unsafe-file]="unsafe outside the adapters files"
+  d="$t/n-fiemap-second-unsafe-file"; cp -r "$t/pos4" "$d"; printf 'fn a() { unsafe { } }\n' > "$d/crates/adapters/src/fiemap2.rs"
+  expect_fail fiemap-second-unsafe-file "$d"
+  WANT[fiemap-write-flag]="fiemap.rs content rule"
+  d="$t/n-fiemap-write-flag"; cp -r "$t/pos4" "$d"; printf 'fn g() { let _ = rustix::fs::OFlags::WRONLY; }\n' >> "$d/crates/adapters/src/fiemap.rs"
+  expect_fail fiemap-write-flag "$d"
+  # the real file, when present, passes its own rule
+  real="$(dirname "$SELF")/../$FIEMAP"
+  if [ -f "$real" ]; then
+    if out=$(python3 -I "$t/fiemap_scan.py" "$real" 2>&1); then echo "ok: the real $FIEMAP passes the content rule"; else echo "SELFTEST BAD: the real $FIEMAP fails: $out"; rc=1; fi
+  fi
   # fail-closed on a blind scan: a tree where the definition files are missing
   mkdir -p "$t/blind/crates/cli/src"; echo 'fn main() {}' > "$t/blind/crates/cli/src/main.rs"
   if out=$("$SELF" --expect-sites 0 "$t/blind" 2>&1); then echo "SELFTEST BAD: blind tree passed"; rc=1; else echo "ok: a tree without the definition sites fails (scan cannot be vacuous)"; fi

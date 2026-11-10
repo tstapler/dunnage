@@ -299,6 +299,43 @@ pub trait SystemProbe: Send + Sync {
     fn mounts(&self) -> io::Result<Vec<MountEntry>>;
 }
 
+/// One extent that carries `FIEMAP_EXTENT_SHARED`, keyed by where it lives on disk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SharedExtent {
+    pub physical: u64,
+    pub length: u64,
+}
+
+/// The shared extents of one probed file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ItemExtents {
+    pub path: std::path::PathBuf,
+    pub shared: Vec<SharedExtent>,
+}
+
+/// Why the probe could not measure; attribution then falls back to the plain `st_blocks` sum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unavailable {
+    NotBtrfs,
+    UnsupportedOnThisOS,
+    /// `ENOTTY` or `EOPNOTSUPP` from the ioctl.
+    IoctlUnsupported,
+    BudgetExhausted,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExtentAttribution {
+    Unavailable(Unavailable),
+    /// One entry per probed regular file; a path that is gone or not a regular file has none.
+    Measured(Vec<ItemExtents>),
+}
+
+/// Shared-extent attribution (ADR-004 outcome 3). Read-only; the delete never depends on it.
+pub trait ExtentProbe: Send + Sync {
+    /// `budget` is the most files the probe may open; more than that is `Unavailable(BudgetExhausted)`.
+    fn attribute(&self, items: &[&Path], budget: usize) -> ExtentAttribution;
+}
+
 pub trait SpaceMeter: Send + Sync {
     fn snapshot(&self, path: &Path) -> FsSnapshot;
     fn settle(&self, path: &Path, timeout: Duration) -> Settled;

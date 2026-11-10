@@ -16,7 +16,7 @@ pub const AUDIT_SCHEMA: u32 = 1;
 
 /// One line of the log. Records are short-lived, so the size gap between variants does not matter.
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AuditRecord {
     RunStart(RunStart),
@@ -87,12 +87,18 @@ impl Intent {
 #[serde(transparent)]
 pub struct ItemResult(pub Outcome);
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RunEnd {
     pub run_id: String,
     pub ts: i64,
     pub verdict_after: DiskVerdict,
     pub attributed_bytes: u64,
     pub measured_drop: Option<i64>,
+    /// `None` when there was no positive drop to compare with.
+    #[serde(default)]
+    pub attribution_pct: Option<f64>,
     pub causes: Vec<Cause>,
+    /// Measured causes account for the shortfall; `scripts/outcome-report.sh` reads this, never the prose.
+    #[serde(default)]
+    pub explained: bool,
 }

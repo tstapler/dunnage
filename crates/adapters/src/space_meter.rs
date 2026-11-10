@@ -6,14 +6,13 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use disk_cleanup_core::ports::SpaceMeter;
 use disk_cleanup_core::{AllocSnapshot, FsSnapshot, Platform, Settled, SpaceUse};
 use disk_cleanup_scan::btrfs::{self, Allocation, SpaceInfo};
 
-use crate::statvfs;
+use crate::{settle, statvfs};
 
 const MOUNTINFO: &str = "/proc/self/mountinfo";
 /// Shown when the filesystem type cannot be named; the report prints `n/a (filesystem is unknown)`.
@@ -166,46 +165,15 @@ impl SpaceMeter for RealSpaceMeter {
         }
     }
 
-    /// Interim: `syncfs`, then `data.bytes_used` polled until two equal samples or the timeout. Story 1.2.2
-    /// replaces the body with `settle.rs`.
     fn settle(&self, path: &Path, timeout: Duration) -> Settled {
-        sync_filesystem(path);
-        let start = Instant::now();
-        let mut samples = 0_u32;
-        let mut last: Option<u64> = None;
-        loop {
-            let used = self.snapshot(path).btrfs.map(|a| a.data.bytes_used);
-            samples += 1;
-            if used.is_none() || (samples > 1 && used == last) {
-                return settled(true, used, samples, start);
-            }
-            last = used;
-            if start.elapsed() >= timeout {
-                return settled(false, used, samples, start);
-            }
-            thread::sleep(SETTLE_POLL.min(timeout.saturating_sub(start.elapsed())));
-        }
+        settle::settle(
+            || settle::sync_filesystem(path),
+            || self.snapshot(path).btrfs.map(|a| a.data.bytes_used),
+            timeout,
+            SETTLE_POLL,
+        )
     }
 }
-
-fn settled(stable: bool, data_bytes_used: Option<u64>, samples: u32, start: Instant) -> Settled {
-    Settled {
-        stable,
-        data_bytes_used,
-        samples,
-        waited_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn sync_filesystem(path: &Path) {
-    if let Ok(f) = fs::File::open(path) {
-        let _ = rustix::fs::syncfs(&f);
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-fn sync_filesystem(_path: &Path) {}
 
 /// `f_fstypename` of `statfs(2)`. Not called on Linux.
 #[cfg(target_os = "macos")]
