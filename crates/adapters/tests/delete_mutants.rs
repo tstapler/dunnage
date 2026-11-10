@@ -116,6 +116,8 @@ struct Spy {
     max_live_at_first_unlink: AtomicUsize,
     registry: Registry,
     next_id: AtomicUsize,
+    /// Most handles open at once at any `unlinkat` of a directory.
+    max_open_at_dir_unlink: AtomicUsize,
     /// Identities of the directory handles that were open at the first `unlinkat`.
     open_at_first_unlink: Mutex<Option<Vec<Identity>>>,
 }
@@ -140,6 +142,7 @@ impl Spy {
             max_live_at_first_unlink: AtomicUsize::new(usize::MAX),
             registry: Arc::new(Mutex::new(HashMap::new())),
             next_id: AtomicUsize::new(0),
+            max_open_at_dir_unlink: AtomicUsize::new(0),
             open_at_first_unlink: Mutex::new(None),
         }
     }
@@ -232,6 +235,11 @@ impl DirOps for Spy {
             Ordering::SeqCst,
             Ordering::SeqCst,
         );
+        if dir {
+            let open = self.registry.lock().unwrap().len();
+            self.max_open_at_dir_unlink
+                .fetch_max(open, Ordering::SeqCst);
+        }
         if k == 1 {
             let idents = self.registry.lock().unwrap().values().copied().collect();
             *self.open_at_first_unlink.lock().unwrap() = Some(idents);
@@ -587,6 +595,12 @@ fn open_frame_should_keep_exactly_MAX_OPEN_LEVELS_handles_open_When_descending_a
             "frame {k} of {n}: only the deepest MAX_OPEN_LEVELS frames keep a handle"
         );
     }
+    // Re-opening an evicted level keeps the last MAX_OPEN_LEVELS frames, and the level being removed
+    // still holds its own handle: MAX_OPEN_LEVELS + 1, plus the root and the parent of the fixture.
+    assert_eq!(
+        spy.max_open_at_dir_unlink.load(Ordering::SeqCst),
+        2 + MAX_OPEN_LEVELS + 1
+    );
     let at_descent = spy.max_live_at_first_unlink.load(Ordering::SeqCst);
     // base-level handles of open_verified_root and open_parent are alive too: root, app
     let outside_window = 2;
