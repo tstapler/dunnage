@@ -1,0 +1,752 @@
+{
+  "roots": [
+    "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx"
+  ],
+  "groups": [
+    {
+      "path": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA",
+      "kind": "checkout",
+      "repo": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA",
+      "stats": {
+        "source": {
+          "inodes": 8,
+          "files": 6,
+          "dirs": 2,
+          "symlinks": 0,
+          "dir_entries": 8,
+          "name_bytes": 70,
+          "size_bytes": 8233,
+          "allocated_bytes": 24576,
+          "extents": 5,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "node_modules": {
+          "inodes": 7,
+          "files": 3,
+          "dirs": 4,
+          "symlinks": 0,
+          "dir_entries": 7,
+          "name_bytes": 41,
+          "size_bytes": 8192,
+          "allocated_bytes": 8192,
+          "extents": 1,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "cargo_target": {
+          "inodes": 5,
+          "files": 2,
+          "dirs": 3,
+          "symlinks": 0,
+          "dir_entries": 5,
+          "name_bytes": 25,
+          "size_bytes": 8192,
+          "allocated_bytes": 8192,
+          "extents": 1,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "git": {
+          "inodes": 6,
+          "files": 2,
+          "dirs": 4,
+          "symlinks": 0,
+          "dir_entries": 6,
+          "name_bytes": 32,
+          "size_bytes": 8213,
+          "allocated_bytes": 12288,
+          "extents": 2,
+          "inline_files": 0,
+          "inline_bytes": 0
+        }
+      },
+      "inodes": 26,
+      "metadata_est_bytes": 10540
+    },
+    {
+      "path": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA-wt1",
+      "kind": "worktree",
+      "repo": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA",
+      "stats": {
+        "source": {
+          "inodes": 8,
+          "files": 6,
+          "dirs": 2,
+          "symlinks": 0,
+          "dir_entries": 8,
+          "name_bytes": 72,
+          "size_bytes": 297,
+          "allocated_bytes": 20480,
+          "extents": 5,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "node_modules": {
+          "inodes": 7,
+          "files": 3,
+          "dirs": 4,
+          "symlinks": 0,
+          "dir_entries": 7,
+          "name_bytes": 41,
+          "size_bytes": 8192,
+          "allocated_bytes": 8192,
+          "extents": 1,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "cargo_target": {
+          "inodes": 5,
+          "files": 2,
+          "dirs": 3,
+          "symlinks": 0,
+          "dir_entries": 5,
+          "name_bytes": 25,
+          "size_bytes": 8192,
+          "allocated_bytes": 8192,
+          "extents": 1,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "git": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        }
+      },
+      "inodes": 20,
+      "metadata_est_bytes": 8142
+    },
+    {
+      "path": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoB",
+      "kind": "checkout",
+      "repo": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoB",
+      "stats": {
+        "source": {
+          "inodes": 7,
+          "files": 4,
+          "dirs": 2,
+          "symlinks": 1,
+          "dir_entries": 8,
+          "name_bytes": 71,
+          "size_bytes": 8204,
+          "allocated_bytes": 16384,
+          "extents": 3,
+          "inline_files": 1,
+          "inline_bytes": 6
+        },
+        "node_modules": {
+          "inodes": 7,
+          "files": 3,
+          "dirs": 4,
+          "symlinks": 0,
+          "dir_entries": 7,
+          "name_bytes": 41,
+          "size_bytes": 8192,
+          "allocated_bytes": 8192,
+          "extents": 1,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "cargo_target": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "git": {
+          "inodes": 5,
+          "files": 2,
+          "dirs": 3,
+          "symlinks": 0,
+          "dir_entries": 5,
+          "name_bytes": 29,
+          "size_bytes": 8213,
+          "allocated_bytes": 12288,
+          "extents": 2,
+          "inline_files": 0,
+          "inline_bytes": 0
+        }
+      },
+      "inodes": 19,
+      "metadata_est_bytes": 7862
+    },
+    {
+      "path": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/loose",
+      "kind": "loose",
+      "repo": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/loose",
+      "stats": {
+        "source": {
+          "inodes": 4,
+          "files": 2,
+          "dirs": 2,
+          "symlinks": 0,
+          "dir_entries": 4,
+          "name_bytes": 23,
+          "size_bytes": 8192,
+          "allocated_bytes": 8192,
+          "extents": 1,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "node_modules": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "cargo_target": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "git": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        }
+      },
+      "inodes": 4,
+      "metadata_est_bytes": 1553
+    },
+    {
+      "path": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx",
+      "kind": "loose",
+      "repo": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx",
+      "stats": {
+        "source": {
+          "inodes": 1,
+          "files": 0,
+          "dirs": 1,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "node_modules": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "cargo_target": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "git": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        }
+      },
+      "inodes": 1,
+      "metadata_est_bytes": 185
+    }
+  ],
+  "families": [
+    {
+      "repo": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA",
+      "checkouts": 2,
+      "stats": {
+        "source": {
+          "inodes": 16,
+          "files": 12,
+          "dirs": 4,
+          "symlinks": 0,
+          "dir_entries": 16,
+          "name_bytes": 142,
+          "size_bytes": 8530,
+          "allocated_bytes": 45056,
+          "extents": 10,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "node_modules": {
+          "inodes": 14,
+          "files": 6,
+          "dirs": 8,
+          "symlinks": 0,
+          "dir_entries": 14,
+          "name_bytes": 82,
+          "size_bytes": 16384,
+          "allocated_bytes": 16384,
+          "extents": 2,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "cargo_target": {
+          "inodes": 10,
+          "files": 4,
+          "dirs": 6,
+          "symlinks": 0,
+          "dir_entries": 10,
+          "name_bytes": 50,
+          "size_bytes": 16384,
+          "allocated_bytes": 16384,
+          "extents": 2,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "git": {
+          "inodes": 6,
+          "files": 2,
+          "dirs": 4,
+          "symlinks": 0,
+          "dir_entries": 6,
+          "name_bytes": 32,
+          "size_bytes": 8213,
+          "allocated_bytes": 12288,
+          "extents": 2,
+          "inline_files": 0,
+          "inline_bytes": 0
+        }
+      },
+      "inodes": 46,
+      "metadata_est_bytes": 18682
+    },
+    {
+      "repo": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoB",
+      "checkouts": 1,
+      "stats": {
+        "source": {
+          "inodes": 7,
+          "files": 4,
+          "dirs": 2,
+          "symlinks": 1,
+          "dir_entries": 8,
+          "name_bytes": 71,
+          "size_bytes": 8204,
+          "allocated_bytes": 16384,
+          "extents": 3,
+          "inline_files": 1,
+          "inline_bytes": 6
+        },
+        "node_modules": {
+          "inodes": 7,
+          "files": 3,
+          "dirs": 4,
+          "symlinks": 0,
+          "dir_entries": 7,
+          "name_bytes": 41,
+          "size_bytes": 8192,
+          "allocated_bytes": 8192,
+          "extents": 1,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "cargo_target": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "git": {
+          "inodes": 5,
+          "files": 2,
+          "dirs": 3,
+          "symlinks": 0,
+          "dir_entries": 5,
+          "name_bytes": 29,
+          "size_bytes": 8213,
+          "allocated_bytes": 12288,
+          "extents": 2,
+          "inline_files": 0,
+          "inline_bytes": 0
+        }
+      },
+      "inodes": 19,
+      "metadata_est_bytes": 7862
+    },
+    {
+      "repo": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/loose",
+      "checkouts": 1,
+      "stats": {
+        "source": {
+          "inodes": 4,
+          "files": 2,
+          "dirs": 2,
+          "symlinks": 0,
+          "dir_entries": 4,
+          "name_bytes": 23,
+          "size_bytes": 8192,
+          "allocated_bytes": 8192,
+          "extents": 1,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "node_modules": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "cargo_target": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "git": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        }
+      },
+      "inodes": 4,
+      "metadata_est_bytes": 1553
+    },
+    {
+      "repo": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx",
+      "checkouts": 1,
+      "stats": {
+        "source": {
+          "inodes": 1,
+          "files": 0,
+          "dirs": 1,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "node_modules": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "cargo_target": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        },
+        "git": {
+          "inodes": 0,
+          "files": 0,
+          "dirs": 0,
+          "symlinks": 0,
+          "dir_entries": 0,
+          "name_bytes": 0,
+          "size_bytes": 0,
+          "allocated_bytes": 0,
+          "extents": 0,
+          "inline_files": 0,
+          "inline_bytes": 0
+        }
+      },
+      "inodes": 1,
+      "metadata_est_bytes": 185
+    }
+  ],
+  "build_roots": [
+    {
+      "path": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA/node_modules",
+      "kind": "node_modules",
+      "group": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA",
+      "stats": {
+        "inodes": 7,
+        "files": 3,
+        "dirs": 4,
+        "symlinks": 0,
+        "dir_entries": 7,
+        "name_bytes": 41,
+        "size_bytes": 8192,
+        "allocated_bytes": 8192,
+        "extents": 1,
+        "inline_files": 0,
+        "inline_bytes": 0
+      },
+      "metadata_est_bytes": 2597,
+      "age_secs": 90180194,
+      "lockfile_hash": 12804005049068819730
+    },
+    {
+      "path": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA-wt1/node_modules",
+      "kind": "node_modules",
+      "group": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA-wt1",
+      "stats": {
+        "inodes": 7,
+        "files": 3,
+        "dirs": 4,
+        "symlinks": 0,
+        "dir_entries": 7,
+        "name_bytes": 41,
+        "size_bytes": 8192,
+        "allocated_bytes": 8192,
+        "extents": 1,
+        "inline_files": 0,
+        "inline_bytes": 0
+      },
+      "metadata_est_bytes": 2597,
+      "age_secs": 90180194,
+      "lockfile_hash": 12804005049068819730
+    },
+    {
+      "path": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoB/node_modules",
+      "kind": "node_modules",
+      "group": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoB",
+      "stats": {
+        "inodes": 7,
+        "files": 3,
+        "dirs": 4,
+        "symlinks": 0,
+        "dir_entries": 7,
+        "name_bytes": 41,
+        "size_bytes": 8192,
+        "allocated_bytes": 8192,
+        "extents": 1,
+        "inline_files": 0,
+        "inline_bytes": 0
+      },
+      "metadata_est_bytes": 2597,
+      "age_secs": 90180194,
+      "lockfile_hash": 6850248883926016364
+    },
+    {
+      "path": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA/target",
+      "kind": "cargo_target",
+      "group": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA",
+      "stats": {
+        "inodes": 5,
+        "files": 2,
+        "dirs": 3,
+        "symlinks": 0,
+        "dir_entries": 5,
+        "name_bytes": 25,
+        "size_bytes": 8192,
+        "allocated_bytes": 8192,
+        "extents": 1,
+        "inline_files": 0,
+        "inline_bytes": 0
+      },
+      "metadata_est_bytes": 1889,
+      "age_secs": 90180194,
+      "lockfile_hash": 1507138135727035972
+    },
+    {
+      "path": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA-wt1/target",
+      "kind": "cargo_target",
+      "group": "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA-wt1",
+      "stats": {
+        "inodes": 5,
+        "files": 2,
+        "dirs": 3,
+        "symlinks": 0,
+        "dir_entries": 5,
+        "name_bytes": 25,
+        "size_bytes": 8192,
+        "allocated_bytes": 8192,
+        "extents": 1,
+        "inline_files": 0,
+        "inline_bytes": 0
+      },
+      "metadata_est_bytes": 1889,
+      "age_secs": 90180194,
+      "lockfile_hash": 1507138135727035972
+    }
+  ],
+  "duplicates": [
+    {
+      "kind": "node_modules",
+      "lockfile_hash": 12804005049068819730,
+      "members": [
+        "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA/node_modules",
+        "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA-wt1/node_modules"
+      ],
+      "min_inodes": 7,
+      "max_inodes": 7,
+      "total_inodes": 14,
+      "redundant_inodes": 7,
+      "redundant_metadata_est_bytes": 2597
+    },
+    {
+      "kind": "cargo_target",
+      "lockfile_hash": 1507138135727035972,
+      "members": [
+        "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA/target",
+        "/home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA-wt1/target"
+      ],
+      "min_inodes": 5,
+      "max_inodes": 5,
+      "total_inodes": 10,
+      "redundant_inodes": 5,
+      "redundant_metadata_est_bytes": 1889
+    }
+  ],
+  "totals": {
+    "source": {
+      "inodes": 28,
+      "files": 18,
+      "dirs": 9,
+      "symlinks": 1,
+      "dir_entries": 28,
+      "name_bytes": 236,
+      "size_bytes": 24926,
+      "allocated_bytes": 69632,
+      "extents": 14,
+      "inline_files": 1,
+      "inline_bytes": 6
+    },
+    "node_modules": {
+      "inodes": 21,
+      "files": 9,
+      "dirs": 12,
+      "symlinks": 0,
+      "dir_entries": 21,
+      "name_bytes": 123,
+      "size_bytes": 24576,
+      "allocated_bytes": 24576,
+      "extents": 3,
+      "inline_files": 0,
+      "inline_bytes": 0
+    },
+    "cargo_target": {
+      "inodes": 10,
+      "files": 4,
+      "dirs": 6,
+      "symlinks": 0,
+      "dir_entries": 10,
+      "name_bytes": 50,
+      "size_bytes": 16384,
+      "allocated_bytes": 16384,
+      "extents": 2,
+      "inline_files": 0,
+      "inline_bytes": 0
+    },
+    "git": {
+      "inodes": 11,
+      "files": 4,
+      "dirs": 7,
+      "symlinks": 0,
+      "dir_entries": 11,
+      "name_bytes": 61,
+      "size_bytes": 16426,
+      "allocated_bytes": 24576,
+      "extents": 4,
+      "inline_files": 0,
+      "inline_bytes": 0
+    }
+  },
+  "truncated": false,
+  "errors": 1,
+  "backend": "walker",
+  "extents_exact": false,
+  "dirs_listed": 34,
+  "dirs_cached": 0,
+  "notes": [],
+  "walk_ms": 0,
+  "total_ms": 0
+}

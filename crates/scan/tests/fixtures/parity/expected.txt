@@ -1,0 +1,20 @@
+    INODES     SOURCE NODE_MODULES CARGO_TARGET       GIT      META~    N  PATH
+        46         16           14           10         6   18.2 KiB    2  /home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA
+        19          7            7            0         5    7.7 KiB    1  /home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoB
+         4          4            0            0         0    1.5 KiB    1  /home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/loose
+         1          1            0            0         0      185 B    1  /home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx
+
+BY CATEGORY
+  source                28 inodes (40.0%)          9 dirs    24.3 KiB  meta~ 12.0 KiB
+  node_modules          21 inodes (30.0%)         12 dirs    24.0 KiB  meta~ 7.6 KiB
+  cargo target          10 inodes (14.3%)          6 dirs    16.0 KiB  meta~ 3.7 KiB
+  .git                  11 inodes (15.7%)          7 dirs    16.0 KiB  meta~ 4.4 KiB
+  total                 70 inodes  meta~ 27.6 KiB logical (x2 on DUP)
+
+DUPLICATE BUILD DIRS (same lockfile content; heuristic)
+  NodeModules x2  7..7 inodes each  redundant 7 inodes, meta~ 2.5 KiB  e.g. /home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA/node_modules
+  CargoTarget x2  5..5 inodes each  redundant 5 inodes, meta~ 1.8 KiB  e.g. /home/tstapler/.cache/dc-fixtures/parity-capture.jKpedQ/fx/repoA/target
+
+backend walker: 34 dirs listed, 0 from cache
+5 build dirs, 5 checkouts/groups; walk 0 ms, total 0 ms, 1 unreadable
+~ = estimate (extent counts are a lower bound; xattrs and leaf slack not modeled)
