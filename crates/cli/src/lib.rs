@@ -4,7 +4,12 @@
 
 #![forbid(unsafe_code)]
 
+pub mod apply;
 pub mod escape;
 pub mod layout;
+pub mod reasontext;
+pub mod render;
+pub mod render_json;
 pub mod terminal;
 pub mod units;
+pub mod view;
