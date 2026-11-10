@@ -94,14 +94,14 @@ proptest! {
             Exec::Scope(n) => Err(DeleteFailure { error: DeleteError::IdentityMismatch, freed: freed(n) }),
         });
         let r = run(&rig, &[&t], &caches_selection(), true, jobs, None).unwrap();
-        let unsafe_ids: HashSet<_> = cands
+        let risky_ids: HashSet<_> = cands
             .iter()
             .zip(&items)
             .filter(|(_, (plan_ok, fresh, _))| !plan_ok || !matches!(fresh, Fresh::Allow))
             .map(|(c, _)| c.id())
             .collect();
         for id in t.executed() {
-            prop_assert!(!unsafe_ids.contains(&id), "an item with unsafe fresh facts reached execute");
+            prop_assert!(!risky_ids.contains(&id), "an item with dirty or out-of-scope fresh facts reached execute");
         }
         // T-027: books balance, failed ones included
         let sum: u64 = r.summary.outcomes.iter().map(|o| o.freed.attributed_bytes.0).sum();
