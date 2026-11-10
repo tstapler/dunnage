@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-core-deps.sh [repo-root] | --selftest
 # disk-cleanup-core must not depend directly on rustix or libc, nor use them or raw deletion calls in source.
-# Direct dependencies only: metascope-core (a read-only library) lists both transitively and that is accepted.
+# Direct dependencies only: disk-cleanup-scan (a read-only library) lists both transitively and that is accepted.
 set -u -o pipefail
 forbidden_deps='rustix libc'
 forbidden_src='rustix::|libc::|std::fs::remove|unlinkat'

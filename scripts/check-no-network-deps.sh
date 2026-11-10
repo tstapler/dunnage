@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-no-network-deps.sh [repo-root] | --selftest
 # No HTTP/socket crate may be a direct dependency of a workspace member or appear in disk-cleanup's resolved
-# tree (metascope-core's transitive tree included), and no `std::net` use may exist under crates/.
+# tree (disk-cleanup-scan's transitive tree included), and no `std::net` use may exist under crates/.
 set -u -o pipefail
 net_crates='reqwest ureq hyper curl isahc attohttpc surf tokio async-std'
 

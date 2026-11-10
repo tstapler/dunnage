@@ -199,7 +199,8 @@ mod tests {
 
     #[test]
     fn save_and_load_through_a_file() {
-        let dir = std::env::temp_dir().join(format!("metascope-cache-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("disk-cleanup-scan-cache-{}", std::process::id()));
         let file = dir.join("c.bin");
         let mut m = HashMap::new();
         m.insert(PathBuf::from("/q"), rec(2));

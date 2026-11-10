@@ -24,7 +24,7 @@ pub enum Locator {
     Steam(AppId, PathBuf),
 }
 
-/// DC-owned mirror of what metascope knows about a build directory, so `metascope_core` types stay inside
+/// DC-owned mirror of what the scan crate knows about a build directory, so `disk_cleanup_scan` types stay inside
 /// `adapters`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BuildDirFacts {

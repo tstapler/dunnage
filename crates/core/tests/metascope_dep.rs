@@ -1,7 +1,7 @@
-//! Smoke test: the metascope-core dependency resolves (Story 0.1.2).
+//! Smoke test: the scan crate (formerly metascope-core) resolves as a workspace member (Stories 0.1.2, 0.1.5).
 
-use metascope_core::btrfs::read_allocation;
-use metascope_core::scan::ScanOptions;
+use disk_cleanup_scan::btrfs::read_allocation;
+use disk_cleanup_scan::scan::ScanOptions;
 
 #[test]
 fn metascope_core_scan_options_and_read_allocation_should_resolve_when_path_dep_builds() {

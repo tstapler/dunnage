@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn missing_dir_is_an_io_error() {
         assert!(matches!(
-            read_allocation(Path::new("/nonexistent-metascope")),
+            read_allocation(Path::new("/nonexistent-scan-fixture")),
             Err(Error::Io { .. })
         ));
     }

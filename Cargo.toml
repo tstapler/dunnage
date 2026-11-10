@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["crates/cli", "crates/core", "crates/adapters"]
+members = ["crates/scan", "crates/cli", "crates/core", "crates/adapters"]
 
 [workspace.package]
 edition = "2021"
 license = "MIT"
 
-# Same lint set as metascope (MS/Cargo.toml) so metascope-derived code compiles cleanly.
+# One lint set for every member, including the imported scan crate (ADR-007).
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
@@ -38,8 +38,6 @@ thiserror = "2"
 rustix = { version = "1", features = ["fs", "process"] }
 libc = "0.2"
 toml = "0.8"
-# TEMPORARY until Task 0.1.2b (git rev + ignored local patch)
-metascope-core = { path = "../metascope/crates/core" }
 
 # The block `dist init` writes; check-release-features.sh builds with it.
 [profile.dist]

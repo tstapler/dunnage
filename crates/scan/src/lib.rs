@@ -1,4 +1,4 @@
-//! Transport-independent logic for metascope. The CLI (and a future ratatui
+//! Transport-independent logic for the read-only scanner. The CLI (and a future ratatui
 //! TUI) consume these types; nothing here prints or parses arguments.
 
 pub mod btrfs;
