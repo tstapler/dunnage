@@ -59,3 +59,11 @@ pub struct Settled {
     pub samples: u32,
     pub waited_ms: u64,
 }
+
+/// Whether a path exists inside any snapshot (`Found` wins over `Unreadable`, which wins over `Absent`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Held {
+    Found,
+    Absent,
+    Unreadable,
+}

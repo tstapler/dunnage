@@ -34,13 +34,8 @@ pub struct SnapshotEntry {
     pub root: PathBuf,
 }
 
-/// Answer of [`SnapshotInfo::holds`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Held {
-    Found,
-    Absent,
-    Unreadable,
-}
+/// Answer of [`SnapshotInfo::holds`]; defined in `core` so `RunSummary::finish` can take it.
+pub use disk_cleanup_core::Held;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotInfo {
