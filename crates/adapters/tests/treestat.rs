@@ -40,10 +40,15 @@ fn treestat_should_count_hardlinks_once_and_allocated_as_blocks_times_512_When_t
         MeasureOpts::default(),
     );
     let blocks = std::fs::metadata(p.join("a")).unwrap().blocks() * 512;
-    assert_eq!(st.allocated, AllocatedBytes(2 * blocks));
-    assert_eq!(st.apparent, ApparentBytes(3 * 4096));
-    assert_eq!(st.inodes, 2);
-    assert_eq!(st.entries, 3);
+    let dir_blocks = std::fs::metadata(&p).unwrap().blocks() * 512;
+    assert_eq!(st.allocated, AllocatedBytes(2 * blocks + dir_blocks));
+    assert_eq!(
+        st.apparent,
+        ApparentBytes(3 * 4096),
+        "per name, directories add 0"
+    );
+    assert_eq!(st.inodes, 3, "two file inodes and the measured directory");
+    assert_eq!(st.entries, 4, "three names and the measured directory");
     assert!(st.newest_mtime.is_some());
     assert!(st.skipped.is_empty());
     assert!(!st.stopped_early);
@@ -75,7 +80,12 @@ fn treestat_should_recurse_and_skip_other_device_subtrees_and_symlinks_When_boun
     // The root's own fstat reports dev 41 as well, so identity must be built with it.
     let root = root.unwrap();
     let st = measure(&ops, root.dir(), RootDev(41), MeasureOpts::default());
-    assert_eq!(st.apparent, ApparentBytes(4096), "only same/deep/f counts");
+    let link_len = std::fs::symlink_metadata(p.join("link")).unwrap().len();
+    assert_eq!(
+        st.apparent,
+        ApparentBytes(4096 + link_len),
+        "same/deep/f and the link itself count; the link's target and the other device do not"
+    );
     let mut why: Vec<_> = st.skipped.iter().map(|s| (s.rel.clone(), s.why)).collect();
     why.sort_by(|a, b| a.0.cmp(&b.0));
     assert_eq!(
@@ -119,7 +129,7 @@ fn treestat_should_stop_without_visiting_the_rest_When_an_entry_is_newer_than_th
         MeasureOpts::default(),
     );
     assert!(!none.stopped_early);
-    assert_eq!(none.entries, 50);
+    assert_eq!(none.entries, 51, "50 files and the measured directory");
 }
 
 #[test]
@@ -137,7 +147,7 @@ fn treestat_should_record_unreadable_entries_in_skipped_When_stat_fails() {
         RootDev(dev_of(&p)),
         MeasureOpts::default(),
     );
-    assert_eq!(st.entries, 1);
+    assert_eq!(st.entries, 2, "ok and the measured directory");
     assert_eq!(st.skipped.len(), 1);
     assert_eq!(st.skipped[0].why, SkipWhy::Unreadable(libc::EACCES));
 }
@@ -175,7 +185,7 @@ fn treestat_should_use_memory_independent_of_entry_count_When_measuring_500_000_
         }
     }
 
-    for (dir, inodes) in [(&flat, 500_000u64), (&links, 10)] {
+    for (dir, inodes) in [(&flat, 500_001u64), (&links, 11)] {
         let ops = RealDirOps::confined_to(&base);
         let r =
             open_verified_root(&ops, dir, Identity::of(&std::fs::metadata(dir).unwrap())).unwrap();
