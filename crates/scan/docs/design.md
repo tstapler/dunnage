@@ -219,3 +219,42 @@ or scrub is running, and re-read the changed state afterwards.
 ## Cleaning
 
 There is no `metascope clean`: cleaning lives in `tstapler/disk-cleanup`; this tool stays read-only.
+
+## Streaming walk (`Backend::collect_streaming`)
+
+`collect_streaming(&StreamRequest, &(dyn Fn(Vec<DirEvent>) + Sync)) -> io::Result<StreamSummary>` delivers the walk as
+batches of per-directory events while it runs, so a UI can draw the first rows in the first second and stop the scan.
+`collect`, `CollectRequest`, `Collected` and `DirInfo` are unchanged. A backend that implements only `collect` gets a default
+method that replays its result (one `Dir` event per entry, ids dense from 0, parents before children, `dev` 0).
+
+- **Events** (`#[non_exhaustive]`): `Dir`, `Unreadable { errno }`, `Boundary { dev }`, `Gone`, each with a dense `id`, the
+  `parent` id the parent handed out when it queued the child (`NO_PARENT` for roots) and a name (full path for roots,
+  basename otherwise). Every id handed out gets exactly one terminal event, unless the walk is stopped first.
+  `Dir.info` is what `collect` returns for the same path; `from_cache` marks cache hits.
+- **Batching**: each worker owns a batch behind its own mutex, handed to the sink at `batch_max` (256) events. One tick
+  thread wakes every 25 ms and flushes batches whose oldest event is 50 ms old, so a worker blocked in a slow `readdir`
+  cannot strand its parent event (worst wait about 75 ms). Sink calls never hold a batch lock.
+- **Cancel**: `StreamRequest.cancel` is read next to the walker's `stop` flag; the tick thread turns it into `stop` and
+  `notify_all`s idle workers. The end of every walk is one order: workers stop, the tick thread is told `done` and joined,
+  the caller flushes every batch, the cache is saved if `StreamRequest.save` is still set (clearing it during the write
+  aborts it through `save_atomic`'s `abort`), then the call returns. A truncated walk saves the visited records plus the old
+  records of directories it did not reach, as `collect` does.
+- **Paint**: with `paint_from_cache` the walker's own loaded cache map (one `cache::load` per run) is emitted first as
+  `painted: true` events with ids from `PAINT_ID_BASE`; the live walk then emits `painted: false` events for the same
+  directories. A painted `info` counts the directory's own inode but not its size, which the cache record does not keep.
+- **Test seams**: `WalkHooks` (doc-hidden) replaces `lstat`, the directory listing and the cache loader and observes
+  workers, so the 200,000- and 1,000,000-directory cases run without a disk.
+
+### Baseline for the "cleaner is not slower" bound
+
+`collect` over a generated 2,221-directory tree (20 x 10 x 10 directories with 5 small files each, tmpfs, 4 threads, no
+cache, release build), median of 9 runs, three repetitions, harness `crates/scan/tests/walk_baseline.rs` (run with
+`--ignored`):
+
+| | repetition 1 | repetition 2 | repetition 3 |
+|---|---|---|---|
+| before the change (`052da1e`) | 12.42 ms | 12.67 ms | 12.48 ms |
+| after the change | 13.01 ms | 12.57 ms | 12.51 ms |
+
+Mean of the medians: 12.52 ms before, 12.70 ms after (+1.4%, inside the +5% bound and inside the run-to-run spread). This was
+measured on the development machine only; the real-tree run and the Gate F harness (Story 6.5.6) are not done here.

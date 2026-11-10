@@ -346,6 +346,15 @@ pub fn save_atomic(
     write_atomic(path, &encode(map), io, abort)
 }
 
+/// [`save_atomic`] on the real filesystem, abortable through `abort`.
+pub fn save_with_abort(
+    path: &Path,
+    map: &HashMap<PathBuf, Rec>,
+    abort: &AtomicBool,
+) -> Result<(), SaveError> {
+    save_atomic(path, map, &RealIo, abort)
+}
+
 /// Atomic replace (temp file + rename) so an interrupted run never leaves a half-written cache.
 pub fn save(path: &Path, map: &HashMap<PathBuf, Rec>) -> io::Result<()> {
     save_atomic(path, map, &RealIo, &AtomicBool::new(false)).map_err(Into::into)
