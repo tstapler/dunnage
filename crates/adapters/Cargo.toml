@@ -21,3 +21,4 @@ thiserror.workspace = true
 [dev-dependencies]
 disk-cleanup-adapters = { path = ".", features = ["test-support"] }
 tempfile = "3"
+proptest = "1"

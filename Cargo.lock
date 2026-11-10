@@ -232,6 +232,7 @@ dependencies = [
  "disk-cleanup-adapters",
  "disk-cleanup-core",
  "libc",
+ "proptest",
  "rustix",
  "tempfile",
  "thiserror",
