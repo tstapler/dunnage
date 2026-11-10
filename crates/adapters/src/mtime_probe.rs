@@ -143,9 +143,8 @@ impl NewestStore {
         let mut f = std::fs::File::create(&tmp)?;
         f.write_all(text.as_bytes())?;
         f.sync_all()?;
-        std::fs::rename(&tmp, &path).inspect_err(|_| {
-            let _ = std::fs::remove_file(&tmp);
-        })?;
+        // A failed rename leaves the temp file behind; nothing here deletes (check-no-stray-unlink.sh).
+        std::fs::rename(&tmp, &path)?;
         self.dirty = false;
         Ok(())
     }
