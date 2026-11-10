@@ -5,6 +5,7 @@ pub mod config;
 pub mod delete;
 pub mod dirops;
 pub mod probe;
+pub mod steam;
 #[cfg(feature = "test-support")]
 pub mod testing;
 pub mod treestat;
