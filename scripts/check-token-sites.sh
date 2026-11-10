@@ -222,6 +222,7 @@ main() {
   flag "'unconfined' outside its definition and call site" < <(not_in "$u" "^($DEF_DIROPS|$SITE_UNCONF):")
   flag "for_tests outside crates/*/tests/, crates/{core,adapters}/src/testing.rs and apply_token.rs" < <(not_in "$t" "^(crates/[^/]+/tests/|crates/(core|adapters)/src/testing\.rs:|$DEF_TOKEN:)")
   flag "Allowed::new outside $GUARD" < <(not_in "$H_allowednew" "^$GUARD:")
+  [ "$(count "$(in_file "$H_allowednew" "$GUARD")")" -eq 1 ] || bad "$GUARD must contain exactly one Allowed::new call (decide_path_common), found $(count "$(in_file "$H_allowednew" "$GUARD")") (0 means the rule polices nothing)"
 
   # no other way to build the witnesses
   flag "macro_rules! body names a witness type (hides a mint site)" <<< "$H_macro"
@@ -296,6 +297,9 @@ selftest() {
   if "$SELF" --expect-sites 1 "$t/pos" >/dev/null 2>&1; then echo "ok: grant named only in a comment or a string is not a site"; else echo "SELFTEST BAD: comment/string false positive"; rc=1; fi
   # negatives: name | file to append to (or replace) | text
   declare -A WANT=(
+    [allowed-new-in-targets-dir]="Allowed::new outside"
+    [allowed-new-twice-in-guard]="exactly one Allowed::new"
+    [allowed-new-missing]="exactly one Allowed::new"
     [macro-arg]="macro_rules! body names a witness|'grant' outside"
     [use-as]="'use ... as' renames|'grant' outside"
     [type-alias]="type alias of a witness|'grant' outside"
@@ -391,6 +395,9 @@ fn a(t: &ApplyToken) { let f = R::unconfined; }'
   neg no-forbid-core crates/core/src/lib.rs 'pub mod apply_token;' replace
   neg for-tests-cli crates/cli/src/main.rs 'fn a() { let _ = ApplyToken::for_tests(); }'
   neg for-tests-inline-mod crates/core/src/guard.rs '#[cfg(test)] mod t { fn a() { let _ = ApplyToken::for_tests(); } }'
+  neg allowed-new-twice-in-guard crates/core/src/guard.rs 'fn d2() -> Allowed { Allowed::new() }'
+  neg allowed-new-missing crates/core/src/guard.rs 'fn decide() {}' replace
+  neg allowed-new-in-targets-dir crates/core/src/targets/x.rs 'fn a() -> Allowed { Allowed::new() }'
   neg allowed-new-elsewhere crates/core/src/targets.rs 'fn a() -> Allowed { Allowed::new() }'
   d="$t/n-allowed-derive-clone"; cp -r "$t/clean" "$d"; sed -i 's/^pub struct WorktreeRemoval/#[derive(Clone)] pub struct WorktreeRemoval/' "$d/crates/core/src/allowed.rs"
   expect_fail allowed-derive-clone "$d"

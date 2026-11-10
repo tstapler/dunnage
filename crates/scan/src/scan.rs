@@ -7,6 +7,7 @@
 //! threads the directory that "owns" a multiply-linked inode is whichever thread saw it first.
 
 use crate::btrfs_tree::BtrfsTreeBackend;
+use crate::classify::{classify_dir, ParentFacts};
 use crate::estimate::Stats;
 use crate::index::{Backend, CollectRequest, DirInfo};
 use crate::walker::{CacheConfig, WalkerBackend};
@@ -14,6 +15,7 @@ use crate::{Error, Result};
 use serde::Serialize;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap};
+use std::ffi::OsStr;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -29,6 +31,7 @@ pub enum BackendChoice {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct ScanOptions {
     pub roots: Vec<PathBuf>,
     pub backend: BackendChoice,
@@ -39,6 +42,20 @@ pub struct ScanOptions {
     pub threads: usize,
     /// Walker incremental cache; `None` disables it.
     pub cache: Option<CacheConfig>,
+}
+
+impl ScanOptions {
+    /// Defaults: auto backend, single filesystem, no time limit, auto threads, no cache.
+    pub fn new(roots: Vec<PathBuf>) -> Self {
+        Self {
+            roots,
+            backend: BackendChoice::Auto,
+            cross_fs: false,
+            max_duration: None,
+            threads: 0,
+            cache: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
@@ -141,6 +158,7 @@ pub struct Family {
 
 /// One discovered `node_modules` (sibling `package.json`) or `target` (sibling `Cargo.toml`).
 #[derive(Debug, Clone, Serialize)]
+#[non_exhaustive]
 pub struct BuildRoot {
     pub path: PathBuf,
     pub kind: BuildKind,
@@ -169,6 +187,7 @@ pub struct DuplicateCluster {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[non_exhaustive]
 pub struct ScanReport {
     pub roots: Vec<PathBuf>,
     pub groups: Vec<Group>,
@@ -199,10 +218,13 @@ fn special_category(
         return Some(Category::Git);
     }
     let parent = &dirs[*index.get(path.parent()?)?].1;
-    match name {
-        "node_modules" if parent.has_package_json => Some(Category::NodeModules),
-        "target" if parent.has_cargo_toml => Some(Category::CargoTarget),
-        _ => None,
+    let facts = ParentFacts {
+        has_package_json: parent.has_package_json,
+        has_cargo_toml: parent.has_cargo_toml,
+    };
+    match classify_dir(OsStr::new(name), facts)? {
+        BuildKind::NodeModules => Some(Category::NodeModules),
+        BuildKind::CargoTarget => Some(Category::CargoTarget),
     }
 }
 

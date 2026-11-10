@@ -4,11 +4,14 @@
 pub mod btrfs;
 pub mod btrfs_tree;
 pub mod cache;
+pub mod classify;
 pub mod estimate;
 pub mod health;
 pub mod index;
 pub mod scan;
 pub mod walker;
+
+pub use classify::{classify_dir, classify_path, ParentFacts};
 
 /// Errors surfaced by the library.
 #[derive(Debug, thiserror::Error)]
