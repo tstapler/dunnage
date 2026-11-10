@@ -1,6 +1,7 @@
 //! Side-effecting adapters (filesystem, processes, config).
 
 pub mod command;
+pub mod config;
 pub mod delete;
 pub mod dirops;
 pub mod probe;
