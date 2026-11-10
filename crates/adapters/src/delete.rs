@@ -134,7 +134,7 @@ struct Engine<'a, D: DirOps> {
     abort: &'a AbortFlag,
     frames: Vec<Frame<D>>,
     freed: Freed,
-    /// Hardlinked inodes seen inside the tree: `(names unlinked, blocks)`.
+    /// Hardlinked inodes seen inside the tree: `(names unlinked, names at first sight)`.
     links: HashMap<(u64, u64), (u64, u64)>,
     first_err: Option<DeleteError>,
 }
@@ -368,19 +368,23 @@ impl<D: DirOps> Engine<'_, D> {
     fn count_name(&mut self, st: &StatInfo) {
         self.freed.entries_removed += 1;
         self.freed.apparent_bytes = ApparentBytes(self.freed.apparent_bytes.0 + st.size);
-        let last_link = if st.nlink <= 1 {
-            true
-        } else {
-            let e = self
-                .links
-                .entry((st.ident.dev, st.ident.ino))
-                .or_insert((0, st.blocks));
-            e.0 += 1;
-            let all_in_tree = e.0 >= st.nlink;
-            if all_in_tree {
-                self.links.remove(&(st.ident.dev, st.ident.ino));
+        // Earlier names are already unlinked, so a later name's own `nlink` is too small: the count of names
+        // is the one recorded when the inode was first seen.
+        let key = (st.ident.dev, st.ident.ino);
+        let last_link = match self.links.get_mut(&key) {
+            Some(e) => {
+                e.0 += 1;
+                let all_in_tree = e.0 >= e.1;
+                if all_in_tree {
+                    self.links.remove(&key);
+                }
+                all_in_tree
             }
-            all_in_tree
+            None if st.nlink <= 1 => true,
+            None => {
+                self.links.insert(key, (1, st.nlink));
+                false
+            }
         };
         if last_link {
             self.count_inode(st.blocks);
