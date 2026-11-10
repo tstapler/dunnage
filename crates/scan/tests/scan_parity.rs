@@ -59,14 +59,10 @@ impl Drop for Fixture {
 
 /// The scan the old CLI performed for the oracle command, serialised the way it printed it.
 fn run_scan(root: &Path) -> ScanReport {
-    let opts = ScanOptions {
-        roots: vec![root.to_path_buf()],
-        backend: BackendChoice::Walker,
-        cross_fs: false,
-        max_duration: Some(Duration::from_secs(120)),
-        threads: 1,
-        cache: None,
-    };
+    let mut opts = ScanOptions::new(vec![root.to_path_buf()]);
+    opts.backend = BackendChoice::Walker;
+    opts.max_duration = Some(Duration::from_secs(120));
+    opts.threads = 1;
     let mut report = scan(&opts).unwrap();
     // The old CLI sorted both tables by inodes, descending, with a stable sort.
     report.families.sort_by_key(|f| std::cmp::Reverse(f.inodes));
