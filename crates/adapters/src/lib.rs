@@ -6,8 +6,10 @@ pub mod delete;
 pub mod dirops;
 pub mod discover_build;
 pub mod discover_cache;
+pub mod fiemap;
 pub mod mtime_probe;
 pub mod probe;
+pub mod settle;
 pub mod snapshots;
 pub mod space_meter;
 pub mod statvfs;
@@ -22,6 +24,7 @@ pub use dirops::{
 };
 
 pub use command::RealCommandRunner;
+pub use fiemap::FiemapProbe;
 pub use probe::RealProbe;
 pub use snapshots::{SnapshotInfo, SnapshotLayout};
 pub use space_meter::RealSpaceMeter;

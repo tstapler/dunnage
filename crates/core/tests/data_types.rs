@@ -56,6 +56,8 @@ fn audit_record_should_roundtrip_each_line_type_with_a_type_tag() {
         verdict_after: DiskVerdict::Warn,
         attributed_bytes: 4096,
         measured_drop: Some(-1),
+        attribution_pct: None,
+        explained: false,
         causes: vec![Cause {
             kind: CauseKind::SnapshotHeld,
             bytes: 0,

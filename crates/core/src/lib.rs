@@ -29,6 +29,7 @@ pub mod ports;
 pub mod preflight;
 pub mod reasons;
 pub mod roots;
+pub mod selector;
 mod serde_remote;
 pub mod shell_quote;
 pub mod snapshot_types;
@@ -66,8 +67,11 @@ pub use plan_state::{
 pub use platform::{MountEntry, Platform, Tri};
 pub use preflight::{PreflightVerdict, Starvation};
 pub use reasons::{errno_phrase, FatalError, Warning};
-pub use snapshot_types::{AllocSnapshot, FsSnapshot, Settled, SpaceUse};
-pub use summary::{Cause, CauseKind, DiskVerdict, RunSummary, StageTimings, WalkerCounters};
+pub use snapshot_types::{AllocSnapshot, FsSnapshot, Held, Settled, SpaceUse};
+pub use summary::{
+    Cause, CauseKind, DiskVerdict, FinishInput, HeldItem, PreDeleteSample, RunSummary,
+    SnapshotFacts, StageTimings, WalkerCounters,
+};
 
 use std::path::PathBuf;
 

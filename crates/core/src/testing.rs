@@ -430,6 +430,26 @@ impl SpaceMeter for FakeSpaceMeter {
     }
 }
 
+// ---------------------------------------------------------------- extent probe
+
+/// Returns the scripted attribution whatever the items are.
+#[derive(Debug)]
+pub struct FakeExtentProbe {
+    result: crate::ports::ExtentAttribution,
+}
+
+impl FakeExtentProbe {
+    pub fn new(result: crate::ports::ExtentAttribution) -> FakeExtentProbe {
+        FakeExtentProbe { result }
+    }
+}
+
+impl crate::ports::ExtentProbe for FakeExtentProbe {
+    fn attribute(&self, _items: &[&Path], _budget: usize) -> crate::ports::ExtentAttribution {
+        self.result.clone()
+    }
+}
+
 // ---------------------------------------------------------------- audit sink
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

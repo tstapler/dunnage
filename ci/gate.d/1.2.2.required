@@ -1,0 +1,2 @@
+# <first-gate> <last-gate|-> <command>   (Story 1.2.2: the unsafe allow-list content rule for adapters/src/fiemap.rs and its 25+ evasion controls)
+A - scripts/check-token-sites.sh --selftest
