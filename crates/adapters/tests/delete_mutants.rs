@@ -343,17 +343,21 @@ impl Fx {
         name: &str,
         expect: Identity,
     ) -> Result<Freed, DeleteFailure> {
-        let root = open_verified_root(spy, &self.base, ident(&self.base)).unwrap();
-        let parent = open_parent(spy, &root, Path::new("home/code/app")).unwrap();
-        delete_tree(
-            spy,
-            &parent,
-            OsStr::new(name),
-            expect,
-            pol,
-            &spy.abort,
-            &ApplyToken::for_tests(),
-        )
+        run_in(&self.base, spy, pol, name, expect)
+    }
+
+    /// Runs the delete on its own thread and fails the test after 30 s, so a mutant that spins inside the
+    /// engine (where the `Spy` watchdog never sees an operation) cannot hang the suite.
+    fn run_bounded(&self, spy: Spy, pol: DeletePolicy) -> (Result<Freed, DeleteFailure>, Spy) {
+        let base = self.base.clone();
+        let expect = ident(&self.nm);
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let r = run_in(&base, &spy, &pol, "node_modules", expect);
+            let _ = tx.send((r, spy));
+        });
+        rx.recv_timeout(std::time::Duration::from_secs(30))
+            .expect("the engine did not return within 30 s (a loop that never ends)")
     }
 
     fn files(&self, n: usize) -> Vec<PathBuf> {
@@ -365,6 +369,26 @@ impl Fx {
             })
             .collect()
     }
+}
+
+fn run_in(
+    base: &Path,
+    spy: &Spy,
+    pol: &DeletePolicy,
+    name: &str,
+    expect: Identity,
+) -> Result<Freed, DeleteFailure> {
+    let root = open_verified_root(spy, base, ident(base)).unwrap();
+    let parent = open_parent(spy, &root, Path::new("home/code/app")).unwrap();
+    delete_tree(
+        spy,
+        &parent,
+        OsStr::new(name),
+        expect,
+        pol,
+        &spy.abort,
+        &ApplyToken::for_tests(),
+    )
 }
 
 fn exists(p: &Path) -> bool {
@@ -582,7 +606,7 @@ fn open_frame_should_keep_exactly_MAX_OPEN_LEVELS_handles_open_When_descending_a
     let spy = fx.spy();
     let mut pol = fx.policy();
     pol.max_depth = 100_000;
-    let r = fx.run(&spy, &pol);
+    let (r, spy) = fx.run_bounded(spy, pol);
     assert!(r.is_ok(), "{r:?}");
     assert!(!exists(&fx.nm));
     let open = spy.open_at_first_unlink.lock().unwrap().clone().unwrap();
