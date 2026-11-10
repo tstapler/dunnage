@@ -45,6 +45,7 @@ impl DeletePolicy {
     /// it has at least two components.
     ///
     /// Lexical, so sound only behind `open_parent`, whose handle carries a symlink-free path.
+    #[allow(unused_variables)]
     pub fn validate(&self, name: &OsStr) -> Result<(), DeleteError> {
         let bytes = name.as_bytes();
         if bytes.is_empty() || bytes == b"." || bytes == b".." {

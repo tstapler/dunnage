@@ -14,6 +14,10 @@ use rustix::fs::{AtFlags, FileType, Mode, OFlags};
 /// Max subdirectory names `delete_tree` buffers per open level; non-directories are unlinked as they stream.
 pub const DELETE_BATCH: usize = 1024;
 
+/// Directory handles `delete_tree` keeps open at once; deeper ancestors are re-opened by identity-checked
+/// `open_dir` when the walk climbs back (Story 2.1.2). Not part of the frozen contract.
+pub const MAX_OPEN_LEVELS: usize = 64;
+
 pub trait DirOps: Send + Sync {
     type Dir: Send + Sync;
     /// Owns its own handle, so the caller may `unlinkat` on the directory while iterating.
