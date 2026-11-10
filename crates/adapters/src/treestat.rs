@@ -2,8 +2,12 @@
 //! delete engine's accounting: `st_blocks * 512`, hardlinks counted once per `(dev, ino)`, bounded to
 //! `root_dev`, never following symlinks, streaming (memory does not grow with directory width).
 //!
-//! Only non-directory entries add to `allocated`, `apparent` and `inodes`, exactly as `delete_tree` counts
-//! `Freed`; `entries` counts every entry examined, directories included.
+//! Counting rule (Glossary, Story 2.1.2), the same one `delete_tree` applies to `Freed`: every name visited
+//! counts one entry, directories and the measured directory itself included; an inode adds `blocks * 512`
+//! once, directories included; `apparent` is `st_size` per name over non-directories. On a quiescent tree
+//! with no links leaving it, `measure(dir)` equals the `Freed` of `delete_tree(dir)`. `allocated` counts a
+//! hardlinked inode once whatever outside links it has (an upper bound), where `Freed` counts it only when
+//! its last name went away.
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -44,7 +48,7 @@ pub struct TreeStats {
     pub allocated: AllocatedBytes,
     pub apparent: ApparentBytes,
     pub newest_mtime: Option<SystemTime>,
-    /// Distinct non-directory inodes.
+    /// Distinct inodes, directories included.
     pub inodes: u64,
     pub entries: u64,
     pub skipped: Vec<Skipped>,
@@ -133,6 +137,17 @@ pub fn measure<D: DirOps>(
         newer_than: opts.stop_if_newer_than,
     };
 
+    match ops.fstat(dir) {
+        Ok(st) => {
+            w.stats.entries += 1;
+            w.stats.allocated.0 += st.blocks * 512;
+            w.stats.inodes += 1;
+        }
+        Err(e) => w.skip(
+            PathBuf::new(),
+            SkipWhy::Unreadable(e.raw_os_error().unwrap_or(libc::EIO)),
+        ),
+    }
     let first = match ops.read_dir(dir) {
         Ok(it) => it,
         Err(e) => {
@@ -183,11 +198,6 @@ pub fn measure<D: DirOps>(
             None => dir,
         };
 
-        if entry.kind == FileKind::Symlink {
-            let rel = rel_of(&stack, &entry.name);
-            w.skip(rel, SkipWhy::Symlink);
-            continue;
-        }
         let st = match ops.stat_at(parent_ref, &entry.name) {
             Ok(st) => st,
             Err(e) => {
@@ -200,9 +210,9 @@ pub fn measure<D: DirOps>(
             }
         };
         if st.kind == FileKind::Symlink {
+            // Never followed, but the link itself is a name and an inode, as `delete_tree` counts it.
             let rel = rel_of(&stack, &entry.name);
             w.skip(rel, SkipWhy::Symlink);
-            continue;
         }
         if st.kind == FileKind::Dir {
             if !st.ident.on_dev(root_dev) {
@@ -211,6 +221,8 @@ pub fn measure<D: DirOps>(
                 continue;
             }
             w.stats.entries += 1;
+            w.stats.allocated.0 += st.blocks * 512;
+            w.stats.inodes += 1;
             if w.note_mtime(&st) {
                 break 'walk;
             }

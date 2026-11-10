@@ -52,5 +52,5 @@ jobs:
         run: scripts/check-case-table.sh
       - name: test authorship selftest
         run: scripts/check-test-authorship.sh --selftest
-      - name: test authorship (red until the owner signs test-author-v1)
+      - name: test authorship
         run: scripts/check-test-authorship.sh
