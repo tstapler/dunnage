@@ -71,12 +71,16 @@ check() {
   rm -f "$dfile"
   if [ -z "$base" ]; then base=HEAD~1; fi
   bsha=$(git rev-parse --verify -q "$base^{commit}") || { echo "ok: contract equals $FROZEN (no base commit to compare)"; return 0; }
-  if ! git cat-file -e "$bsha:$FROZEN" 2>/dev/null; then echo "ok: initial freeze of the contract (no $FROZEN at $base)"; return 0; fi
+  # An initial freeze is only the first appearance: a frozen file with any history at BASE (deleted, then re-added) is a change.
+  if ! git cat-file -e "$bsha:$FROZEN" 2>/dev/null && [ -z "$(git log --format=%H -1 "$bsha" -- "$FROZEN")" ]; then
+    echo "ok: initial freeze of the contract (no $FROZEN, and no history of it, at $base)"; return 0
+  fi
   if git diff --quiet "$bsha" -- "$FROZEN"; then echo "ok: contract equals $FROZEN and it is unchanged since $base"; return 0; fi
-  if git log --format=%B "$bsha..HEAD" | grep -q 'contract-change:'; then
+  # The marker must sit on a commit that itself changes the frozen file, not on any commit in the range.
+  if [ -n "$(git log --format=%H -1 --grep='contract-change:' "$bsha..HEAD" -- "$FROZEN")" ]; then
     echo "ok: contract changed since $base with a contract-change: commit (re-run the independent test author)"; return 0
   fi
-  echo "FAIL: $FROZEN changed since $base but no commit in $base..HEAD carries 'contract-change:'"; return 1
+  echo "FAIL: $FROZEN changed since $base but no commit in $base..HEAD that changes it carries 'contract-change:'"; return 1
 }
 
 selftest() {
@@ -103,6 +107,12 @@ selftest() {
   git commit -q --allow-empty -m "x" ; sed -i 's/open_parent_x/open_parent_y/' crates/adapters/src/dirops.rs; "$self" --update . >/dev/null 2>&1; git add -A
   git commit -qm "contract-change: rename open_parent again (test author re-run)"
   expect 0 "a contract-change: commit passes" "contract-change:" "$self" .
+  git reset -q --hard HEAD~1; git commit -q --allow-empty -m "contract-change: marker on an empty commit"
+  sed -i 's/open_parent_x/open_parent_y/' crates/adapters/src/dirops.rs; "$self" --update . >/dev/null 2>&1; git add -A; git commit -qm "refactor: change without the marker"
+  expect 1 "a contract-change: marker on a commit that does not change the frozen file fails" "that changes it" "$self" --base HEAD~2 .
+  git reset -q --hard HEAD~2; git commit -q --allow-empty -m "x"; git rm -q ci/contract.frozen.txt; git commit -qm "chore: drop the frozen file"
+  "$self" --update . >/dev/null 2>&1; git add -A; git commit -qm "chore: bring it back"
+  expect 1 "a re-added frozen file with history is not an initial freeze" "that changes it" "$self" --base HEAD~1 .
   rm ci/contract.frozen.txt; expect 1 "a missing frozen file fails" "missing" "$self" .; git checkout -q ci
   rm crates/adapters/src/delete.rs; expect 1 "a missing contract block fails closed" "no .contract. block" "$self" .; git checkout -q crates
   sed -i 's/pub fn delete_tree/pub fn delete_tree_renamed/' crates/adapters/src/delete.rs
