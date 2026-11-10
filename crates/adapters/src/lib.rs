@@ -4,6 +4,8 @@ pub mod command;
 pub mod config;
 pub mod delete;
 pub mod dirops;
+pub mod discover_build;
+pub mod mtime_probe;
 pub mod probe;
 pub mod snapshots;
 pub mod space_meter;
