@@ -334,6 +334,23 @@ pub enum ExtentAttribution {
 pub trait ExtentProbe: Send + Sync {
     /// `budget` is the most files the probe may open; more than that is `Unavailable(BudgetExhausted)`.
     fn attribute(&self, items: &[&Path], budget: usize) -> ExtentAttribution;
+
+    /// The explorer's info-pane estimate: bytes of `SHARED` extents among the `top_n` largest files of
+    /// `dir`, opening at most `budget` files. An estimate, labelled so everywhere it is shown. The default
+    /// is `Unavailable(UnsupportedOnThisOS)` so existing probes keep compiling.
+    fn shared_bytes(&self, _dir: &Path, _top_n: usize, _budget: usize) -> SharedEstimate {
+        SharedEstimate::Unavailable(Unavailable::UnsupportedOnThisOS)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SharedEstimate {
+    Unavailable(Unavailable),
+    /// `files` of the largest files were probed and `bytes` of their extents are shared.
+    Estimated {
+        bytes: u64,
+        files: u64,
+    },
 }
 
 pub trait SpaceMeter: Send + Sync {
