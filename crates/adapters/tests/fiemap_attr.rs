@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
-//! Story 1.2.2 Task 1.2.2d (T-541): `FiemapProbe` against a real btrfs fixture under `$HOME/.cache/dc-fixtures`.
+//! Story 1.2.2 Task 1.2.2d (T-541): `FiemapProbe` against a real btrfs fixture under `$DC_FIXTURE_ROOT`
+//! (default `<workspace>/target/dc-fixtures`).
 //! Skips with a named line off btrfs; `DC_REQUIRE_BTRFS=1` makes that a failure. The only deletion is the
 //! test-only `remove_dir_all` of the fixture directory this test created.
 
@@ -19,8 +20,12 @@ const MIB: u64 = 1 << 20;
 const BTRFS_MAGIC: u64 = 0x9123_683E;
 
 fn fixture_root() -> Option<PathBuf> {
-    let home = PathBuf::from(std::env::var_os("HOME")?);
-    let root = home.join(".cache/dc-fixtures");
+    // DC_FIXTURE_ROOT overrides; the default is the workspace's git-ignored `target/`, which sits on the
+    // developer's own filesystem (no home-directory read, check-home-sources.sh).
+    let root = std::env::var_os("DC_FIXTURE_ROOT").map_or_else(
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/dc-fixtures"),
+        PathBuf::from,
+    );
     fs::create_dir_all(&root).ok()?;
     let magic = rustix::fs::statfs(&root).ok()?.f_type as u64 & 0xFFFF_FFFF;
     if magic == BTRFS_MAGIC {
@@ -128,6 +133,17 @@ fn fiemap_probe_should_count_five_clones_once_and_not_over_subtract_a_compressed
 
     let meter = RealSpaceMeter::new(Platform::Linux);
     let used = |m: &RealSpaceMeter| m.snapshot(base).btrfs.unwrap().data.bytes_used;
+    // The comparison reads the machine's live counter, so another writer can move it. Skip, saying why,
+    // when the counter is not still before and after the delete.
+    let quiet = |m: &RealSpaceMeter| {
+        let a = m.settle(base, Duration::from_secs(30)).data_bytes_used;
+        std::thread::sleep(Duration::from_secs(2));
+        a.is_some() && a == m.settle(base, Duration::from_secs(30)).data_bytes_used
+    };
+    if !quiet(&meter) {
+        eprintln!("SKIP: data.bytes_used is moving (another writer on this filesystem)");
+        return;
+    }
     let before = used(&meter);
     for p in &paths {
         fs::remove_file(p).unwrap();
@@ -136,6 +152,10 @@ fn fiemap_probe_should_count_five_clones_once_and_not_over_subtract_a_compressed
         .settle(base, Duration::from_secs(60))
         .data_bytes_used
         .unwrap();
+    if !quiet(&meter) {
+        eprintln!("SKIP: data.bytes_used kept moving after the delete (another writer)");
+        return;
+    }
     let drop = before.saturating_sub(after);
     let off = drop.abs_diff(attributed) as f64 / drop as f64;
     assert!(
