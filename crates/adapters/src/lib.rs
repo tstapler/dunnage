@@ -5,6 +5,7 @@ pub mod config;
 pub mod delete;
 pub mod dirops;
 pub mod probe;
+pub mod settle;
 pub mod snapshots;
 pub mod space_meter;
 pub mod statvfs;
