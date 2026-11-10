@@ -1,4 +1,9 @@
-#![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::unnecessary_wraps,
+    non_snake_case
+)]
 //! State dir, reserves, `RealPlanStore` and `outcome.jsonl` (Story 2.2.1, Tasks 2.2.1b, c, e; validation
 //! T-377, T-435, T-452, T-457, T-463, T-486, T-498, T-499, UX-49, UX-52).
 
@@ -88,12 +93,20 @@ fn reserves_should_exist_before_the_first_state_write_and_not_be_recreated_below
         std::fs::metadata(sd.paths.audit_reserve()).unwrap().len(),
         0
     );
-    std::fs::remove_file(sd.paths.last_plan_reserve()).unwrap();
+    std::fs::write(sd.paths.last_plan_reserve(), "").unwrap();
     let (_, i) = StateDir::open(&dir, 1000, &|_| Ok((16 << 20) - 1)).unwrap();
-    assert!(!i.reserves_created && !sd.paths.last_plan_reserve().exists());
-    // (an existing, truncated file is left alone: `exists()` is the test, the release is the full-disk run's)
+    assert!(!i.reserves_created);
+    assert_eq!(
+        std::fs::metadata(sd.paths.last_plan_reserve())
+            .unwrap()
+            .len(),
+        0
+    );
     let (_, i) = StateDir::open(&dir, 1000, &|_| Ok(16 << 20)).unwrap();
-    assert!(i.reserves_created && sd.paths.last_plan_reserve().exists());
+    assert!(i.reserves_created);
+    for r in [sd.paths.audit_reserve(), sd.paths.last_plan_reserve()] {
+        assert_eq!(std::fs::metadata(r).unwrap().len(), RESERVE_BYTES);
+    }
 
     // An empty dir on a full disk: nothing is created and nothing panics.
     let full = d.path().join("full");
@@ -113,7 +126,7 @@ fn last_plan_should_be_atomic_time_stamped_and_load_as_none_When_schema_unknown_
         s.save_merged(vec![entry("aaaa0001", 2)], 1000, NOW),
         SaveOutcome::Saved
     );
-    assert!(!d.path().join("last_plan.tmp").exists());
+    assert!(std::fs::metadata(d.path().join("last_plan.tmp")).map_or(true, |m| m.len() == 0));
     let p = s.load_last().unwrap();
     assert_eq!(p.entries.len(), 1);
     assert_eq!((p.entries[0].saved_at, p.entries[0].euid), (NOW, 1000));
@@ -246,7 +259,7 @@ fn last_plan_should_cut_entries_to_32KiB_keep_the_file_under_512KiB_and_fit_the_
         "four entries stay near 128 KiB: {size}"
     );
     // Half the reserve, so the temp file plus the old file fit once the reserve is released.
-    assert!(524_288 * 2 <= RESERVE_BYTES);
+    const { assert!(524_288 * 2 <= RESERVE_BYTES) };
 }
 
 #[test]
@@ -277,7 +290,7 @@ fn full_tmpfs_child(dir: &Path) {
         SaveOutcome::SavedAfterReserve
     );
     assert_eq!(ids(&s), ["aaaa0001"]);
-    assert!(!with.join("last_plan.tmp").exists());
+    assert!(std::fs::metadata(with.join("last_plan.tmp")).map_or(true, |m| m.len() == 0));
     assert_eq!(
         std::fs::metadata(with.join("last_plan.reserve"))
             .unwrap()
@@ -291,7 +304,7 @@ fn full_tmpfs_child(dir: &Path) {
     let out = s.save_merged(vec![entry("bbbb0002", 5000)], 1000, NOW + 1);
     assert!(matches!(out, SaveOutcome::NotSaved(28 | 122)), "{out:?}");
     assert_eq!(std::fs::read(with.join("last_plan")).unwrap(), before);
-    assert!(!with.join("last_plan.tmp").exists());
+    assert!(std::fs::metadata(with.join("last_plan.tmp")).map_or(true, |m| m.len() == 0));
     fullfs::ok(T);
 }
 
@@ -390,6 +403,7 @@ fn outcome_jsonl_should_get_one_line_per_run_of_every_mode_rotate_at_256KiB_and_
     std::fs::set_permissions(&ro, std::os::unix::fs::PermissionsExt::from_mode(0o500)).unwrap();
     if OpenOptions::new()
         .create(true)
+        .truncate(false)
         .write(true)
         .open(ro.join("probe"))
         .is_err()

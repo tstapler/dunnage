@@ -44,9 +44,10 @@ pub fn run_child(child_test: &str, size_kib: u32) -> bool {
                 String::from_utf8_lossy(&o.stdout),
                 String::from_utf8_lossy(&o.stderr)
             );
-            if text.contains("running 1 test") {
-                panic!("child {child_test} failed:\n{text}");
-            }
+            assert!(
+                !text.contains("running 1 test"),
+                "child {child_test} failed:\n{text}"
+            );
             skip(child_test, "unshare -rm not permitted")
         }
         Err(_) => skip(child_test, "unshare not installed"),

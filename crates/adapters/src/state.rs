@@ -146,14 +146,19 @@ impl StateDir {
         };
         let mut init = StateInit::default();
         for r in [sd.paths.audit_reserve(), sd.paths.last_plan_reserve()] {
-            if !r.exists() && avail(dir).is_ok_and(|a| a >= RESERVE_RECREATE_MIN_AVAIL) {
+            let full_size = fs::metadata(&r).is_ok_and(|m| m.len() >= RESERVE_BYTES);
+            if !full_size && avail(dir).is_ok_and(|a| a >= RESERVE_RECREATE_MIN_AVAIL) {
                 match create_reserve(&r) {
                     Ok(()) => {
                         chown_if(owner, &r);
                         init.reserves_created = true;
                     }
                     Err(_) => {
-                        let _ = fs::remove_file(&r);
+                        // A partial reserve is cut to nothing, never left as a half-size file.
+                        let _ = OpenOptions::new()
+                            .write(true)
+                            .open(&r)
+                            .and_then(|f| f.set_len(0));
                     }
                 }
             }
@@ -172,7 +177,8 @@ impl StateDir {
 fn create_reserve(path: &Path) -> io::Result<()> {
     let mut f = OpenOptions::new()
         .write(true)
-        .create_new(true)
+        .create(true)
+        .truncate(true)
         .mode(PRIVATE)
         .open(path)?;
     let chunk = vec![0u8; 64 * 1024];
@@ -290,7 +296,11 @@ impl RealPlanStore {
             fs::rename(&tmp, self.dir.paths.last_plan())
         })();
         if res.is_err() {
-            let _ = fs::remove_file(&tmp);
+            // Emptied, not removed: the next save truncates it anyway, and it holds no space meanwhile.
+            let _ = OpenOptions::new()
+                .write(true)
+                .open(&tmp)
+                .and_then(|f| f.set_len(0));
         }
         res
     }

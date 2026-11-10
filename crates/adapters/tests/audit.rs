@@ -4,8 +4,9 @@
 //! `core/tests/executor.rs` and end to end in Story 2.3.3.
 
 use std::ffi::OsString;
+use std::io::Write;
 use std::os::unix::ffi::OsStringExt;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use disk_cleanup_adapters::audit::{unclean_run_warning, unfinished_run, RealAuditSink};
@@ -189,7 +190,6 @@ fn sudo_state_dir_should_resolve_to_sudo_user_home_0600_and_chowned_When_euid_0_
     assert_eq!(Owner::for_euid(1000, d.path()), None);
     let me = Owner::for_euid(0, &d.path().join("not/yet/created")).expect("owner of the tempdir");
     let meta = std::fs::metadata(d.path()).unwrap();
-    use std::os::unix::fs::MetadataExt;
     assert_eq!((me.uid, me.gid), (meta.uid(), meta.gid()));
     let s = RealAuditSink::new(
         d.path().join("audit.jsonl"),
@@ -282,7 +282,6 @@ fn run_start_without_run_end_in_previous_run_should_print_the_warning_previous_r
     );
     // A torn last line does not hide it, and a following run's end closes it.
     std::fs::OpenOptions::new().append(true).open(&log).unwrap();
-    use std::io::Write;
     writeln!(
         std::fs::OpenOptions::new().append(true).open(&log).unwrap(),
         "{{\"type\":\"intent\",\"ru"

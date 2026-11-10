@@ -200,9 +200,9 @@ mod tests {
         theirs.write_all(text.as_bytes()).unwrap();
         let slot = std::sync::Mutex::new(Some((ours, theirs)));
         move || {
-            let (ours, _theirs) = slot.lock().unwrap().take().expect("opened once");
+            let (ours, theirs) = slot.lock().unwrap().take().expect("opened once");
             // Keep the typing end open until the read is done by leaking it to the process end.
-            std::mem::forget(_theirs);
+            std::mem::forget(theirs);
             Ok(std::fs::File::from(std::os::fd::OwnedFd::from(ours)))
         }
     }
