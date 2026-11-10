@@ -10,7 +10,7 @@ order="ABCDE"
 rank() { local p=${order%%$1*}; echo ${#p}; }
 
 run_gate() {
-  local gate=$1 root=${2:-.} fails=0 ok=0 sha line cmd first last script
+  local gate=$1 root=${2:-.} fails=0 ok=0 sha line cmd first last script prev
   cd "$root" || { echo "FAIL: no repo $root"; return 2; }
   case $gate in A|B|C|D|E) ;; *) echo "usage: gate.sh A|B|C|D|E"; return 64 ;; esac
   ls ci/gate.d/*.required >/dev/null 2>&1 || { echo "FAIL: ci/gate.d/*.required missing"; return 1; }
@@ -36,6 +36,10 @@ run_gate() {
     step "cargo test" env GATE="$gate" cargo test --workspace
     step "cargo build --release" cargo build --release --locked
   fi
+  prev=$(ls -t "$(git rev-parse --git-dir)/gate-reports/$gate-"*.txt 2>/dev/null | head -1)
+  prev=${prev##*/}; prev=${prev#"$gate"-}; prev=${prev%.txt}
+  echo "pin diff since previous gate $gate report (${prev:-none}):"
+  if [ -n "$prev" ] && git rev-parse -q --verify "$prev^{commit}" >/dev/null; then git diff "$prev" HEAD -- ci/delete_adversarial.sha256 | sed 's/^/  /'; else echo "  (no previous report to compare with)"; fi
   line="GATE $gate commit $sha tree clean checks $((ok+fails)) ok $ok failed $fails"
   mkdir -p "$(git rev-parse --git-dir)/gate-reports"; echo "$line" > "$(git rev-parse --git-dir)/gate-reports/$gate-$sha.txt"; echo "$line"
   # Gate stamp (Task 0.1.1d, consumed by Task 2.2.1d): only an all-green gate on a clean tree stamps the release binary it built.
