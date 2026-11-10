@@ -1,0 +1,3 @@
+{"Containers":"0","CreatedAt":"2026-11-01 18:36:31 -0800 PST","CreatedSince":"8 days ago","Digest":"<none>","ID":"c9418950f8fb","Repository":"example/image-1","SharedSize":"N/A","Size":"149MB","Tag":"migtest","UniqueSize":"N/A"}
+{"Containers":"1","CreatedAt":"2026-08-17 18:15:51 -0700 PDT","CreatedSince":"2 months ago","Digest":"<none>","ID":"e11c83206a71","Repository":"example/image-2","SharedSize":"N/A","Size":"392MB","Tag":"0.159.0","UniqueSize":"N/A"}
+{"Containers":"1","CreatedAt":"2026-08-17 18:15:51 -0700 PDT","CreatedSince":"2 months ago","Digest":"<none>","ID":"e11c83206a71","Repository":"example/image-3","SharedSize":"N/A","Size":"392MB","Tag":"latest","UniqueSize":"N/A"}

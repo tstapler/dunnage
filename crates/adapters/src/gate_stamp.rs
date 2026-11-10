@@ -28,11 +28,13 @@ pub fn sha256_file(path: &Path) -> io::Result<String> {
         }
         h.update(&buf[..n]);
     }
-    Ok(h.finalize().iter().fold(String::with_capacity(64), |mut s, b| {
-        use std::fmt::Write as _;
-        let _ = write!(s, "{b:02x}");
-        s
-    }))
+    Ok(h.finalize()
+        .iter()
+        .fold(String::with_capacity(64), |mut s, b| {
+            use std::fmt::Write as _;
+            let _ = write!(s, "{b:02x}");
+            s
+        }))
 }
 
 /// Hash of the running executable.
