@@ -269,6 +269,8 @@ dependencies = [
  "libc",
  "proptest",
  "rustix",
+ "serde",
+ "serde_json",
  "steamlocate",
  "tempfile",
  "thiserror",
