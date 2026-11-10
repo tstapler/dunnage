@@ -17,11 +17,13 @@ use crate::kind::SelectorId;
 use crate::outcome::{Outcome, SkipReason, Status};
 use crate::plan::{destructive_gate, GateRefusal, GateRenderCtx, Plan, PlanId, PlanItem, Planned};
 use crate::plan_state::{BuildInfo, StampSummary};
-use crate::ports::Env;
+use crate::ports::{Env, ExtentAttribution, ExtentProbe, Unavailable};
 use crate::reasons::FatalError;
 use crate::selector::Selection;
 use crate::snapshot_types::FsSnapshot;
-use crate::summary::{DiskVerdict, RunSummary, StageTimings, WalkerCounters};
+use crate::summary::{
+    DiskVerdict, FinishInput, PreDeleteSample, RunSummary, StageTimings, WalkerCounters,
+};
 use crate::target::{kind_order, Guarded, KindGate, Target};
 
 /// `Plan` cannot execute: there is no token in it. `Apply` carries the capability.
@@ -124,6 +126,9 @@ pub struct PreDeleteSamples {
     pub measurable: bool,
 }
 
+/// The most files the extent probe may open in one run.
+const EXTENT_PROBE_BUDGET: usize = 4096;
+
 /// Samples closer than this say nothing about concurrent writers.
 const MIN_SAMPLE_GAP_SECS: i64 = 2;
 
@@ -137,9 +142,18 @@ impl PreDeleteSamples {
         }
     }
 
-    fn as_vec(&self) -> Vec<u64> {
+    fn as_samples(&self) -> Vec<PreDeleteSample> {
         match (self.first, self.second) {
-            (Some(a), Some(b)) => vec![a, b],
+            (Some(a), Some(b)) => vec![
+                PreDeleteSample {
+                    at_ms: 0,
+                    data_bytes_used: a,
+                },
+                PreDeleteSample {
+                    at_ms: u64::try_from(self.elapsed_secs.max(0)).unwrap_or(0) * 1000,
+                    data_bytes_used: b,
+                },
+            ],
             _ => Vec::new(),
         }
     }
@@ -174,6 +188,7 @@ pub struct Executor<'a> {
     env: &'a Env<'a>,
     targets: Vec<&'a dyn Target>,
     opts: RunOptions,
+    extents: Option<&'a dyn ExtentProbe>,
 }
 
 struct Shared<'t> {
@@ -279,19 +294,34 @@ fn audit_unwritable(env: &Env, errno: i32) -> FatalError {
     }
 }
 
-/// The three largest `KindNotSelected` outcomes.
-fn top_unselected(outcomes: &[Outcome]) -> Vec<Outcome> {
-    let mut v: Vec<&Outcome> = outcomes
-        .iter()
-        .filter(|o| o.status == Status::Skipped(SkipReason::KindNotSelected))
-        .collect();
-    v.sort_by_key(|o| std::cmp::Reverse(o.est_bytes));
-    v.into_iter().take(3).cloned().collect()
-}
-
 impl<'a> Executor<'a> {
     pub fn new(env: &'a Env<'a>, targets: Vec<&'a dyn Target>, opts: RunOptions) -> Executor<'a> {
-        Executor { env, targets, opts }
+        Executor {
+            env,
+            targets,
+            opts,
+            extents: None,
+        }
+    }
+
+    /// Shared-extent attribution for the removed set (ADR-004). Without a probe the summary says the
+    /// extents were not measured.
+    #[must_use]
+    pub fn with_extent_probe(mut self, probe: &'a dyn ExtentProbe) -> Executor<'a> {
+        self.extents = Some(probe);
+        self
+    }
+
+    fn extent_attribution(&self, outcomes: &[Outcome]) -> ExtentAttribution {
+        let Some(probe) = self.extents else {
+            return ExtentAttribution::Unavailable(Unavailable::NotBtrfs);
+        };
+        let removed: Vec<&Path> = outcomes
+            .iter()
+            .filter(|o| o.status == Status::Removed)
+            .filter_map(|o| o.path.as_deref())
+            .collect();
+        probe.attribute(&removed, EXTENT_PROBE_BUDGET)
     }
 
     fn target_for(&self, c: &Candidate) -> Option<&'a dyn Target> {
@@ -411,26 +441,7 @@ impl<'a> Executor<'a> {
         let fs_after = env.space.snapshot(self.meter_path());
         let settle_ms = settled.waited_ms.max(millis(settle_start));
 
-        let attributed: u64 = outcomes.iter().map(|o| o.freed.attributed_bytes.0).sum();
-        let drop = i64::try_from(fs_before.used_bytes).unwrap_or(i64::MAX)
-            - i64::try_from(fs_after.used_bytes).unwrap_or(i64::MAX);
-        let end = RunEnd {
-            run_id: run_id.clone(),
-            ts: env.clock.now_epoch(),
-            verdict_after: DiskVerdict::Unknown,
-            attributed_bytes: attributed,
-            measured_drop: Some(drop),
-            causes: Vec::new(),
-        };
-        let end_errno = env
-            .audit
-            .run_end(&end)
-            .err()
-            .map(|e| e.raw_os_error().unwrap_or(5));
-        let audit_errno = lock(&shared.audit_errno).take().or(end_errno);
-        let fatal = audit_errno.map(|errno| audit_unwritable(env, errno));
         let abort = *lock(&shared.abort);
-
         let mut notes = notes;
         for t in &self.targets {
             let mine: Vec<Outcome> = outcomes
@@ -440,29 +451,18 @@ impl<'a> Executor<'a> {
                 .collect();
             notes.extend(t.finish(&mine, env));
         }
-
-        let exit = match (abort, &fatal) {
-            (Some(AbortCause::Interrupted(sig)), _) => ExitClass::Interrupted(sig),
-            (Some(_), _) | (_, Some(_)) => ExitClass::Fatal,
-            _ if outcomes
-                .iter()
-                .any(|o| matches!(o.status, Status::Error(_))) =>
-            {
-                ExitClass::PartialFailure
-            }
-            _ => ExitClass::Ok,
-        };
-        let summary = RunSummary {
+        let extents = self.extent_attribution(&outcomes);
+        let summary = RunSummary::finish(FinishInput {
             fs_before,
             fs_after: Some(fs_after),
-            top_unselected: top_unselected(&outcomes),
+            settled: Some(settled),
             outcomes,
-            attributed_bytes: attributed,
-            measured_drop: Some(drop),
-            unattributed: Some(drop - i64::try_from(attributed).unwrap_or(i64::MAX)),
-            provisional: !settled.stable,
-            pre_delete_data_bytes_used: pre_delete.as_vec(),
-            causes: Vec::new(),
+            extents,
+            pre_delete: pre_delete.as_samples(),
+            delete_window_ms: execute_ms + settle_ms,
+            held: Vec::new(),
+            snapshots: None,
+            docker_delta_bytes: None,
             verdict_after: DiskVerdict::Unknown,
             timings: StageTimings {
                 discover_ms,
@@ -472,6 +472,36 @@ impl<'a> Executor<'a> {
             },
             walker: WalkerCounters::default(),
             notes: Vec::new(),
+        });
+        let end = RunEnd {
+            run_id: run_id.clone(),
+            ts: env.clock.now_epoch(),
+            verdict_after: summary.verdict_after,
+            attributed_bytes: summary.attributed_bytes,
+            measured_drop: summary.measured_drop,
+            attribution_pct: summary.attribution_pct,
+            causes: summary.causes.clone(),
+            explained: summary.explained,
+        };
+        let end_errno = env
+            .audit
+            .run_end(&end)
+            .err()
+            .map(|e| e.raw_os_error().unwrap_or(5));
+        let audit_errno = lock(&shared.audit_errno).take().or(end_errno);
+        let fatal = audit_errno.map(|errno| audit_unwritable(env, errno));
+
+        let exit = match (abort, &fatal) {
+            (Some(AbortCause::Interrupted(sig)), _) => ExitClass::Interrupted(sig),
+            (Some(_), _) | (_, Some(_)) => ExitClass::Fatal,
+            _ if summary
+                .outcomes
+                .iter()
+                .any(|o| matches!(o.status, Status::Error(_))) =>
+            {
+                ExitClass::PartialFailure
+            }
+            _ => ExitClass::Ok,
         };
         let skipped_by_guard = std::mem::take(&mut *lock(&shared.guard_skips));
         Ok(RunReport {
@@ -568,17 +598,17 @@ impl<'a> Executor<'a> {
                 Planned::Will => None,
             })
             .collect();
-        let summary = RunSummary {
+        let summary = RunSummary::finish(FinishInput {
             fs_before,
             fs_after: None,
-            top_unselected: top_unselected(&outcomes),
+            settled: None,
             outcomes,
-            attributed_bytes: 0,
-            measured_drop: None,
-            unattributed: None,
-            provisional: false,
-            pre_delete_data_bytes_used: Vec::new(),
-            causes: Vec::new(),
+            extents: ExtentAttribution::Unavailable(Unavailable::NotBtrfs),
+            pre_delete: Vec::new(),
+            delete_window_ms: 0,
+            held: Vec::new(),
+            snapshots: None,
+            docker_delta_bytes: None,
             verdict_after: DiskVerdict::Unknown,
             timings: StageTimings {
                 discover_ms,
@@ -588,7 +618,7 @@ impl<'a> Executor<'a> {
             },
             walker: WalkerCounters::default(),
             notes: Vec::new(),
-        };
+        });
         RunReport {
             summary,
             plan,
