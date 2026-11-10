@@ -63,14 +63,19 @@ enum OpenAct {
 /// `(name, number of earlier calls with that name)`.
 type Hook<A> = Box<dyn Fn(&OsStr, usize) -> A + Send + Sync>;
 
+type Registry = Arc<Mutex<HashMap<usize, Identity>>>;
+
 struct SDir {
     inner: RealDir,
     live: Arc<AtomicUsize>,
+    id: usize,
+    registry: Registry,
 }
 
 impl Drop for SDir {
     fn drop(&mut self) {
         self.live.fetch_sub(1, Ordering::SeqCst);
+        self.registry.lock().unwrap().remove(&self.id);
     }
 }
 
@@ -109,6 +114,10 @@ struct Spy {
     max_live: AtomicUsize,
     /// `max_live` as it stood at the first `unlinkat`, i.e. the descent phase only.
     max_live_at_first_unlink: AtomicUsize,
+    registry: Registry,
+    next_id: AtomicUsize,
+    /// Identities of the directory handles that were open at the first `unlinkat`.
+    open_at_first_unlink: Mutex<Option<Vec<Identity>>>,
 }
 
 impl Spy {
@@ -129,6 +138,9 @@ impl Spy {
             live: Arc::new(AtomicUsize::new(0)),
             max_live: AtomicUsize::new(0),
             max_live_at_first_unlink: AtomicUsize::new(usize::MAX),
+            registry: Arc::new(Mutex::new(HashMap::new())),
+            next_id: AtomicUsize::new(0),
+            open_at_first_unlink: Mutex::new(None),
         }
     }
 
@@ -149,9 +161,14 @@ impl Spy {
     fn wrap(&self, inner: RealDir) -> SDir {
         let now = self.live.fetch_add(1, Ordering::SeqCst) + 1;
         self.max_live.fetch_max(now, Ordering::SeqCst);
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        let ident = self.inner.fstat(&inner).unwrap().ident;
+        self.registry.lock().unwrap().insert(id, ident);
         SDir {
             inner,
             live: self.live.clone(),
+            id,
+            registry: self.registry.clone(),
         }
     }
 }
@@ -215,6 +232,10 @@ impl DirOps for Spy {
             Ordering::SeqCst,
             Ordering::SeqCst,
         );
+        if k == 1 {
+            let idents = self.registry.lock().unwrap().values().copied().collect();
+            *self.open_at_first_unlink.lock().unwrap() = Some(idents);
+        }
         (self.on_unlink)(k);
         let n = self.nth("unlinkat", name);
         match (self.unlink)(name, dir, n) {
@@ -543,12 +564,29 @@ fn open_frame_should_keep_exactly_MAX_OPEN_LEVELS_handles_open_When_descending_a
         p = p.join(format!("d{i}"));
     }
     fs::create_dir_all(&p).unwrap();
+    // frame k of the engine is the directory at depth k below `app`; frame 0 is node_modules
+    let mut chain = vec![ident(&fx.nm)];
+    let mut q = fx.nm.clone();
+    for i in 0..(MAX_OPEN_LEVELS * 3) {
+        q = q.join(format!("d{i}"));
+        chain.push(ident(&q));
+    }
     let spy = fx.spy();
     let mut pol = fx.policy();
     pol.max_depth = 100_000;
     let r = fx.run(&spy, &pol);
     assert!(r.is_ok(), "{r:?}");
     assert!(!exists(&fx.nm));
+    let open = spy.open_at_first_unlink.lock().unwrap().clone().unwrap();
+    let n = chain.len();
+    for (k, id) in chain.iter().enumerate() {
+        let should_be_open = k + MAX_OPEN_LEVELS >= n;
+        assert_eq!(
+            open.contains(id),
+            should_be_open,
+            "frame {k} of {n}: only the deepest MAX_OPEN_LEVELS frames keep a handle"
+        );
+    }
     let at_descent = spy.max_live_at_first_unlink.load(Ordering::SeqCst);
     // base-level handles of open_verified_root and open_parent are alive too: root, app
     let outside_window = 2;
