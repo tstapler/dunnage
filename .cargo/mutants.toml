@@ -1,0 +1,17 @@
+# Accepted surviving mutants of Task 2.1.5b, each with its reason.
+# Anything not listed here must be killed by a test; `make mutants` fails on any other survivor.
+exclude_re = [
+  # statx mask: this kernel returns the basic stats and the mount id whatever mask is requested, so the
+  # mask is unobservable here (a test under the mutant passes with mnt_id Some); `|` and `^` are the same
+  # value because the two flag sets are disjoint bits.
+  'dirops\.rs:271:40: replace \| with [&^] in stat_info',
+  # `(stx_mask & MNT_ID) != 0` is true on every kernel that has statx with MNT_ID (Linux 5.8+); the
+  # false branch exists only for older kernels, which this machine does not run.
+  'dirops\.rs:287:34: replace & with [|^] in stat_info',
+  # `stat_info` for non-Linux targets is compiled out on Linux; this mutant cannot be reached by any test run on Linux.
+  'dirops\.rs:296:5: replace stat_info -> io::Result<StatInfo> with Ok\(Default::default\(\)\)',
+  # `while s > 0 && frames[s - 1].handle.is_none()` -> `frames[s / 1]`: handles are only dropped oldest-first,
+  # so every frame below an evicted one is evicted too and both forms stop at the same `s`; no input of the
+  # engine reaches a state where they differ (the window mutants at delete.rs:293 are killed instead).
+  'delete\.rs:305:38: replace - with / in Engine<.+>::ensure_handle',
+]
