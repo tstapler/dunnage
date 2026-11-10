@@ -9,6 +9,9 @@
 #![forbid(unsafe_code)]
 
 mod version;
+// Not called until Story 1.2.4 builds `Env` in `main`.
+#[allow(dead_code)]
+mod wiring;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
