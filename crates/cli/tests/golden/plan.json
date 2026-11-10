@@ -1,0 +1,216 @@
+{
+  "errors": [],
+  "exit_code": 0,
+  "fs": {
+    "after": null,
+    "before": {
+      "btrfs": {
+        "data": {
+          "bytes_used": 1858174650941,
+          "total_bytes": 1913150232330
+        },
+        "metadata": {
+          "bytes_used": 15139759718,
+          "total_bytes": 17179869184
+        },
+        "system": {
+          "bytes_used": 1048576,
+          "total_bytes": 8388608
+        },
+        "unallocated": 10522669875
+      },
+      "df": {
+        "avail_bytes": 75376676045,
+        "fs_type": "btrfs",
+        "path": "/",
+        "taken_at": 1800000000,
+        "total_bytes": 2001111162552,
+        "used_bytes": 1781208836997
+      }
+    }
+  },
+  "items": [
+    {
+      "elapsed_ms": 0,
+      "est_bytes": 41231686042,
+      "family": "build-dirs",
+      "id": "03aabf063656871c",
+      "kind": "cargo-target",
+      "measured_bytes": null,
+      "next_action": "add the kind to --kinds",
+      "path": "/home/tstapler/code/metascope/target",
+      "reason": "kind-not-selected",
+      "reason_text": "not selected",
+      "selector": "build-dirs",
+      "status": "risk_not_selected",
+      "tier": "destructive"
+    },
+    {
+      "elapsed_ms": 0,
+      "est_bytes": 23300197581,
+      "family": "build-dirs",
+      "id": "6012dcc4814556c1",
+      "kind": "node-modules",
+      "measured_bytes": null,
+      "next_action": "add the kind to --kinds",
+      "path": "/home/tstapler/old-app/node_modules",
+      "reason": "kind-not-selected",
+      "reason_text": "not selected",
+      "selector": "build-dirs",
+      "status": "risk_not_selected",
+      "tier": "destructive"
+    },
+    {
+      "elapsed_ms": 0,
+      "est_bytes": 19542101197,
+      "family": "docker",
+      "id": "991cfaa7ed76191a",
+      "kind": "docker-image",
+      "measured_bytes": null,
+      "name": "dangling image sha256:ab12",
+      "next_action": "add the kind to --kinds",
+      "path": null,
+      "reason": "kind-not-selected",
+      "reason_text": "not selected",
+      "selector": "docker",
+      "status": "risk_not_selected",
+      "tier": "guarded"
+    },
+    {
+      "elapsed_ms": 0,
+      "est_bytes": 17716740096,
+      "family": "steam",
+      "id": "08d1102730881223",
+      "kind": "steam-prefix",
+      "measured_bytes": null,
+      "next_action": "add the kind to --kinds",
+      "path": "/home/tstapler/.local/share/Steam/steamapps/compatdata/440",
+      "reason": "kind-not-selected",
+      "reason_text": "not selected",
+      "selector": "steam",
+      "status": "risk_not_selected",
+      "tier": "destructive"
+    },
+    {
+      "elapsed_ms": 0,
+      "est_bytes": 11811160064,
+      "family": "docker",
+      "id": "d037d25f73af3f6e",
+      "kind": "docker-volume",
+      "measured_bytes": null,
+      "name": "volume pg (anonymous)",
+      "next_action": "add the kind to --kinds",
+      "path": null,
+      "reason": "kind-not-selected",
+      "reason_text": "not selected",
+      "selector": "docker-volumes",
+      "status": "risk_not_selected",
+      "tier": "destructive"
+    },
+    {
+      "elapsed_ms": 0,
+      "est_bytes": 10522669875,
+      "family": "caches",
+      "id": "5d5797f5bf7b0c2b",
+      "kind": "cache",
+      "measured_bytes": null,
+      "next_action": null,
+      "path": "/home/tstapler/.cache/go-build",
+      "reason": null,
+      "reason_text": null,
+      "selector": "caches",
+      "status": "would_free",
+      "tier": "safe"
+    },
+    {
+      "elapsed_ms": 0,
+      "est_bytes": 4402341478,
+      "family": "caches",
+      "id": "e688a838d3be5f14",
+      "kind": "cache",
+      "measured_bytes": null,
+      "next_action": null,
+      "path": "/home/tstapler/.npm/_cacache",
+      "reason": null,
+      "reason_text": null,
+      "selector": "caches",
+      "status": "would_free",
+      "tier": "safe"
+    },
+    {
+      "elapsed_ms": 0,
+      "est_bytes": 2469606195,
+      "family": "caches",
+      "id": "7ffe7578e5ab164d",
+      "kind": "cache",
+      "measured_bytes": null,
+      "next_action": null,
+      "path": "/home/tstapler/.cache/pip",
+      "reason": null,
+      "reason_text": null,
+      "selector": "caches",
+      "status": "would_free",
+      "tier": "safe"
+    },
+    {
+      "elapsed_ms": 0,
+      "est_bytes": 2040109466,
+      "family": "worktrees",
+      "id": "e807c95af316d170",
+      "kind": "worktree",
+      "measured_bytes": null,
+      "next_action": null,
+      "path": "/home/tstapler/code/app/.claude/worktrees/agent-a41",
+      "reason": null,
+      "reason_text": null,
+      "selector": "worktrees",
+      "status": "would_free",
+      "tier": "guarded"
+    },
+    {
+      "elapsed_ms": 0,
+      "est_bytes": 1288490189,
+      "family": "worktrees",
+      "id": "f9d1ab5afd4bd32f",
+      "kind": "worktree",
+      "measured_bytes": null,
+      "next_action": "commit, stash or discard in that worktree",
+      "path": "/home/tstapler/code/app/.claude/worktrees/agent-c19",
+      "reason": "dirty",
+      "reason_text": "dirty working tree",
+      "selector": "worktrees",
+      "status": "skipped",
+      "tier": "guarded"
+    }
+  ],
+  "mode": "plan",
+  "next": [
+    {
+      "command": "disk-cleanup --apply",
+      "explain": "the 4 FREE rows (selected now)",
+      "plan_id": null
+    },
+    {
+      "command": "disk-cleanup --apply --kinds build-dirs,caches,docker,worktrees --plan-id ec21a198",
+      "explain": "adds the 3 RISK rows",
+      "plan_id": "ec21a198"
+    },
+    {
+      "command": "disk-cleanup --kinds docker-volumes,steam --docker-volumes anonymous",
+      "explain": "a dry run of the kinds that need naming (prints its own plan-id)",
+      "plan_id": null
+    }
+  ],
+  "notes": [],
+  "partial_scan": false,
+  "plan_id": "0eb1bc77",
+  "plan_saved": true,
+  "schema_version": 1,
+  "totals": {
+    "attributed_bytes": 0,
+    "attribution_pct": null,
+    "estimated_bytes": 19434727014,
+    "measured_drop_bytes": null,
+    "unattributed_bytes": null
+  }
+}

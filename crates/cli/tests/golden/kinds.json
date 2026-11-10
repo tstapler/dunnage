@@ -1,0 +1,98 @@
+{
+  "errors": [],
+  "exit_code": 0,
+  "kinds": [
+    {
+      "available": "yes",
+      "default": true,
+      "family": "caches",
+      "id": "caches",
+      "min_age": null,
+      "tier": "safe",
+      "touches": "npm, go, gradle, pip, cargo, playwright"
+    },
+    {
+      "available": "yes",
+      "default": true,
+      "family": "caches",
+      "id": "cache-apt",
+      "min_age": null,
+      "tier": "safe",
+      "touches": "/var/cache/apt"
+    },
+    {
+      "available": "yes",
+      "default": true,
+      "family": "worktrees",
+      "id": "worktrees",
+      "min_age": "14d",
+      "tier": "guarded",
+      "touches": ".claude/worktrees/agent-*"
+    },
+    {
+      "available": "yes",
+      "default": false,
+      "family": "build-dirs",
+      "id": "build-dirs",
+      "min_age": "14d",
+      "tier": "destructive",
+      "touches": "node_modules, cargo target"
+    },
+    {
+      "available": "yes",
+      "default": false,
+      "family": "docker",
+      "id": "docker",
+      "min_age": null,
+      "tier": "guarded",
+      "touches": "dangling images, build cache"
+    },
+    {
+      "available": "yes",
+      "default": false,
+      "family": "docker",
+      "id": "docker-images",
+      "min_age": "30d",
+      "tier": "guarded",
+      "touches": "unused tagged images pulled from a registry (locally built ones are skipped, LocalOnlyImage)"
+    },
+    {
+      "available": "yes",
+      "default": false,
+      "family": "docker",
+      "id": "docker-volumes",
+      "min_age": "30d",
+      "tier": "destructive",
+      "touches": "unreferenced volumes (--docker-volumes anonymous|named)"
+    },
+    {
+      "available": "yes",
+      "default": false,
+      "family": "steam",
+      "id": "steam",
+      "min_age": "30d",
+      "tier": "destructive",
+      "touches": "orphan prefixes, shader caches, uninstalled-game remnants"
+    },
+    {
+      "available": "yes",
+      "default": false,
+      "family": "btrfs",
+      "id": "btrfs",
+      "min_age": null,
+      "tier": "guarded",
+      "touches": "balance (usage ladder)"
+    },
+    {
+      "available": "yes",
+      "default": false,
+      "family": "btrfs",
+      "id": "btrfs-trim",
+      "min_age": null,
+      "tier": "guarded",
+      "touches": "fstrim"
+    }
+  ],
+  "mode": "kinds",
+  "schema_version": 1
+}

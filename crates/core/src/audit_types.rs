@@ -54,6 +54,9 @@ pub struct RunStart {
     pub stamp: Option<StampSummary>,
     pub break_glass: Option<BreakGlass>,
     pub roots: RunRoots,
+    /// Verdict of the snapshot taken at the start of the run (the qualifying-run rule of `outcome-report.sh`).
+    #[serde(default)]
+    pub verdict_start: Option<DiskVerdict>,
 }
 
 /// Written before the delete it announces.

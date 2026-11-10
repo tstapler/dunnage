@@ -1,0 +1,37 @@
+{
+  "errors": [],
+  "exit_code": 1,
+  "fs": {
+    "after": null,
+    "before": {
+      "btrfs": {
+        "data": {
+          "bytes_used": 1858174650941,
+          "total_bytes": 1913150232330
+        },
+        "metadata": {
+          "bytes_used": 15139759718,
+          "total_bytes": 17179869184
+        },
+        "system": {
+          "bytes_used": 1048576,
+          "total_bytes": 8388608
+        },
+        "unallocated": 10522669875
+      },
+      "df": {
+        "avail_bytes": 75376676045,
+        "fs_type": "btrfs",
+        "path": "/",
+        "taken_at": 1800000000,
+        "total_bytes": 2001111162552,
+        "used_bytes": 1781208836997
+      }
+    }
+  },
+  "mode": "status",
+  "notes": [],
+  "path": "/",
+  "schema_version": 1,
+  "verdict": "warn"
+}

@@ -1,5 +1,6 @@
 //! Side-effecting adapters (filesystem, processes, config).
 
+pub mod audit;
 pub mod command;
 pub mod config;
 pub mod delete;
@@ -8,11 +9,13 @@ pub mod discover_build;
 pub mod discover_cache;
 pub mod docker_cli;
 pub mod fiemap;
+pub mod gate_stamp;
 pub mod mtime_probe;
 pub mod probe;
 pub mod settle;
 pub mod snapshots;
 pub mod space_meter;
+pub mod state;
 pub mod statvfs;
 pub mod steam;
 #[cfg(feature = "test-support")]
