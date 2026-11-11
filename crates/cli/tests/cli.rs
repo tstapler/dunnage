@@ -465,6 +465,10 @@ fn kinds_should_list_every_selector_with_availability_and_exit_0() {
             assert!(row(unbuilt).contains(" yes "), "{unbuilt}");
             continue;
         }
+        if cfg!(feature = "gate-d") && unbuilt == "steam" {
+            assert!(row(unbuilt).contains(" yes "), "{unbuilt}");
+            continue;
+        }
         assert!(
             row(unbuilt).contains("not available in this build"),
             "{unbuilt}"
