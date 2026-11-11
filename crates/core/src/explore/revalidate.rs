@@ -205,11 +205,11 @@ impl ExploreTree {
             n.not_listed = n.not_listed.saturating_sub(not_listed);
             cur = n.parent;
         }
-        self.unlink(id);
+        self.detach(id);
         self.free_subtree(id);
     }
 
-    fn unlink(&mut self, id: u32) {
+    fn detach(&mut self, id: u32) {
         let (parent, next) = {
             let n = self.node(id);
             (n.parent, n.next_sibling)
