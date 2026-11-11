@@ -352,7 +352,12 @@ fn plan_mode(cli: &Cli, sel: &Selection, registered: &[SelectorId], p: &Ports, i
     }
     let view = PlanView::build(&input);
     let text = if cli.json {
-        to_text(&plan_doc(&input, &view, 0))
+        let mut doc = plan_doc(&input, &view, 0);
+        doc["timings"] = serde_json::json!({
+            "discover_ms": report.summary.timings.discover_ms,
+            "plan_ms": report.summary.timings.plan_ms,
+        });
+        to_text(&doc)
     } else {
         render_plan(&input, &view, &p.term)
     };

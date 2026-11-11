@@ -100,6 +100,20 @@ fn report_should_exit_0_print_one_json_document_with_npm_and_go_caches_and_leave
 }
 
 #[test]
+fn report_should_carry_discover_and_plan_timings_in_the_plan_document_When_json() {
+    let f = Fixture::new();
+    fill(&f.home().join(".npm/_cacache"));
+    let out = plan_cmd(&f, &f.home().join(".cache"))
+        .arg("--json")
+        .output()
+        .unwrap();
+    let doc = json_of(&out);
+    for k in ["discover_ms", "plan_ms"] {
+        assert!(doc["timings"][k].is_u64(), "timings.{k} missing: {doc}");
+    }
+}
+
+#[test]
 fn report_should_print_a_dry_run_text_report_by_default_and_change_nothing() {
     let f = Fixture::new();
     fill(&f.home().join(".npm/_cacache"));
