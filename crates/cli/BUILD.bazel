@@ -175,6 +175,21 @@ dc_integration_tests(
             ],
         },
         "e2e_apply_build_dirs": {"tags": ["requires-unshare"]},
+        # Task 6.6.3b: a tmpfs and a bind mount made under `unshare -rm` after the plan.
+        "explore_apply_mounts": {"tags": ["requires-unshare"]},
+        # Task 6.6.3d: runs the repo-level token-site, tui-dependency and unlink checks against the real checkout
+        # (ast-grep and jq on PATH), like safety_suite.
+        "explore_containment": {
+            "env_inherit": [
+                "DC_REPO_ROOT",
+                "HOME",
+            ],
+            "tags": [
+                "local",
+                "no-sandbox",
+                "requires-repo-checkout",
+            ],
+        },
         "canary_home": {"tags": ["requires-strace"]},
     },
 )

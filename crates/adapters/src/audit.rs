@@ -10,7 +10,9 @@ use std::sync::Mutex;
 
 use disk_cleanup_core::audit_types::AUDIT_SCHEMA;
 use disk_cleanup_core::ports::AuditSink;
-use disk_cleanup_core::{AuditRecord, Intent, ItemResult, Locator, RunEnd, RunStart, Warning};
+use disk_cleanup_core::{
+    AuditRecord, ExplorerConfirm, Intent, ItemResult, Locator, RunEnd, RunStart, Warning,
+};
 use serde::Serialize;
 
 use crate::state::{chown_if, is_no_space, release_reserve, Owner};
@@ -170,6 +172,19 @@ impl AuditSink for RealAuditSink {
 
     fn run_end(&self, rec: &RunEnd) -> io::Result<()> {
         let line = with_hex(&AuditRecord::RunEnd(rec.clone()), None)?;
+        self.append(&line, &rec.run_id, rec.ts, true)
+    }
+
+    /// Synced like `run_start`: the paths it names are what `audit verify` judges when the unsynced `intent`
+    /// lines of a crashed run are lost.
+    fn explorer_confirm(&self, rec: &ExplorerConfirm) -> io::Result<()> {
+        let mut r = rec.clone();
+        for item in &mut r.items {
+            let (lossy, hex) = lossless(&item.path);
+            item.path = lossy;
+            item.path_hex = hex;
+        }
+        let line = with_hex(&AuditRecord::ExplorerConfirm(r), None)?;
         self.append(&line, &rec.run_id, rec.ts, true)
     }
 }
