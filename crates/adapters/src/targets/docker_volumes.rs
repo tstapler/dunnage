@@ -118,10 +118,10 @@ impl DockerVolumesTarget {
     fn facts(
         env: &Env,
         listed: &DockerVolume,
-        inspected: Result<DockerVolume, DockerError>,
+        inspected: &Result<DockerVolume, DockerError>,
         used_by: Option<String>,
     ) -> (VolumeFacts, String) {
-        let (labels, created_at) = match &inspected {
+        let (labels, created_at) = match inspected {
             Ok(i) => {
                 let mut l = listed.labels.clone();
                 l.extend(i.labels.clone());
@@ -149,7 +149,7 @@ impl DockerVolumesTarget {
         (facts, evidence)
     }
 
-    fn opts<'a>(run: &'a Run, now: i64) -> VolumeOpts<'a> {
+    fn opts(run: &Run, now: i64) -> VolumeOpts<'_> {
         VolumeOpts {
             class: run.class,
             named: &run.named,
@@ -163,7 +163,7 @@ impl DockerVolumesTarget {
         lock(&self.state).evidence.get(&c.id()).cloned()
     }
 
-    fn inspect(&self, env: &Env, name: &str) -> Result<DockerVolume, DockerError> {
+    fn inspect(env: &Env, name: &str) -> Result<DockerVolume, DockerError> {
         parse_volume_inspect(&docker_read(env, &["volume", "inspect", name])?)
     }
 
@@ -190,7 +190,7 @@ impl DockerVolumesTarget {
             Err(DockerError::Daemon(_)) => return skip_of(SkipReason::DaemonUnavailable),
             Err(DockerError::Unrecognised(_)) => return skip_of(SkipReason::UnrecognisedOutput),
         };
-        let inspected = match self.inspect(env, name) {
+        let inspected = match Self::inspect(env, name) {
             Ok(i) => i,
             Err(DockerError::Daemon(m)) if m.contains("No such volume") => {
                 return skip_of(SkipReason::Gone)
@@ -205,7 +205,7 @@ impl DockerVolumesTarget {
             ..inspected.clone()
         };
         let used = ps.first().map(|p| p.names.clone());
-        let (facts, _) = Self::facts(env, &listed, Ok(inspected), used);
+        let (facts, _) = Self::facts(env, &listed, &Ok(inspected), used);
         decide_volume(&facts, &Self::opts(&run, env.clock.now_epoch()))
             .reason
             .map_or(Guarded::Allow, skip_of)
@@ -265,8 +265,8 @@ impl Target for DockerVolumesTarget {
         let now = env.clock.now_epoch();
         let mut out = Vec::new();
         for v in &volumes {
-            let inspected = self.inspect(env, &v.name);
-            let (facts, evidence) = Self::facts(env, v, inspected, used_by(v, &containers));
+            let inspected = Self::inspect(env, &v.name);
+            let (facts, evidence) = Self::facts(env, v, &inspected, used_by(v, &containers));
             let verdict = decide_volume(&facts, &Self::opts(&run, now));
             let c = Candidate::new(
                 Locator::Docker(DockerId(v.name.clone())),

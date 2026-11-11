@@ -27,7 +27,7 @@ fn vol(name: &str, anonymous: bool) -> VolumeFacts {
     }
 }
 
-fn opts<'a>(class: Option<DockerVolumes>, named: &'a [String]) -> VolumeOpts<'a> {
+fn opts(class: Option<DockerVolumes>, named: &[String]) -> VolumeOpts<'_> {
     VolumeOpts {
         class,
         named,

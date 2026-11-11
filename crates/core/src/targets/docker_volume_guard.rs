@@ -69,6 +69,12 @@ impl VolumeVerdict {
     }
 }
 
+fn has_extension(name: &str, ext: &str) -> bool {
+    std::path::Path::new(name)
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case(ext))
+}
+
 /// The database signature among a volume's top-level names: `PG_VERSION`, `ibdata1`, `*.rdb`,
 /// `mongod.lock`, `*.sqlite`.
 #[must_use]
@@ -77,8 +83,8 @@ pub fn database_signature(names: &[String]) -> Option<String> {
         .iter()
         .find(|n| {
             matches!(n.as_str(), "PG_VERSION" | "ibdata1" | "mongod.lock")
-                || n.ends_with(".rdb")
-                || n.ends_with(".sqlite")
+                || has_extension(n, "rdb")
+                || has_extension(n, "sqlite")
         })
         .cloned()
 }
@@ -97,9 +103,8 @@ pub fn decide_volume(f: &VolumeFacts, o: &VolumeOpts<'_>) -> VolumeVerdict {
         );
     }
     let min = i64::try_from(o.min_age_secs).unwrap_or(i64::MAX);
-    if !f
-        .created_epoch
-        .is_some_and(|t| o.now.saturating_sub(t) >= min)
+    if f.created_epoch
+        .is_none_or(|t| o.now.saturating_sub(t) < min)
     {
         return VolumeVerdict::skip(SkipReason::TooRecent, None);
     }
@@ -111,7 +116,7 @@ pub fn decide_volume(f: &VolumeFacts, o: &VolumeOpts<'_>) -> VolumeVerdict {
     if !opted_in {
         return VolumeVerdict::skip(SkipReason::OptInRequired, None);
     }
-    if o.named.iter().any(|n| *n == f.name) {
+    if o.named.contains(&f.name) {
         return VolumeVerdict::allow();
     }
     let names = match &f.contents {

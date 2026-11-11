@@ -193,33 +193,38 @@ pub fn parse_si_size(s: &str) -> Option<u64> {
 /// Seconds since the epoch of a Docker timestamp: `docker images` prints `2026-11-01 18:36:31 -0800 PST`,
 /// `volume inspect` prints RFC 3339 (`2026-11-06T13:35:25-08:00`, `...Z`, optional fraction). `None` for
 /// anything else, which callers treat as "age unknown" and so as too recent.
-pub fn parse_docker_time(s: &str) -> Option<i64> {
-    let s = s.trim();
-    let (date, rest) = s.split_once(['T', ' '])?;
-    let mut d = date.split('-');
-    let (y, m, day): (i64, i64, i64) = (
-        d.next()?.parse().ok()?,
-        d.next()?.parse().ok()?,
-        d.next()?.parse().ok()?,
-    );
-    if d.next().is_some() || !(1..=12).contains(&m) || !(1..=31).contains(&day) {
+pub fn parse_docker_time(text: &str) -> Option<i64> {
+    let (date, rest) = text.trim().split_once(['T', ' '])?;
+    let (year, month, day) = three_numbers(date, '-')?;
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
         return None;
     }
     let clock_end = rest.find(['Z', '+', '-', ' ']).unwrap_or(rest.len());
     let (clock, zone) = rest.split_at(clock_end);
-    let clock = clock.split('.').next()?;
-    let mut c = clock.split(':');
-    let (hh, mm, ss): (i64, i64, i64) = (
-        c.next()?.parse().ok()?,
-        c.next()?.parse().ok()?,
-        c.next()?.parse().ok()?,
-    );
-    if c.next().is_some() || hh > 23 || mm > 59 || ss > 60 {
+    let (hours, minutes, seconds) = three_numbers(clock.split('.').next()?, ':')?;
+    if hours > 23 || minutes > 59 || seconds > 60 {
         return None;
     }
-    let zone = zone.trim_start();
-    let offset = match zone.chars().next() {
-        None | Some('Z') => 0,
+    let offset = zone_offset_secs(zone.trim_start())?;
+    Some(
+        days_from_civil(year, month, day) * 86_400 + hours * 3600 + minutes * 60 + seconds - offset,
+    )
+}
+
+fn three_numbers(text: &str, sep: char) -> Option<(i64, i64, i64)> {
+    let mut parts = text.split(sep);
+    let out = (
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+    );
+    parts.next().is_none().then_some(out)
+}
+
+/// `Z`, nothing, `+0000`, `-08:00`; a zone name after it (`PST`) is ignored.
+fn zone_offset_secs(zone: &str) -> Option<i64> {
+    match zone.chars().next() {
+        None | Some('Z') => Some(0),
         Some(sign @ ('+' | '-')) => {
             let digits: String = zone[1..]
                 .chars()
@@ -229,17 +234,12 @@ pub fn parse_docker_time(s: &str) -> Option<i64> {
             if digits.len() != 4 {
                 return None;
             }
-            let (oh, om): (i64, i64) = (digits[..2].parse().ok()?, digits[2..].parse().ok()?);
-            let secs = oh * 3600 + om * 60;
-            if sign == '-' {
-                -secs
-            } else {
-                secs
-            }
+            let secs =
+                digits[..2].parse::<i64>().ok()? * 3600 + digits[2..].parse::<i64>().ok()? * 60;
+            Some(if sign == '-' { -secs } else { secs })
         }
-        Some(_) => return None,
-    };
-    Some(days_from_civil(y, m, day) * 86_400 + hh * 3600 + mm * 60 + ss - offset)
+        Some(_) => None,
+    }
 }
 
 /// Days since 1970-01-01 of a proleptic Gregorian date (Hinnant's algorithm).
