@@ -2,6 +2,8 @@
 //! facts a probe in `adapters` gathered. Order: common path checks, identity and marker, age floor,
 //! reproducibility. The one `Allowed` it can return is the witness `delete_tree` needs.
 
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::allowed::Allowed;
@@ -9,6 +11,7 @@ use crate::guard::{decide_path_common, Facts, GuardDecision};
 use crate::ids::Identity;
 use crate::kind::Kind;
 use crate::outcome::SkipReason;
+use crate::ports::RunState;
 use crate::roots::RootSet;
 use crate::selector::{format_age, BUILD_DIR_FLOOR_SECS};
 
@@ -129,4 +132,83 @@ pub fn decide_build_dir(
         }
     }
     BuildGuard::Allow(allowed)
+}
+
+/// A running build is never deleted (Story 3.2.2). `Idle` is the only state that lets a candidate through.
+pub fn run_state_skip(state: RunState) -> Option<SkipReason> {
+    match state {
+        RunState::Idle => None,
+        RunState::Running => Some(SkipReason::RunningBuild),
+        RunState::Unknown => Some(SkipReason::RunStateUnknown),
+    }
+}
+
+/// Header line when `--keep-newest 0` offers the newest copy of every duplicate set too.
+pub const KEEP_NEWEST_ZERO_WARNING: &str =
+    "WARNING: --keep-newest 0 also offers the newest copy of every duplicate set";
+
+/// `--keep-newest N`: how many copies of each duplicate set survive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeepNewest(pub usize);
+
+impl KeepNewest {
+    pub fn warning(self) -> Option<&'static str> {
+        (self.0 == 0).then_some(KEEP_NEWEST_ZERO_WARNING)
+    }
+}
+
+/// One build dir as the duplicate planner sees it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClusterInput {
+    pub path: PathBuf,
+    pub kind: Kind,
+    /// `None` when the lockfile could not be parsed: the dir is in no cluster.
+    pub lockfile_hash: Option<u64>,
+    /// Newest mtime inside (Unix seconds). `None` (unknown recency) ranks as newest, so it is kept.
+    pub newest_mtime: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Placement {
+    /// In no duplicate set: judged by the age rules only.
+    Unclustered,
+    /// Survives as one of the newest; `of` is the size of its duplicate set.
+    Kept { of: usize },
+    /// An older duplicate: eligible (the guards still apply).
+    Offered,
+}
+
+/// The note on a `KeptAsNewest` row.
+pub fn kept_note(of: usize) -> String {
+    format!("kept as newest of {of} duplicates")
+}
+
+/// Ranks every duplicate set (same kind and lockfile hash, two or more members) by true recency and keeps
+/// the `keep` newest of each. Ties break by path so the plan is deterministic. The result is parallel to
+/// `inputs`.
+pub fn plan_keep_newest(inputs: &[ClusterInput], keep: KeepNewest) -> Vec<Placement> {
+    let mut sets: BTreeMap<(Kind, u64), Vec<usize>> = BTreeMap::new();
+    for (i, m) in inputs.iter().enumerate() {
+        if let Some(h) = m.lockfile_hash {
+            sets.entry((m.kind, h)).or_default().push(i);
+        }
+    }
+    let mut out = vec![Placement::Unclustered; inputs.len()];
+    for mut idx in sets.into_values().filter(|s| s.len() > 1) {
+        idx.sort_by(|&a, &b| {
+            let rank = |i: usize| inputs[i].newest_mtime.unwrap_or(i64::MAX);
+            rank(b)
+                .cmp(&rank(a))
+                .then_with(|| inputs[a].path.cmp(&inputs[b].path))
+        });
+        let of = idx.len();
+        for (pos, i) in idx.into_iter().enumerate() {
+            out[i] = if pos < keep.0 {
+                Placement::Kept { of }
+            } else {
+                Placement::Offered
+            };
+        }
+    }
+    out
 }
