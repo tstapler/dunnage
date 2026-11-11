@@ -41,6 +41,8 @@ pub struct FakeTarget {
     pub candidates: Vec<Candidate>,
     pub exec: ExecFn,
     pub executed: Mutex<Vec<CandidateId>>,
+    /// What `Target::partial_scan` answers (a walking kind that hit `--max-seconds`).
+    pub partial: Option<u64>,
 }
 
 impl FakeTarget {
@@ -50,6 +52,7 @@ impl FakeTarget {
             candidates,
             exec: Box::new(|c| Ok(freed(c.est_bytes().0))),
             executed: Mutex::new(Vec::new()),
+            partial: None,
         }
     }
 
@@ -77,6 +80,10 @@ impl Target for FakeTarget {
 
     fn guard(&self, _c: &Candidate, _env: &Env) -> Guarded {
         Guarded::Allow
+    }
+
+    fn partial_scan(&self) -> Option<u64> {
+        self.partial
     }
 
     fn execute(

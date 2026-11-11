@@ -126,6 +126,10 @@ pub struct Cli {
     #[arg(long)]
     pub rescan: bool,
 
+    /// Read and write no walker cache
+    #[arg(long, hide = true)]
+    pub no_cache: bool,
+
     /// No progress lines on stderr
     #[arg(long)]
     pub no_progress: bool,
@@ -489,6 +493,11 @@ impl Cli {
             .worktree_ignored
             .map(|DiscardArg::Discard| Discard::Discard);
         sel.only.clone_from(&self.only);
+        sel.scan = disk_cleanup_core::selector::ScanControl {
+            max_seconds: self.max_seconds,
+            rescan: self.rescan,
+            no_cache: self.no_cache,
+        };
         sel.validate().map_err(|e| UsageError(e.to_string()))?;
         if self.kinds.is_some() {
             let named = named_kinds.ids().chain(except_ids.ids());

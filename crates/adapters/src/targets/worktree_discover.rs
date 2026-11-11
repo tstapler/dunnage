@@ -198,17 +198,37 @@ pub fn collect_repos(runner: &dyn CommandRunner, seeds: &[PathBuf]) -> RepoColle
 /// descend into `.git`, `node_modules`, `target` or any directory whose own `.git` is a file (a linked
 /// worktree), so it never walks the inside of a worktree.
 pub fn git_dir_parents(roots: &[PathBuf], max_depth: usize) -> Vec<PathBuf> {
-    fn walk(dir: &Path, depth: usize, max: usize, out: &mut Vec<PathBuf>) {
+    git_dir_parents_until(roots, max_depth, None).0
+}
+
+/// [`git_dir_parents`] that stops descending once `deadline` has passed (`--max-seconds`); the flag is true when
+/// it did, so the repos found are a subset.
+pub fn git_dir_parents_until(
+    roots: &[PathBuf],
+    max_depth: usize,
+    deadline: Option<std::time::Instant>,
+) -> (Vec<PathBuf>, bool) {
+    struct Walk {
+        max: usize,
+        deadline: Option<std::time::Instant>,
+        out: Vec<PathBuf>,
+        cut: bool,
+    }
+    fn walk(dir: &Path, depth: usize, w: &mut Walk) {
+        if w.deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+            w.cut = true;
+            return;
+        }
         let Ok(rd) = std::fs::read_dir(dir) else {
             return;
         };
         let git = dir.join(".git");
         match std::fs::symlink_metadata(&git) {
-            Ok(m) if m.is_dir() => out.push(dir.to_path_buf()),
+            Ok(m) if m.is_dir() => w.out.push(dir.to_path_buf()),
             Ok(m) if m.is_file() => return,
             _ => {}
         }
-        if depth >= max {
+        if depth >= w.max {
             return;
         }
         for e in rd.flatten() {
@@ -217,17 +237,22 @@ pub fn git_dir_parents(roots: &[PathBuf], max_depth: usize) -> Vec<PathBuf> {
                 continue;
             }
             if e.file_type().is_ok_and(|t| t.is_dir()) {
-                walk(&e.path(), depth + 1, max, out);
+                walk(&e.path(), depth + 1, w);
             }
         }
     }
-    let mut out = Vec::new();
+    let mut w = Walk {
+        max: max_depth,
+        deadline,
+        out: Vec::new(),
+        cut: false,
+    };
     for r in roots {
-        walk(r, 0, max_depth, &mut out);
+        walk(r, 0, &mut w);
     }
-    out.sort();
-    out.dedup();
-    out
+    w.out.sort();
+    w.out.dedup();
+    (w.out, w.cut)
 }
 
 /// Seeds from scan groups (`Group.repo`), falling back to `.git` directories when the scan has none.

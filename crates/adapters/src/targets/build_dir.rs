@@ -341,6 +341,8 @@ struct Discovered {
     selected: bool,
     entries: HashMap<CandidateId, Entry>,
     notes: Vec<String>,
+    /// `--max-seconds N` cut the walk short.
+    partial: Option<u64>,
 }
 
 fn flavor_of(c: &Candidate) -> Option<BuildDirFlavor> {
@@ -521,6 +523,19 @@ impl<D: DirOps> BuildDirTarget<D> {
     }
 }
 
+/// The scan options of a run: `--max-seconds` is the walk deadline, `--rescan` reads no cached directory and
+/// rewrites the cache, `--no-cache` reads and writes none. Directories unchanged since the last run otherwise
+/// come from the cache (a changed mtime relists them); `scan.cache` belongs to the `scan` subcommand.
+pub fn build_opts(selection: &Selection, cache_dir: &Path, min_age: Duration) -> BuildOpts {
+    BuildOpts {
+        min_age,
+        kinds: BuildKinds::ALL,
+        max_duration: selection.scan.deadline_secs().map(Duration::from_secs),
+        rescan: selection.scan.rescan,
+        walker_cache: (!selection.scan.no_cache).then(|| cache_dir.join(WALKER_CACHE_FILE)),
+    }
+}
+
 impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
     fn name(&self) -> &'static str {
         "build-dirs"
@@ -536,15 +551,7 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
                 .effective_min_age(SelectorId::BuildDirs)
                 .unwrap_or(0),
         );
-        let opts = BuildOpts {
-            min_age,
-            kinds: BuildKinds::ALL,
-            max_duration: None,
-            rescan: false,
-            // Directories unchanged since the last run come from the cache (a changed mtime relists them);
-            // `scan.cache` belongs to the `scan` subcommand.
-            walker_cache: Some(env.dirs.cache.join(WALKER_CACHE_FILE)),
-        };
+        let opts = build_opts(selection, &env.dirs.cache, min_age);
         let benv = BuildEnv {
             ops: &self.ops,
             roots: &self.roots,
@@ -564,6 +571,10 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
                 return Vec::new();
             }
         };
+        st.partial = found
+            .partial_scan
+            .then(|| selection.scan.deadline_secs())
+            .flatten();
         if found.mounts_unreadable {
             st.notes.push(format!(
                 "build-dirs: {}; every build dir is skipped as a mount point",
@@ -706,6 +717,10 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
             .entries
             .get(&c.id())
             .and_then(|e| e.duplicates)
+    }
+
+    fn partial_scan(&self) -> Option<u64> {
+        lock(&self.state).partial
     }
 
     fn plan_notes(&self, _env: &Env, selection: &Selection) -> Vec<String> {

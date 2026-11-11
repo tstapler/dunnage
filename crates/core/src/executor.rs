@@ -215,6 +215,8 @@ pub struct RunReport {
     pub skipped_by_guard: Vec<CandidateId>,
     /// Wall ms of discovery per selector id, plus `availability` (the gate probes); the dominant phase of a slow run.
     pub discover_by_kind: Vec<(&'static str, u64)>,
+    /// `Some(N)` when a walking kind hit `--max-seconds N`.
+    pub partial_scan: Option<u64>,
 }
 
 pub struct Executor<'a> {
@@ -486,6 +488,17 @@ impl<'a> Executor<'a> {
                 avail.notes.extend(t.plan_notes(env, sel));
             }
         }
+        let partial_scan = self
+            .targets
+            .iter()
+            .filter(|t| t.selectors().iter().any(|s| sel.selects(*s)) && !avail.is_unavailable(**t))
+            .filter_map(|t| t.partial_scan())
+            .max();
+        if let (Some(n), true) = (partial_scan, applying) {
+            avail.notes.push(format!(
+                "WARNING: PARTIAL SCAN (hit --max-seconds {n}): the picture is incomplete; build dirs of a lockfile cluster are kept."
+            ));
+        }
         by_kind.push(("plan_notes", millis(notes_start)));
         let discover_ms = millis(discover_start);
         let plan_start = Instant::now();
@@ -496,7 +509,10 @@ impl<'a> Executor<'a> {
 
         let Mode::Apply(token) = mode else {
             let stage = (discover_ms, plan_ms);
-            return Ok(self.plan_report(plan, plan_id, fs_before, avail.notes, stage, by_kind));
+            let mut report =
+                self.plan_report(plan, plan_id, fs_before, avail.notes, stage, by_kind);
+            report.partial_scan = partial_scan;
+            return Ok(report);
         };
 
         hooks.step("plan_id_gate");
@@ -653,6 +669,7 @@ impl<'a> Executor<'a> {
             pre_delete,
             skipped_by_guard,
             discover_by_kind: by_kind,
+            partial_scan,
         })
     }
 
@@ -755,6 +772,7 @@ impl<'a> Executor<'a> {
             pre_delete: PreDeleteSamples::new(None, None, 0),
             skipped_by_guard: Vec::new(),
             discover_by_kind,
+            partial_scan: None,
         }
     }
 

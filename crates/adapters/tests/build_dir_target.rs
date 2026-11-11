@@ -18,7 +18,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use disk_cleanup_adapters::targets::build_dir::{BuildDirTarget, DETAIL_MOUNTS_UNREADABLE};
+use disk_cleanup_adapters::targets::build_dir::{
+    build_opts, BuildDirTarget, DETAIL_MOUNTS_UNREADABLE,
+};
 use disk_cleanup_adapters::testing::{At, FaultDirOps, Op};
 use disk_cleanup_adapters::RealDirOps;
 use disk_cleanup_core::audit_types::RunRoots;
@@ -774,4 +776,123 @@ fn candidate_ids_should_differ_per_path_When_two_dirs_share_a_lockfile() {
     let ids: std::collections::HashSet<CandidateId> = cands.iter().map(Candidate::id).collect();
     assert_eq!(ids.len(), 3);
     assert_ne!(find(&cands, &a).id(), find(&cands, &b).id());
+}
+
+// ------------------------------------------------------------------ --rescan, --no-cache, --max-seconds
+
+fn walker_cache_of(f: &Fixture) -> PathBuf {
+    f.home.join(".cache/disk-cleanup/walker.cache")
+}
+
+fn mtime_of(p: &Path) -> std::time::SystemTime {
+    fs::metadata(p).unwrap().modified().unwrap()
+}
+
+fn backdate(p: &Path) -> std::time::SystemTime {
+    let old = std::time::SystemTime::now() - Duration::from_secs(3600);
+    fs::File::options()
+        .write(true)
+        .open(p)
+        .unwrap()
+        .set_modified(old)
+        .unwrap();
+    mtime_of(p)
+}
+
+fn plan_ids(t: &BuildDirTarget<RealDirOps>, env: &Env, sel: &Selection) -> Vec<CandidateId> {
+    t.discover(env, sel).iter().map(Candidate::id).collect()
+}
+
+#[test]
+fn discover_should_rewrite_the_walker_cache_and_return_the_same_items_When_rescan() {
+    let f = fixture();
+    stale_node(&f, "a", Some("a"), 70);
+    stale_node(&f, "b", Some("b"), 70);
+    let rig = Rig::new(&f);
+    let env = rig.env();
+    let t = target(&f);
+    let cache = walker_cache_of(&f);
+
+    let first = plan_ids(&t, &env, &sel());
+    assert!(cache.is_file(), "a plain run writes the walker cache");
+    let again = plan_ids(&t, &env, &sel());
+    assert_eq!(again, first);
+    let stale = backdate(&cache);
+
+    let mut s = sel();
+    s.scan.rescan = true;
+    assert_eq!(plan_ids(&t, &env, &s), first, "--rescan changes no item");
+    assert!(mtime_of(&cache) > stale, "--rescan rewrites the cache");
+}
+
+#[test]
+fn discover_should_read_and_write_no_walker_cache_When_no_cache() {
+    let f = fixture();
+    stale_node(&f, "a", Some("a"), 70);
+    let rig = Rig::new(&f);
+    let env = rig.env();
+    let t = target(&f);
+    let cache = walker_cache_of(&f);
+    let mut s = sel();
+    s.scan.no_cache = true;
+
+    let items = plan_ids(&t, &env, &s);
+    assert_eq!(items.len(), 1);
+    assert!(!cache.exists(), "--no-cache creates no cache");
+    assert!(
+        !f.home.join(".cache").exists(),
+        "--no-cache creates no cache directory or sidecar"
+    );
+
+    plan_ids(&t, &env, &sel());
+    let bytes = fs::read(&cache).unwrap();
+    let stale = backdate(&cache);
+    let again = plan_ids(&t, &env, &s);
+    assert_eq!(again, items);
+    assert_eq!(fs::read(&cache).unwrap(), bytes);
+    assert_eq!(
+        mtime_of(&cache),
+        stale,
+        "--no-cache leaves an existing cache alone"
+    );
+}
+
+#[test]
+fn build_opts_should_map_max_seconds_rescan_and_no_cache_and_not_report_partial_When_the_walk_finishes(
+) {
+    let cache_dir = Path::new("/c");
+    let o = build_opts(&sel(), cache_dir, HOUR);
+    assert_eq!((o.max_duration, o.rescan), (None, false));
+    assert_eq!(
+        o.walker_cache.as_deref(),
+        Some(Path::new("/c/disk-cleanup/walker.cache"))
+    );
+
+    let mut s = sel();
+    s.scan.max_seconds = Some(7);
+    s.scan.rescan = true;
+    let o = build_opts(&s, cache_dir, HOUR);
+    assert_eq!(o.max_duration, Some(Duration::from_secs(7)));
+    assert!(o.rescan);
+    assert!(o.walker_cache.is_some());
+
+    s.scan.no_cache = true;
+    assert!(build_opts(&s, cache_dir, HOUR).walker_cache.is_none());
+
+    s.scan.max_seconds = Some(0);
+    assert_eq!(
+        build_opts(&s, cache_dir, HOUR).max_duration,
+        None,
+        "0 is no limit"
+    );
+
+    // a deadline that is not reached leaves the plan complete
+    let f = fixture();
+    stale_node(&f, "a", Some("a"), 70);
+    let rig = Rig::new(&f);
+    let t = target(&f);
+    let mut s = sel();
+    s.scan.max_seconds = Some(3600);
+    assert_eq!(t.discover(&rig.env(), &s).len(), 1);
+    assert_eq!(t.partial_scan(), None);
 }

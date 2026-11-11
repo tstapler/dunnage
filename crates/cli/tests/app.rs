@@ -778,3 +778,107 @@ fn kinds_should_print_the_table_with_availability_and_exit_0_and_json_should_ret
     assert_eq!(d["kinds"].as_array().unwrap().len(), SelectorId::ALL.len());
     assert_eq!(d["exit_code"], 0);
 }
+
+const WALK_FLAGS: [&str; 4] = ["--max-seconds", "3600", "--rescan", "--no-cache"];
+
+#[test]
+fn walk_flags_should_leave_the_plan_output_and_id_unchanged_When_the_deadline_is_not_hit() {
+    let rig = Rig::new();
+    let b = build_dirs();
+    let kinds = ["--kinds", "build-dirs"];
+    let bare = run(&rig, &[&b], &kinds, true, &confined);
+    let flagged_args: Vec<&str> = kinds.iter().chain(&WALK_FLAGS).copied().collect();
+    let flagged = run(&rig, &[&b], &flagged_args, true, &confined);
+    assert_eq!(flagged.code, 0, "{flagged:?}");
+    assert_eq!(no_scan_line(&flagged.stdout), no_scan_line(&bare.stdout));
+    assert!(!flagged.stdout.contains("PARTIAL SCAN"));
+    assert_eq!(
+        plan_id_of(&rig, &[&b], &flagged_args),
+        plan_id_of(&rig, &[&b], &kinds),
+        "the walk flags are not part of the plan-id"
+    );
+}
+
+#[test]
+fn a_plan_should_print_the_partial_scan_banner_and_exit_0_When_a_walking_kind_hit_max_seconds() {
+    let rig = Rig::new();
+    let mut b = build_dirs();
+    b.partial = Some(5);
+    let r = run(
+        &rig,
+        &[&b],
+        &["--kinds", "build-dirs", "--max-seconds", "5"],
+        true,
+        &confined,
+    );
+    assert_eq!(r.code, 0, "{r:?}");
+    assert!(
+        r.stdout
+            .contains("PARTIAL SCAN (hit --max-seconds 5): sizes are lower bounds"),
+        "{}",
+        r.stdout
+    );
+    assert!(r.stdout.contains("at least"), "{}", r.stdout);
+    let j = run(
+        &rig,
+        &[&b],
+        &["--kinds", "build-dirs", "--max-seconds", "5", "--json"],
+        true,
+        &confined,
+    );
+    let doc: serde_json::Value = serde_json::from_str(&j.stdout).unwrap();
+    assert_eq!(doc["partial_scan"], true);
+}
+
+#[test]
+fn an_apply_should_warn_that_the_scan_was_partial_When_a_walking_kind_hit_max_seconds() {
+    let rig = Rig::new();
+    let mut b = build_dirs();
+    b.partial = Some(5);
+    let id = plan_id_of(&rig, &[&b], &["--kinds", "build-dirs"]);
+    let r = run(
+        &rig,
+        &[&b],
+        &[
+            "--apply",
+            "--kinds",
+            "build-dirs",
+            "--plan-id",
+            &id,
+            "--max-seconds",
+            "5",
+        ],
+        true,
+        &confined,
+    );
+    assert_eq!(r.code, 0, "{r:?}");
+    assert!(
+        r.stderr
+            .contains("WARNING: PARTIAL SCAN (hit --max-seconds 5)"),
+        "{}",
+        r.stderr
+    );
+}
+
+#[test]
+fn the_selection_should_carry_max_seconds_rescan_and_no_cache_When_the_flags_are_given() {
+    let parse = |argv: &[&str]| match args::parse(argv.iter().copied()) {
+        args::Parsed::Run(c) => c,
+        other @ args::Parsed::Exit { .. } => panic!("{other:?}"),
+    };
+    let kinds = disk_cleanup_core::selector::KindSelector::default();
+    let none = parse(&[]).selection(&[], &kinds).unwrap();
+    assert_eq!(
+        none.scan,
+        disk_cleanup_core::selector::ScanControl::default()
+    );
+    let all = parse(&WALK_FLAGS).selection(&[], &kinds).unwrap();
+    assert_eq!(
+        all.scan,
+        disk_cleanup_core::selector::ScanControl {
+            max_seconds: Some(3600),
+            rescan: true,
+            no_cache: true
+        }
+    );
+}
