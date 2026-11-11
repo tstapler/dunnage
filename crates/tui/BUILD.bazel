@@ -1,0 +1,72 @@
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_binary")
+load("//build:defs.bzl", "LINTS", "MANIFEST_ENV", "dc_integration_tests", "dc_library", "dc_manifest_env", "dc_unit_and_doc_tests")
+
+exports_files(["Cargo.toml"])
+
+dc_manifest_env()
+
+dc_library(
+    name = "tui",
+    srcs = glob(["src/**/*.rs"]),
+    crate_name = "disk_cleanup_tui",
+    deps = ["//crates/core:core"] + all_crate_deps(normal = True),
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    ts_deps_override = ["//crates/core:core_ts"] + all_crate_deps(normal = True),
+    ts_features = [],
+)
+
+# Cargo example `guard_probe`: the pty test spawns it (tests/pty_restore.rs, DC_GUARD_PROBE).
+rust_binary(
+    name = "guard_probe",
+    srcs = ["examples/guard_probe.rs"],
+    crate_name = "guard_probe",
+    edition = "2021",
+    lint_config = LINTS,
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    rustc_env_files = [MANIFEST_ENV],
+    testonly = True,
+    visibility = ["//visibility:public"],
+    deps = [
+        ":tui_ts",
+        "//crates/adapters:adapters_ts",
+        "//crates/core:core_ts",
+        "//crates/scan:scan",
+    ] + all_crate_deps(normal = True) + all_crate_deps(normal_dev = True),
+)
+
+TEST_DATA = ["//:repo_files"]
+
+DEV_DEPS = [
+    "//crates/adapters:adapters_ts",
+    "//crates/core:core_ts",
+    "//crates/scan:scan",
+]
+
+dc_unit_and_doc_tests(
+    name = "tui",
+    crate = ":tui_ts",
+    data = TEST_DATA,
+    deps = DEV_DEPS + all_crate_deps(normal_dev = True),
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+)
+
+dc_integration_tests(
+    crate = "tui",
+    data = TEST_DATA,
+    compile_data = glob(["src/**/*.rs"]),
+    deps = [":tui_ts"] + DEV_DEPS + all_crate_deps(normal = True) + all_crate_deps(normal_dev = True),
+    proc_macro_deps = all_crate_deps(proc_macro = True) + all_crate_deps(proc_macro_dev = True),
+    per_test = {
+        "pty_restore": {
+            "data": [":guard_probe"],
+            "env": {"DC_GUARD_PROBE": "$(rootpath :guard_probe)"},
+        },
+    },
+)
+
+filegroup(
+    name = "all_files",
+    srcs = glob(["**"], exclude = ["BUILD.bazel", "manifest_env.txt"]),
+    visibility = ["//visibility:public"],
+)

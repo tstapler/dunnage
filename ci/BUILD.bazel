@@ -1,0 +1,7 @@
+filegroup(
+    name = "files",
+    srcs = glob(["**"], exclude = ["BUILD.bazel"]),
+    visibility = ["//visibility:public"],
+)
+
+exports_files(["allowed-roots.txt"])

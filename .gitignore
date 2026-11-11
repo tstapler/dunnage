@@ -2,3 +2,7 @@
 target/
 .envrc
 .cargo/config.toml
+
+# Bazel
+/bazel-*
+user.bazelrc

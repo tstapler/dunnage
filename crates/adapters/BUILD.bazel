@@ -1,0 +1,79 @@
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_binary")
+load("//build:defs.bzl", "LINTS", "MANIFEST_ENV", "dc_integration_tests", "dc_library", "dc_manifest_env", "dc_unit_and_doc_tests")
+
+exports_files(["Cargo.toml"])
+
+dc_manifest_env()
+
+DEPS = ["//crates/core:core", "//crates/scan:scan"]
+
+dc_library(
+    name = "adapters",
+    srcs = glob(
+        ["src/**/*.rs"],
+        exclude = ["src/bin/**"],
+    ),
+    compile_data = ["//ci:allowed-roots.txt"],
+    crate_name = "disk_cleanup_adapters",
+    # Cargo feature test-support (= core/test-support): behind the explicit taint flag only (see //build).
+    crate_features = select({
+        "//build:test_support_on": ["test-support"],
+        "//conditions:default": [],
+    }),
+    deps = DEPS + all_crate_deps(normal = True),
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    ts_features = ["test-support"],
+)
+
+# Test helper (Cargo: required-features = ["test-support"], dist = false): exists only in the test-support universe.
+rust_binary(
+    name = "dc-sigprobe",
+    srcs = ["src/bin/dc-sigprobe.rs"],
+    crate_name = "dc_sigprobe",
+    edition = "2021",
+    lint_config = LINTS,
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    rustc_env_files = [MANIFEST_ENV],
+    testonly = True,
+    visibility = ["//visibility:public"],
+    deps = [
+        ":adapters_ts",
+        "//crates/core:core_ts",
+        "//crates/scan:scan",
+    ] + all_crate_deps(normal = True),
+)
+
+TEST_DATA = ["//:repo_files"]
+
+dc_unit_and_doc_tests(
+    name = "adapters",
+    crate = ":adapters_ts",
+    data = TEST_DATA,
+    deps = all_crate_deps(normal_dev = True),
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+)
+
+dc_integration_tests(
+    crate = "adapters",
+    data = TEST_DATA,
+    compile_data = glob(["src/**/*.rs"]) + ["//crates/scan:stream_common"],
+    deps = [
+        ":adapters_ts",
+        "//crates/core:core_ts",
+        "//crates/scan:scan",
+    ] + all_crate_deps(normal = True) + all_crate_deps(normal_dev = True),
+    proc_macro_deps = all_crate_deps(proc_macro = True) + all_crate_deps(proc_macro_dev = True),
+    per_test = {
+        "explore_signals": {
+            "data": [":dc-sigprobe"],
+            "rustc_env": {"CARGO_BIN_EXE_dc-sigprobe": "$(rootpath :dc-sigprobe)"},
+        },
+    },
+)
+
+filegroup(
+    name = "all_files",
+    srcs = glob(["**"], exclude = ["BUILD.bazel", "manifest_env.txt"]),
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,92 @@
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
+load("@rules_rust//rust:defs.bzl", "rust_lint_config")
+
+package(default_visibility = ["//visibility:public"])
+
+# Feature gates of the cli crate (Story 2.3.4): the default registers no apply-capable kind, like `cargo build
+# --release`. `--config=gate-b|gate-c|gate-d` (.bazelrc) sets --//build:gate; gate-c implies gate-b, gate-d gate-c.
+string_flag(
+    name = "gate",
+    build_setting_default = "none",
+    values = [
+        "none",
+        "b",
+        "c",
+        "d",
+    ],
+)
+
+config_setting(
+    name = "gate_b_on",
+    flag_values = {":gate": "b"},
+)
+
+config_setting(
+    name = "gate_c_on",
+    flag_values = {":gate": "c"},
+)
+
+config_setting(
+    name = "gate_d_on",
+    flag_values = {":gate": "d"},
+)
+
+# `disk-cleanup explore` (cli feature `explore`, default on). --//build:explore=false builds without it.
+bool_flag(
+    name = "explore",
+    build_setting_default = True,
+)
+
+config_setting(
+    name = "explore_on",
+    flag_values = {":explore": "True"},
+)
+
+# Cargo feature `test-support` of core/adapters. Test targets use the `*_ts` library variants (so tests never
+# depend on this flag); the flag exists to build a deliberately tainted shipped binary, the positive control of
+# scripts/check-release-features.sh. Never set it for a release.
+bool_flag(
+    name = "test_support",
+    build_setting_default = False,
+)
+
+config_setting(
+    name = "test_support_on",
+    flag_values = {":test_support": "True"},
+)
+
+# Mirror of [workspace.lints.clippy] in the root Cargo.toml (scripts/check-bazel-cargo-sync.sh compares them).
+# Groups come first: a later flag wins over an earlier one for the same lint.
+rust_lint_config(
+    name = "workspace_lints",
+    clippy = {
+        "all": "warn",
+        "pedantic": "warn",
+        "unwrap_used": "warn",
+        "expect_used": "warn",
+        "cast_precision_loss": "allow",
+        "cast_possible_truncation": "allow",
+        "cast_sign_loss": "allow",
+        "module_name_repetitions": "allow",
+        "missing_errors_doc": "allow",
+        "must_use_candidate": "allow",
+        "doc_markdown": "allow",
+        "too_many_lines": "allow",
+        "cast_possible_wrap": "allow",
+        "implicit_hasher": "allow",
+        "similar_names": "allow",
+        "decimal_bitwise_operands": "allow",
+        "ref_as_ptr": "allow",
+        "match_same_arms": "allow",
+        "single_match_else": "allow",
+    },
+)
+
+exports_files(["defs.bzl", "provenance.sh", "workspace_status.sh"])
+
+# `--stamp` (set by --config=dist and the gate configs) bakes build.rs's provenance (Story 2.2.1d) from
+# build/workspace_status.sh; unstamped builds say "unknown", which keeps remote-cache hits commit-independent.
+config_setting(
+    name = "stamped",
+    values = {"stamp": "true"},
+)

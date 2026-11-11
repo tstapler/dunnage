@@ -1,0 +1,24 @@
+# Everything the tests read through `CARGO_MANIFEST_DIR/../..` (sources of other crates, ci/, scripts/).
+filegroup(
+    name = "repo_files",
+    srcs = [
+        "Cargo.lock",
+        "Cargo.toml",
+        "Makefile",
+        "rust-toolchain.toml",
+        "//ci:files",
+        "//crates/adapters:all_files",
+        "//crates/cli:all_files",
+        "//crates/core:all_files",
+        "//crates/scan:all_files",
+        "//crates/tui:all_files",
+        "//scripts:files",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+exports_files([
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+])

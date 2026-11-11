@@ -1,0 +1,141 @@
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_binary")
+load("//build:defs.bzl", "LINTS", "MANIFEST_ENV", "dc_integration_tests", "dc_library", "dc_manifest_env", "dc_unit_and_doc_tests", "ts_select")
+
+exports_files(["Cargo.toml"])
+
+dc_manifest_env()
+
+# Cargo features of this crate: `explore` (default) and the per-gate kind registry (gate-d => gate-c => gate-b).
+FEATURES = select({
+    "//build:explore_on": ["explore"],
+    "//conditions:default": [],
+}) + select({
+    "//build:gate_b_on": ["gate-b"],
+    "//build:gate_c_on": [
+        "gate-b",
+        "gate-c",
+    ],
+    "//build:gate_d_on": [
+        "gate-b",
+        "gate-c",
+        "gate-d",
+    ],
+    "//conditions:default": [],
+})
+
+# What crates/cli/build.rs bakes under Cargo (env! in src/version.rs).
+PROVENANCE = select({
+    "//build:stamped": {
+        "DC_GIT_COMMIT": "{STABLE_DC_GIT_COMMIT}",
+        "DC_GIT_DIRTY": "{STABLE_DC_GIT_DIRTY}",
+        "DC_SCAN_REV": "{STABLE_DC_SCAN_REV}",
+        "DC_SCAN_DIRTY": "{STABLE_DC_SCAN_DIRTY}",
+    },
+    "//conditions:default": {
+        "DC_GIT_COMMIT": "unknown",
+        "DC_GIT_DIRTY": "false",
+        "DC_SCAN_REV": "unknown",
+        "DC_SCAN_DIRTY": "false",
+    },
+})
+
+PLAIN_DEPS = [
+    "//crates/core:core",
+    "//crates/scan:scan",
+    "//crates/adapters:adapters",
+] + select({
+    "//build:explore_on": ["//crates/tui:tui"],
+    "//conditions:default": [],
+}) + all_crate_deps(normal = True)
+
+TS_DEPS = [
+    "//crates/core:core_ts",
+    "//crates/scan:scan",
+    "//crates/adapters:adapters_ts",
+] + select({
+    "//build:explore_on": ["//crates/tui:tui_ts"],
+    "//conditions:default": [],
+}) + all_crate_deps(normal = True)
+
+dc_library(
+    name = "cli",
+    srcs = glob(
+        ["src/**/*.rs"],
+        exclude = ["src/main.rs"],
+    ),
+    crate_features = FEATURES,
+    crate_name = "disk_cleanup_cli",
+    deps = PLAIN_DEPS,
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    rustc_env = PROVENANCE,
+    stamp = -1,
+    ts_deps_override = TS_DEPS,
+    ts_features = FEATURES,
+)
+
+# The shipped binary.
+rust_binary(
+    name = "disk-cleanup",
+    srcs = [
+        "src/main.rs",
+        "src/version.rs",
+    ],
+    crate_name = "disk_cleanup",
+    edition = "2021",
+    lint_config = LINTS,
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    rustc_env = PROVENANCE,
+    rustc_env_files = [MANIFEST_ENV],
+    stamp = -1,
+    version = "0.1.0",
+    visibility = ["//visibility:public"],
+    deps = [":cli"] + PLAIN_DEPS,
+)
+
+# The binary the integration tests run (Cargo: CARGO_BIN_EXE_disk-cleanup, built with the dev-dependency features).
+rust_binary(
+    name = "disk-cleanup_ts",
+    testonly = True,
+    srcs = [
+        "src/main.rs",
+        "src/version.rs",
+    ],
+    crate_name = "disk_cleanup",
+    edition = "2021",
+    lint_config = LINTS,
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    rustc_env = PROVENANCE,
+    rustc_env_files = [MANIFEST_ENV],
+    stamp = -1,
+    version = "0.1.0",
+    visibility = ["//visibility:public"],
+    deps = [":cli_ts"] + TS_DEPS,
+)
+
+TEST_DATA = ["//:repo_files"]
+
+dc_unit_and_doc_tests(
+    name = "cli",
+    crate = ":cli_ts",
+    data = TEST_DATA,
+    deps = all_crate_deps(normal_dev = True),
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    doc = False,
+)
+
+dc_integration_tests(
+    crate = "cli",
+    data = TEST_DATA + [":disk-cleanup_ts"],
+    compile_data = glob(["src/**/*.rs"]) + ["build.rs"],
+    deps = [":cli_ts"] + TS_DEPS + all_crate_deps(normal_dev = True),
+    features = FEATURES,
+    proc_macro_deps = all_crate_deps(proc_macro = True) + all_crate_deps(proc_macro_dev = True),
+    rustc_env = {"CARGO_BIN_EXE_disk-cleanup": "$(rootpath :disk-cleanup_ts)"},
+)
+
+filegroup(
+    name = "all_files",
+    srcs = glob(["**"], exclude = ["BUILD.bazel", "manifest_env.txt"]),
+    visibility = ["//visibility:public"],
+)
