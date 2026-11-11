@@ -261,8 +261,24 @@ pub struct StatusArgs {
 
 #[derive(Subcommand, Debug)]
 pub enum SteamCommand {
-    /// List Steam libraries, prefixes and remnants
-    List,
+    /// Rank installed games by size x idle time / hours played (read-only)
+    List {
+        /// Row order
+        #[arg(long, value_enum, default_value = "score")]
+        sort: SteamSortArg,
+        /// Only show games of at least this many GiB
+        #[arg(long, value_name = "GIB")]
+        min_gib: Option<f64>,
+    },
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SteamSortArg {
+    Score,
+    Size,
+    Date,
+    Playtime,
+    Name,
 }
 
 #[derive(Subcommand, Debug)]

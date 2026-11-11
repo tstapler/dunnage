@@ -2,6 +2,7 @@
 //! (spike 0.2.3); compatdata and shadercache enumeration belongs to Story 4.2.2.
 
 pub mod library;
+pub mod list;
 
 pub use library::{
     default_steam_roots, downloading_nonempty, plan_gate, InstalledApp, SteamGate, SteamInstall,

@@ -26,7 +26,7 @@ use disk_cleanup_core::{
 };
 
 use crate::apply::{finished_line, render_apply, render_refused, ApplyInput, LastDryRun};
-use crate::args::{AuditCommand, Cli, Command, SortArg, SteamCommand};
+use crate::args::{AuditCommand, Cli, Command, SortArg, SteamCommand, SteamSortArg};
 use crate::render::{render_plan, wrapper_note};
 use crate::render_json::{
     apply_doc, fatal_doc, gate_refusal_doc, plan_doc, to_text, SCHEMA_VERSION,
@@ -37,6 +37,7 @@ use crate::view::{
 };
 use crate::wiring::audit::{GateExit, StampOutcome};
 use crate::{audit_cmd, kinds, status};
+use disk_cleanup_adapters::steam::default_steam_roots;
 
 /// The refusal of a build that ships no apply path (Gate A; the token is minted by Story 2.1.6).
 pub const APPLY_NOT_ENABLED: &str = "error: apply is not enabled in this build (kinds register per gate; see 'disk-cleanup kinds'). Nothing was deleted.";
@@ -140,13 +141,8 @@ pub fn run(cli: &Cli, p: &Ports, io: &mut Io) -> i32 {
             0
         }
         Some(Command::Steam {
-            command: SteamCommand::List,
-        }) => {
-            io.stderr_line(
-                "error: 'steam list' is not available in this build (see 'disk-cleanup kinds')",
-            );
-            64
-        }
+            command: SteamCommand::List { sort, min_gib },
+        }) => steam_list(cli.json, *sort, *min_gib, p, io),
         Some(Command::Audit {
             command: AuditCommand::Verify { log },
         }) => {
@@ -160,6 +156,41 @@ pub fn run(cli: &Cli, p: &Ports, io: &mut Io) -> i32 {
         }
         Some(Command::Scan(args)) => crate::scan_cmd::run_process(args, cli.json, io),
         None => cleaner(cli, p, io),
+    }
+}
+
+/// `steam list`: read-only; exit 0 (a partial listing still exits 0), 1 when no library is readable.
+fn steam_list(json: bool, sort: SteamSortArg, min_gib: Option<f64>, p: &Ports, io: &mut Io) -> i32 {
+    use disk_cleanup_adapters::steam::list::{self, SortKey};
+    let now = u64::try_from(p.env.clock.now_epoch()).unwrap_or(0);
+    let platform = p.env.probe.platform();
+    let loaded = default_steam_roots(&p.env.dirs.home, platform)
+        .first()
+        .map_or(Err(list::ListError::NotInstalled), |root| list::load(root));
+    match loaded {
+        Ok(mut l) => {
+            if let Some(min) = min_gib {
+                l.games.retain(|g| g.size_gib() >= min);
+            }
+            let key = match sort {
+                SteamSortArg::Score => SortKey::Score,
+                SteamSortArg::Size => SortKey::Size,
+                SteamSortArg::Date => SortKey::Date,
+                SteamSortArg::Playtime => SortKey::Playtime,
+                SteamSortArg::Name => SortKey::Name,
+            };
+            list::sort_games(&mut l.games, key, now);
+            if json {
+                io.stdout(&list::to_json(&l.games, &l.notes, now, 0));
+            } else {
+                io.stdout(&list::render(&l.games, &l.notes, now));
+            }
+            0
+        }
+        Err(e) => {
+            io.stderr_line(&format!("error: {}", e.text()));
+            1
+        }
     }
 }
 
