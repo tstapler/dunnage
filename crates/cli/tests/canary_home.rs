@@ -4,7 +4,7 @@
 
 mod common;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use common::{
     canary_violations, strace_available, strace_cmd, strace_own_paths, tree_manifest, Fixture,

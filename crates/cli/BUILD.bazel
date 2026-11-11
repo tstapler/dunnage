@@ -150,10 +150,28 @@ dc_integration_tests(
         },
         "e2e_apply_caches": {
             "env": {"DC_SKIP_PROFILE_BUILDS": "1"},
+            "env_inherit": ["DC_REPO_ROOT"],
             "tags": [
                 "requires-cargo",
                 "requires-strace",
                 "requires-unshare",
+            ],
+        },
+        # Run the repo-level checks (check-*.sh --selftest, rg/find over crates/**) against the real checkout, with
+        # cargo and the network for check-release-features.sh --selftest: not hermetic, so `local`.
+        "safety_suite": {
+            "env_inherit": [
+                "DC_REPO_ROOT",
+                "HOME",
+                "CARGO_HOME",
+                "RUSTUP_HOME",
+            ],
+            "tags": [
+                "local",
+                "no-sandbox",
+                "requires-cargo",
+                "requires-network",
+                "requires-repo-checkout",
             ],
         },
         "e2e_apply_build_dirs": {"tags": ["requires-unshare"]},

@@ -10,6 +10,8 @@
 set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
+# Tests tagged requires-repo-checkout run the repo-level scripts on the real tree, not on Bazel's symlink forest.
+export DC_REPO_ROOT=${DC_REPO_ROOT:-$root}
 case "${TMPDIR:-}" in "" | "$HOME"/*) export TMPDIR=/tmp ;; esac
 out=${DC_BAZEL_OUTPUT_ROOT:-$HOME/.cache/dc-bazel}
 cache=${DC_BAZEL_DISK_CACHE:-$HOME/.cache/dc-bazel-disk-cache}

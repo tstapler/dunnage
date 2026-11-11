@@ -299,7 +299,12 @@ pub fn bin_path() -> PathBuf {
 
 /// The repository root (`CARGO_MANIFEST_DIR` is `crates/cli`).
 pub fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    // Bazel runs tests in a runfiles tree of symlinks, which the repo-level scripts cannot walk: the tests that run
+    // them are tagged `local` and get the real checkout through DC_REPO_ROOT (scripts/bazel.sh sets it).
+    std::env::var_os("DC_REPO_ROOT").map_or_else(
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+        PathBuf::from,
+    )
 }
 
 /// `<dir>/f` holding `bytes` bytes, the file and the directory aged `days` days (so `--min-age` sees the age).
