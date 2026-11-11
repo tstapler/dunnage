@@ -77,6 +77,25 @@ pub fn parse_mountinfo(text: &str) -> Vec<MountEntry> {
         .collect()
 }
 
+/// Mount point and source (`/dev/sdb1`, `tmpfs`) of every well-formed `mountinfo` line, for the explorer's
+/// mount-point notes. The source is the field after the ` - ` separator and its filesystem type.
+pub fn parse_mount_sources(text: &str) -> Vec<(std::path::PathBuf, String)> {
+    text.lines()
+        .filter_map(|line| {
+            let (head, tail) = line.split_once(" - ")?;
+            let mount_point = head.split(' ').nth(4)?;
+            let source = tail.split(' ').nth(1)?;
+            Some((unescape(mount_point).into(), unescape(source)))
+        })
+        .collect()
+}
+
+/// [`parse_mount_sources`] over `/proc/self/mountinfo`.
+pub fn mount_sources() -> io::Result<Vec<(std::path::PathBuf, String)>> {
+    let text = std::fs::read_to_string("/proc/self/mountinfo")?;
+    Ok(parse_mount_sources(&text))
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
@@ -90,6 +109,15 @@ mod tests {
 garbage line
 88 26 x:y /x /bad rw - ext4 a b
 ";
+
+    #[test]
+    fn parse_mount_sources_should_return_point_and_source_and_unescape_both() {
+        let got = parse_mount_sources(FIXTURE);
+        assert_eq!(got[0], ("/sys".into(), "sysfs".to_string()));
+        assert_eq!(got[1], ("/".into(), "/dev/nvme0n1p2".to_string()));
+        assert!(got.contains(&("/mnt/my disk".into(), "/dev/nvme0n1p3".to_string())));
+        assert!(!got.iter().any(|(p, _)| p.to_string_lossy() == "garbage"));
+    }
 
     #[test]
     fn parse_mountinfo_should_return_point_device_and_mount_id_and_skip_malformed_lines() {

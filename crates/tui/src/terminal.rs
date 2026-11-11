@@ -328,3 +328,43 @@ pub fn fixed_terminal<B: Backend>(
         },
     )
 }
+
+/// The whole interactive session on the process's stdout (Story 6.5.4): terminal guard, panic hook, fixed
+/// viewport, the loop and the restore, in the order `examples/guard_probe.rs` proves. The caller prints
+/// `ExplorerExit::stdout_lines` and `stderr_lines` afterwards. `Err` means the terminal could not be set up
+/// (exit [`EXIT_TERMINAL`]); nothing was drawn.
+pub fn run_on_stdout(
+    ports: crate::app::Ports,
+    cfg: crate::app::ExplorerConfig,
+    size: (u16, u16),
+) -> io::Result<crate::event_loop::ExplorerExit> {
+    use crate::event_loop::{
+        run_explorer, CrosstermEvents, IoctlSize, Runtime, SystemClock, Tuning,
+    };
+    let (columns, rows) = size;
+    let mut guard = TerminalGuard::enter(io::stdout(), CrosstermRaw)?;
+    let queue = Arc::new(DiagQueue::default());
+    let hook = install_panic_hook(guard.restorer(), Arc::clone(&queue));
+    let mut term = fixed_terminal(
+        ratatui::backend::CrosstermBackend::new(io::stdout()),
+        columns,
+        rows,
+    )?;
+    let (mut events, mut sizer, clock) = (CrosstermEvents, IoctlSize, SystemClock::default());
+    let exit = {
+        let mut rt = Runtime {
+            term: &mut term,
+            guard: &mut guard,
+            events: &mut events,
+            sizer: &mut sizer,
+            clock: &clock,
+            tuning: Tuning::default(),
+            diagnostics: Arc::clone(&queue),
+        };
+        run_explorer(&mut rt, ports, cfg, size)
+    };
+    drop(hook);
+    drop(term);
+    drop(guard);
+    Ok(exit)
+}

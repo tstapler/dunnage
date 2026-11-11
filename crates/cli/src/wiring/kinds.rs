@@ -138,6 +138,11 @@ impl KindRegistry {
         self.registered.iter().map(|r| r.target.as_ref()).collect()
     }
 
+    /// The targets, owned: the explorer's planner outlives the registry's borrowers (Story 6.5.4).
+    pub fn into_targets(self) -> Vec<Box<dyn Target>> {
+        self.registered.into_iter().map(|r| r.target).collect()
+    }
+
     /// Every selector some registered target serves.
     pub fn listed(&self) -> Vec<SelectorId> {
         let mut v: Vec<SelectorId> = self
