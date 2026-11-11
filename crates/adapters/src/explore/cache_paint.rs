@@ -24,7 +24,7 @@ use crate::space_meter::UNKNOWN_FS;
 pub const EXPLORER_CACHE: &str = "explorer.cache";
 
 /// Re-list cached directories older than this (the `scan` default).
-pub const DEFAULT_MAX_AGE: Duration = Duration::from_secs(24 * 3600);
+pub const DEFAULT_MAX_AGE: Duration = Duration::from_hours(24);
 
 /// A save needs this much free beyond four times the previous cache (INFERRED margin).
 const FREE_FLOOR: u64 = GIB;

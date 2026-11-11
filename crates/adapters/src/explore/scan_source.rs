@@ -125,7 +125,7 @@ impl Job {
         req.paint_from_cache = self.opts.paint_from_cache;
         req.save = Arc::clone(&self.save);
         req.batch_max = DEFAULT_BATCH_MAX;
-        req.save_guard = self.guard.clone();
+        req.save_guard.clone_from(&self.guard);
         let paints = self.opts.paint_from_cache;
         let gone = AtomicBool::new(false);
         let sink = |events: Vec<DirEvent>| {

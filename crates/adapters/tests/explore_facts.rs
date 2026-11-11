@@ -68,7 +68,7 @@ fn runner_with_go(reported: Option<&Path>) -> Arc<dyn CommandRunner> {
 fn loader_should_send_installed_ids_install_dirs_and_resolved_cache_paths_When_run_on_its_own_thread(
 ) {
     let f = fixture();
-    let steam = steam_fixture(f._tmp.path().canonicalize().unwrap().as_path());
+    let steam = steam_fixture(f.home.parent().unwrap());
     let relocated = f.home.join(".cache/custom/go-build");
     let loader = ClassifyFactsLoader::new(
         roots_for(&f),
@@ -110,7 +110,7 @@ fn loader_should_send_installed_ids_install_dirs_and_resolved_cache_paths_When_r
 fn loader_should_leave_steam_absent_and_keep_table_paths_When_libraryfolders_is_unreadable_and_go_env_fails(
 ) {
     let f = fixture();
-    let steam = steam_fixture(f._tmp.path().canonicalize().unwrap().as_path());
+    let steam = steam_fixture(f.home.parent().unwrap());
     fs::write(steam.join("steamapps/libraryfolders.vdf"), "{ not vdf").unwrap();
     let loader = ClassifyFactsLoader::new(roots_for(&f), vec![steam], runner_with_go(None));
     let facts = loader.load();

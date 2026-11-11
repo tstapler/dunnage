@@ -598,7 +598,7 @@ fn full_tmpfs_child() {
         cache: Some(cfg.clone()),
     })
     .with_save_guard(save_guard(meter));
-    let (_, s) = finish(&guarded.start(&[root.clone()], &ScanOpts::default()));
+    let (_, s) = finish(&guarded.start(std::slice::from_ref(&root), &ScanOpts::default()));
     assert!(
         s.notes
             .contains(&"cache not saved: disk nearly full".to_string()),
@@ -608,7 +608,7 @@ fn full_tmpfs_child() {
     let bare = WalkerScanSource::new(WalkerBackend {
         cache: Some(cfg.clone()),
     });
-    let (_, s) = finish(&bare.start(&[root.clone()], &ScanOpts::default()));
+    let (_, s) = finish(&bare.start(std::slice::from_ref(&root), &ScanOpts::default()));
     let want = format!("cache not saved to {}: ", cache_path.display());
     assert!(
         s.notes.iter().any(|n| n.starts_with(&want)),
@@ -666,7 +666,8 @@ fn explore_scan_and_cleaner_collect_should_leave_decodable_caches_When_they_run_
                     let src = WalkerScanSource::new(WalkerBackend {
                         cache: Some(cfg(&explorer)),
                     });
-                    let (_, sum) = finish(&src.start(&[root.clone()], &ScanOpts::default()));
+                    let (_, sum) =
+                        finish(&src.start(std::slice::from_ref(&root), &ScanOpts::default()));
                     assert!(sum.notes.is_empty(), "{:?}", sum.notes);
                 });
                 s.spawn(|| {
