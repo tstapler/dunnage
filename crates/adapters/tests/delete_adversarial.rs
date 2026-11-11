@@ -1039,6 +1039,7 @@ fn ten_thousand_level_nesting_should_complete_without_stack_overflow_When_deleti
     assert!(exists(&fx.app.join("package.json")));
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn fifo_socket_chardev_nodes_should_be_unlinked_without_opening_them_When_in_tree() {
     use rustix::fs::{makedev, mknodat, FileType, Mode, CWD};
