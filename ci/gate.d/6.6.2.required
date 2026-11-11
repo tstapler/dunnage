@@ -1,0 +1,2 @@
+# <first-gate> <last-gate|-> <command>   (Task 6.6.2e: Story 6.6.3 starts only on a fresh accepted review of the current ADR-006; gate.sh sets DC_REQUIRE_ADR_REVIEW=1, so a missing planning dir is a failure here and a SKIP only on hosted CI)
+D - scripts/check-adr006-review.sh

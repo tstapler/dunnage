@@ -18,6 +18,7 @@ run_gate() {
   sha=$(git rev-parse --short HEAD)
   # The bench scripts build the gate's binary with Bazel instead of Cargo (see scripts/gate-binary.sh).
   [ "${DC_GATE_SKIP_BUILD:-${DC_GATE_SKIP_CARGO:-0}}" = 1 ] || export DC_BENCH_BAZEL=1
+  export DC_REQUIRE_ADR_REVIEW=${DC_REQUIRE_ADR_REVIEW:-1}   # locally the ADR-006 review check must find the planning dir (Task 6.6.2e); hosted CI leaves it unset
   step() { local name=$1; shift; if "$@" >/dev/null 2>&1; then ok=$((ok+1)); echo "ok:   $name"; else fails=$((fails+1)); echo "FAIL: $name"; fi; }
   while read -r first last cmd; do
     [ -n "${first:-}" ] && [ "${first:0:1}" != "#" ] || continue
