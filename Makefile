@@ -25,7 +25,8 @@ mutants:
 	env -u CARGO_TARGET_DIR cargo mutants --no-shuffle -j 3 $$args
 
 # Copies the gated binary and its stamp only if the stamp's hash equals the hash of the file copied.
-# Task 2.2.1b adds the final `disk-cleanup status` step (reserve files) once the binary has that command.
+# The final `disk-cleanup status` creates the two 1 MiB reserve files (audit.reserve, last_plan.reserve) in the state
+# dir while the disk still has room; its exit code (1 warn, 2 crit) is the verdict, not a failure of the install.
 install-gated:
 	@test -n "$(GATE)" || { echo "usage: make install-gated GATE=<A-E>"; exit 64; }
 	@stamp=$$(git rev-parse --git-dir)/gate-reports/stamp-$(GATE).json; \
@@ -37,4 +38,5 @@ install-gated:
 	mkdir -p "$$state" "$$HOME/.cargo/bin"; \
 	install -m 0755 $$bin "$$HOME/.cargo/bin/disk-cleanup"; \
 	cp "$$stamp" "$$state/gate-stamp.json"; \
+	"$$HOME/.cargo/bin/disk-cleanup" status >/dev/null 2>&1 || true; \
 	echo "installed $$HOME/.cargo/bin/disk-cleanup (stamp gate $(GATE))"
