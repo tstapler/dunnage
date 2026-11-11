@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2015,SC2016,SC2295
-# gate.sh <A|B|C|D|E> [repo-root] | --selftest
+# gate.sh <A|B|C|D|E|F> [repo-root] | --selftest
 # Local stand-in for CI: runs every check the gate requires, on a clean tree, and writes a report bound to the commit.
 # ci/gate.d/*.required (one file per owning story, so stories never edit one shared file) hold lines
 # "<first-gate> <last-gate|-> <command...>" ; a command whose script file is missing is a FAIL, so a gate
 # cannot go green by omitting a check. Every scripts/check-*.sh not listed is run too (and its --selftest if it has one).
 set -u
-order="ABCDE"
+order="ABCDEF"
 rank() { local p=${order%%$1*}; echo ${#p}; }
 
 run_gate() {
   local gate=$1 root=${2:-.} fails=0 ok=0 sha line cmd first last script prev
   cd "$root" || { echo "FAIL: no repo $root"; return 2; }
-  case $gate in A|B|C|D|E) ;; *) echo "usage: gate.sh A|B|C|D|E"; return 64 ;; esac
+  case $gate in A|B|C|D|E|F) ;; *) echo "usage: gate.sh A|B|C|D|E|F"; return 64 ;; esac
   ls ci/gate.d/*.required >/dev/null 2>&1 || { echo "FAIL: ci/gate.d/*.required missing"; return 1; }
   [ -z "$(git status --porcelain)" ] || { echo "FAIL: working tree is not clean; the report must name a commit"; return 1; }
   sha=$(git rev-parse --short HEAD)
@@ -27,7 +27,7 @@ run_gate() {
   done < <(cat ci/gate.d/*.required)
   for script in scripts/check-*.sh; do
     [ -e "$script" ] || continue
-    cat ci/gate.d/*.required | grep -qE "^[A-E] [A-E-] $script( |$)" || step "$script" "$script"
+    cat ci/gate.d/*.required | grep -qE "^[A-F] [A-F-] $script( |$)" || step "$script" "$script"
     if grep -q -- '--selftest' "$script"; then step "$script --selftest" "$script" --selftest; fi
   done
   if [ "${DC_GATE_SKIP_CARGO:-0}" != 1 ]; then
@@ -70,6 +70,7 @@ selftest() {
   export GATE_ARGS_LOG="$d/args.log"; : > "$GATE_ARGS_LOG"
   expect pass "gate B adds the token-site check and its selftest" "GATE B commit .* checks 3 ok 3 failed 0" "$self" B "$d/r"
   if grep -qx -- '--expect-sites 1' "$GATE_ARGS_LOG" && ! grep -qx -- '--expect-sites 0' "$GATE_ARGS_LOG"; then n=$((n+1)); echo "ok: at gate B only the 'B -' argument form ran, not the 'A A' one"; else echo "SELFTEST BAD: argument forms at gate B: $(tr '\n' ',' < "$GATE_ARGS_LOG")"; bad=$((bad+1)); fi
+  expect fail "gate F is accepted, not a usage error, and ranks after C" "required check missing: scripts/check-worktree.sh (needed from gate C)" "$self" F "$d/r"
   expect fail "gate C fails when a required script does not exist yet" "required check missing: scripts/check-worktree.sh" "$self" C "$d/r"
   printf '#!/bin/sh\nexit 1\n' > scripts/check-bad.sh; chmod +x scripts/check-bad.sh; git add -A; git commit -qm bad
   expect fail "a failing unlisted check fails the gate" "FAIL: scripts/check-bad.sh" "$self" A "$d/r"
