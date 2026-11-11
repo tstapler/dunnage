@@ -18,6 +18,7 @@ fn roots(n: usize) -> Vec<PathBuf> {
     (0..n).map(|i| PathBuf::from(format!("/h/r{i}"))).collect()
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn text(r: MarkRefusal, path: &Path, roots: &[PathBuf], real: Option<&Path>) -> String {
     r.text(&RefusalCtx {
         path,
@@ -136,10 +137,15 @@ fn every_text_should_state_what_happened_and_end_with_a_next_action_or_a_period(
         MarkRefusal::LimitReached,
         MarkRefusal::PathTooLong,
         MarkRefusal::StillScanning,
+        MarkRefusal::MountPoint,
+        MarkRefusal::BindMountBelow(PathBuf::from("/h/code/app/bind")),
+        MarkRefusal::OwnState,
+        MarkRefusal::InsideMarked(PathBuf::from("/h/code")),
+        MarkRefusal::ContainsMarked(1),
         MarkRefusal::Engine(SkipReason::ProtectedPath),
     ];
     for r in all {
-        let t = text(r, p, &roots(1), None);
+        let t = text(r.clone(), p, &roots(1), None);
         assert!(!t.is_empty() && !t.contains('\n'), "{r:?}: {t:?}");
         // each text carries an instruction: a verb phrase that tells the owner what to do or what stays safe
         let has_action = [
@@ -151,6 +157,10 @@ fn every_text_should_state_what_happened_and_end_with_a_next_action_or_a_period(
             "press f",
             "Delete these",
             "none (",
+            "Mark a folder inside it",
+            "unmount it first",
+            "never deleted from here",
+            "Unmark",
         ]
         .iter()
         .any(|k| t.contains(k));
@@ -168,9 +178,19 @@ fn paths_in_texts_should_be_escaped() {
         MarkRefusal::SymlinkRow,
         MarkRefusal::ContainsItems(1),
         MarkRefusal::PathTooLong,
+        MarkRefusal::MountPoint,
+        MarkRefusal::BindMountBelow(hostile.clone()),
+        MarkRefusal::OwnState,
+        MarkRefusal::InsideMarked(hostile.clone()),
+        MarkRefusal::ContainsMarked(2),
         MarkRefusal::Engine(SkipReason::OutsideRoot),
     ] {
-        let t = text(r, &hostile, std::slice::from_ref(&hostile), Some(&hostile));
+        let t = text(
+            r.clone(),
+            &hostile,
+            std::slice::from_ref(&hostile),
+            Some(&hostile),
+        );
         assert!(
             !t.chars().any(|c| c.is_control() && c != ' '),
             "{r:?} leaked a control character: {t:?}"
@@ -266,4 +286,30 @@ fn contains_items_should_not_count_the_directory_itself() {
     assert_eq!(count_items_below(&t, root, &|_| true), 19);
     let leaf = t.iter().last().unwrap();
     assert_eq!(count_items_below(&t, leaf, &|_| true), 0);
+}
+
+#[test]
+fn the_rule_m3_to_m6_texts_should_read_as_the_plan_words_them() {
+    let p = Path::new("/h/code/app");
+    assert!(text(MarkRefusal::MountPoint, p, &[], None)
+        .starts_with("/h/code/app is a mount point; the explorer does not delete mount points."));
+    assert!(text(MarkRefusal::OwnState, p, &[], None).contains(
+        "holds disk-cleanup's own state (audit log, plans, cache or config). It is never deleted from here."
+    ));
+    assert_eq!(
+        text(MarkRefusal::BindMountBelow(PathBuf::from("/h/code/app/b")), p, &[], None),
+        "/h/code/app has a bind mount below it (/h/code/app/b); unmount it first. The explorer will not walk into it."
+    );
+    assert!(text(MarkRefusal::ContainsMarked(1), p, &[], None)
+        .starts_with("/h/code/app contains 1 marked item. Unmark it first."));
+    assert!(
+        text(MarkRefusal::ContainsMarked(3), p, &[], None).contains("3 marked items. Unmark them")
+    );
+    assert!(text(
+        MarkRefusal::InsideMarked(PathBuf::from("/h/code")),
+        p,
+        &[],
+        None
+    )
+    .contains("is inside /h/code, which is already marked"));
 }
