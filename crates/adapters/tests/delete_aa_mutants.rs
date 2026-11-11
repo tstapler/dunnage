@@ -12,7 +12,12 @@
 //! Every filesystem effect is inside a `tempfile` directory and every mutation goes through
 //! `RealDirOps::confined_to(<tempdir>)`. `Spy` wraps `RealDirOps` to inject races and count calls. A
 //! watchdog in `Spy` sets the `AbortFlag` after `WATCHDOG_OPS` operations, so a mutant that loops forever
-//! makes the engine return `Err(Refused)` and the test fail, instead of hanging until a timeout.
+//! makes the engine return `Err(Refused)` and the test fail, instead of hanging until a timeout; a 20 s
+//! wall-clock timer does the same for a loop that performs no operation.
+//!
+//! This file is named to sort before `delete_adversarial.rs`: `cargo test` runs integration test binaries in
+//! name order and stops at the first failure, so a mutant that makes a later suite spin forever is caught
+//! here first.
 
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
@@ -124,9 +129,17 @@ struct Spy {
 
 impl Spy {
     fn new(base: &Path) -> Spy {
+        // Wall-clock watchdog for a loop that never reaches the engine's per-operation `tick`, but does
+        // reach its `check_abort` at the top of the run loop.
+        let abort = Arc::new(AbortFlag::new());
+        let watchdog = abort.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(20));
+            watchdog.set();
+        });
         Spy {
             inner: RealDirOps::confined_to(base),
-            abort: Arc::new(AbortFlag::new()),
+            abort,
             stat_at: Box::new(|_, _| StatAct::Real),
             unlink: Box::new(|_, _, _| UnlinkAct::Real),
             open_dir: Box::new(|_, _| OpenAct::Real),
@@ -1086,5 +1099,23 @@ fn stat_info_should_fall_back_to_plain_stat_with_exact_bits_When_statx_returns_E
     assert!(
         text.contains("1 passed"),
         "the child test did not run: {text}"
+    );
+}
+
+#[test]
+fn scan_should_buffer_at_most_DELETE_BATCH_subdirectory_names_per_level_When_the_directory_is_wide()
+{
+    let fx = Fx::new();
+    for i in 0..=DELETE_BATCH {
+        fs::create_dir(fx.nm.join(format!("d{i:04}"))).unwrap();
+    }
+    let spy = fx.spy();
+    let f = fx.run(&spy, &fx.policy()).unwrap();
+    assert!(!exists(&fx.nm));
+    assert_eq!(f.entries_removed, DELETE_BATCH as u64 + 2);
+    assert_eq!(
+        spy.reads.load(Ordering::SeqCst),
+        DELETE_BATCH + 1 + 3,
+        "one scan per empty child, plus three of the top level: DELETE_BATCH names, the one that did not fit, none"
     );
 }
