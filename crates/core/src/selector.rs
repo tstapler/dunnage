@@ -283,6 +283,26 @@ pub struct Selection {
     pub steam_saves: Option<Discard>,
     pub worktree_ignored: Option<Discard>,
     pub only: Vec<PathBuf>,
+    /// How the walking kinds scan; not part of the item set, so never bound into the plan-id.
+    pub scan: ScanControl,
+}
+
+/// `--max-seconds`, `--rescan` and `--no-cache` as the kinds that walk the disk read them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ScanControl {
+    /// Walk deadline in seconds; `None` (or 0) is unbounded.
+    pub max_seconds: Option<u64>,
+    /// Read no walker cache, write a fresh one.
+    pub rescan: bool,
+    /// Read and write no walker cache.
+    pub no_cache: bool,
+}
+
+impl ScanControl {
+    /// The deadline, with `--max-seconds 0` meaning no limit like `scan`.
+    pub fn deadline_secs(&self) -> Option<u64> {
+        self.max_seconds.filter(|n| *n > 0)
+    }
 }
 
 impl Selection {
@@ -350,6 +370,7 @@ impl Selection {
             steam_saves: None,
             worktree_ignored: None,
             only: Vec::new(),
+            scan: ScanControl::default(),
         }
     }
 

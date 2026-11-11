@@ -223,6 +223,8 @@ pub struct RunReport {
     pub selection: Selection,
     /// The `--only` values dropped that way; always empty under `Strict`, which refuses instead.
     pub stale_only: Vec<PathBuf>,
+    /// `Some(N)` when a walking kind hit `--max-seconds N`.
+    pub partial_scan: Option<u64>,
 }
 
 pub struct Executor<'a> {
@@ -510,6 +512,17 @@ impl<'a> Executor<'a> {
                 avail.notes.extend(t.plan_notes(env, sel));
             }
         }
+        let partial_scan = self
+            .targets
+            .iter()
+            .filter(|t| t.selectors().iter().any(|s| sel.selects(*s)) && !avail.is_unavailable(**t))
+            .filter_map(|t| t.partial_scan())
+            .max();
+        if let (Some(n), true) = (partial_scan, applying) {
+            avail.notes.push(format!(
+                "WARNING: PARTIAL SCAN (hit --max-seconds {n}): the picture is incomplete; build dirs of a lockfile cluster are kept."
+            ));
+        }
         by_kind.push(("plan_notes", millis(notes_start)));
         let discover_ms = millis(discover_start);
         let plan_start = Instant::now();
@@ -541,7 +554,10 @@ impl<'a> Executor<'a> {
                 selection: narrowed.clone(),
                 stale: stale_only,
             };
-            return Ok(self.plan_report(planned, plan_id, fs_before, avail.notes, stage, by_kind));
+            let mut report =
+                self.plan_report(planned, plan_id, fs_before, avail.notes, stage, by_kind);
+            report.partial_scan = partial_scan;
+            return Ok(report);
         };
 
         hooks.step("plan_id_gate");
@@ -700,6 +716,7 @@ impl<'a> Executor<'a> {
             discover_by_kind: by_kind,
             selection: sel.clone(),
             stale_only: Vec::new(),
+            partial_scan,
         })
     }
 
@@ -808,6 +825,7 @@ impl<'a> Executor<'a> {
             discover_by_kind,
             selection,
             stale_only,
+            partial_scan: None,
         }
     }
 

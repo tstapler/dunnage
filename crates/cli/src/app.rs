@@ -315,7 +315,7 @@ fn plan_mode(cli: &Cli, sel: &Selection, registered: &[SelectorId], p: &Ports, i
             unreadable: 0,
         },
         fs: Some(fs.clone()),
-        partial_scan: None,
+        partial_scan: report.partial_scan,
         not_built: unbuilt(registered),
         notes: [
             report.notes.clone(),

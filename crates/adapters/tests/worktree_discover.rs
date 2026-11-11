@@ -12,7 +12,7 @@ use std::process::Command;
 use std::sync::Mutex;
 
 use disk_cleanup_adapters::targets::worktree_discover::{
-    collect_repos, discover_worktrees, git_dir_parents,
+    collect_repos, discover_worktrees, git_dir_parents, git_dir_parents_until,
 };
 use disk_cleanup_adapters::RealCommandRunner;
 use disk_cleanup_core::ports::{Cmd, CmdOutput, CommandRunner};
@@ -261,4 +261,23 @@ fn discovery_should_mark_a_locked_entry_and_a_prunable_one() {
     assert_eq!(by("agent-lock").entry.locked.as_deref(), Some("mine"));
     assert!(by("agent-gone").entry.prunable);
     assert!(by("agent-gone").ident.is_none());
+}
+
+#[test]
+fn git_dir_parents_until_should_stop_and_say_so_When_the_deadline_has_passed() {
+    let (_t, p) = tmp();
+    for n in ["a", "b", "c"] {
+        fs::create_dir_all(p.join(n).join(".git")).unwrap();
+    }
+    let roots = std::slice::from_ref(&p);
+
+    let (all, cut) = git_dir_parents_until(roots, 6, None);
+    assert_eq!((all.len(), cut), (3, false));
+    let far = std::time::Instant::now() + std::time::Duration::from_secs(3600);
+    assert_eq!(git_dir_parents_until(roots, 6, Some(far)), (all, false));
+
+    let past = std::time::Instant::now();
+    let (found, cut) = git_dir_parents_until(roots, 6, Some(past));
+    assert!(cut, "a walk past its deadline is reported as cut");
+    assert!(found.is_empty());
 }

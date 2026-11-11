@@ -103,20 +103,18 @@ impl RawBuildDir {
     }
 }
 
-/// `--rescan` gives `cache: None` (the walker cache is neither read nor trusted); `--max-seconds` becomes
-/// `max_duration`. The walker backend is chosen explicitly: it is the one the spike measured.
+/// `--rescan` keeps the cache config with `rescan: true` (existing records are neither read nor trusted, fresh
+/// ones are written); no `walker_cache` (`--no-cache`) gives `cache: None`, which reads and writes nothing;
+/// `--max-seconds` becomes `max_duration`. The walker backend is chosen explicitly: it is the one the spike measured.
 pub fn scan_options(roots: &RootSet, opts: &BuildOpts) -> ScanOptions {
     let mut so = ScanOptions::new(roots.scan_roots().to_vec());
     so.backend = BackendChoice::Walker;
     so.max_duration = opts.max_duration;
-    so.cache = match (&opts.walker_cache, opts.rescan) {
-        (Some(path), false) => Some(CacheConfig {
-            path: path.clone(),
-            rescan: false,
-            max_age: WALKER_CACHE_MAX_AGE,
-        }),
-        _ => None,
-    };
+    so.cache = opts.walker_cache.as_ref().map(|path| CacheConfig {
+        path: path.clone(),
+        rescan: opts.rescan,
+        max_age: WALKER_CACHE_MAX_AGE,
+    });
     so
 }
 

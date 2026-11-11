@@ -160,6 +160,12 @@ pub trait Target: Send + Sync {
         Vec::new()
     }
 
+    /// `Some(N)` when the last `discover` was cut short by `--max-seconds N`: sizes are lower bounds and the
+    /// plan says so. Targets that do not walk keep the default.
+    fn partial_scan(&self) -> Option<u64> {
+        None
+    }
+
     /// Whether `execute` of `c` ended by leaving its command running in the kernel because the run was
     /// interrupted (Story 4.3.2). The executor then records the item as `Status::Running` and the run as
     /// interrupted.

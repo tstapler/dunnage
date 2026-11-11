@@ -240,10 +240,83 @@ fn partial_scan_should_set_partial_scan_keep_clustered_build_dirs_and_rescan_sho
     let cut = discover_build_dirs(&env, &o).unwrap();
     assert!(cut.partial_scan, "a walk past --max-seconds is truncated");
 
-    // --rescan: the walker cache is neither read nor trusted
+    // --rescan: existing records are neither read nor trusted, fresh ones are written (`rescan: true`);
+    // no cache path (`--no-cache`) reads and writes nothing
     let mut o = opts();
-    o.walker_cache = Some(f.home.join("walker.cache"));
-    assert!(scan_options(&roots, &o).cache.is_some());
-    o.rescan = true;
     assert!(scan_options(&roots, &o).cache.is_none());
+    o.walker_cache = Some(f.home.join("walker.cache"));
+    assert!(!scan_options(&roots, &o).cache.unwrap().rescan);
+    o.rescan = true;
+    assert!(scan_options(&roots, &o).cache.unwrap().rescan);
+}
+
+#[test]
+fn walker_cache_counters_should_follow_rescan_and_no_cache_When_the_cache_is_warm() {
+    let f = fixture();
+    for n in ["a", "b", "c"] {
+        let nm = node_checkout(&f.code.join(n), Some(n));
+        set_age(&nm.join("x"), 5 * DAY);
+        set_age(&nm, 5 * DAY);
+    }
+    let roots = roots_for(&f);
+    let ops = RealDirOps::confined_to(&f.home);
+    let (probe, clock) = (FakeProbe::new(), FakeClock::at(now_epoch()));
+    let env = BuildEnv {
+        ops: &ops,
+        roots: &roots,
+        probe: &probe,
+        clock: &clock,
+    };
+    let cache = f.home.join("walker.cache");
+    let with_cache = || {
+        let mut o = opts();
+        o.walker_cache = Some(cache.clone());
+        o
+    };
+    let stamp = |c: &std::path::Path| std::fs::metadata(c).and_then(|m| m.modified());
+    let backdate = |c: &std::path::Path| {
+        let old = std::time::SystemTime::now() - Duration::from_secs(3600);
+        std::fs::File::options()
+            .write(true)
+            .open(c)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        stamp(c).unwrap()
+    };
+
+    let cold = discover_build_dirs(&env, &with_cache()).unwrap();
+    assert_eq!(cold.dirs_cached, 0, "nothing cached on the first run");
+    assert!(cold.dirs_listed > 0);
+    assert!(cache.is_file(), "the first run writes the cache");
+
+    let warm = discover_build_dirs(&env, &with_cache()).unwrap();
+    assert!(
+        warm.dirs_cached > 0,
+        "a warm run reuses unchanged directories"
+    );
+
+    // --rescan: reads no record, rewrites the file
+    let before = backdate(&cache);
+    let mut o = with_cache();
+    o.rescan = true;
+    let re = discover_build_dirs(&env, &o).unwrap();
+    assert_eq!(re.dirs_cached, 0, "--rescan trusts no cached directory");
+    assert_eq!(re.dirs_listed, cold.dirs_listed);
+    assert!(
+        stamp(&cache).unwrap() > before,
+        "--rescan rewrites the cache"
+    );
+    assert_eq!(re.items.len(), warm.items.len());
+
+    // --no-cache: reads nothing, leaves the file as it was, and creates none
+    let before = backdate(&cache);
+    let bytes = std::fs::read(&cache).unwrap();
+    let nc = discover_build_dirs(&env, &opts()).unwrap();
+    assert_eq!(nc.dirs_cached, 0);
+    assert_eq!(stamp(&cache).unwrap(), before);
+    assert_eq!(std::fs::read(&cache).unwrap(), bytes);
+    std::fs::remove_file(&cache).unwrap();
+    discover_build_dirs(&env, &opts()).unwrap();
+    assert!(!cache.exists(), "--no-cache writes no cache");
 }

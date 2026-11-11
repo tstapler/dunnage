@@ -28,7 +28,7 @@ use disk_cleanup_core::{
 use crate::dirops::{open_verified_root, DirOps};
 use crate::mtime_probe::NewestStore;
 use crate::targets::worktree_discover::{
-    collect_repos, discover_worktrees, git_dir_parents, parse_porcelain_z, WorktreeSite,
+    collect_repos, discover_worktrees, git_dir_parents_until, parse_porcelain_z, WorktreeSite,
 };
 use crate::targets::worktree_probe::{guard_worktree, last_commit, ProbeEnv, WorktreeProbed};
 use crate::treestat::{measure, MeasureOpts};
@@ -54,6 +54,8 @@ struct State {
     unread: HashSet<CandidateId>,
     warnings: Vec<String>,
     store: NewestStore,
+    /// `--max-seconds N` cut the repo search short.
+    partial: Option<u64>,
 }
 
 pub struct WorktreeTarget<D: DirOps> {
@@ -263,10 +265,21 @@ impl<D: DirOps + 'static> Target for WorktreeTarget<D> {
         } else {
             selection.roots.clone()
         };
-        let seeds = git_dir_parents(&roots, REPO_SEARCH_DEPTH);
+        let deadline = selection
+            .scan
+            .deadline_secs()
+            .map(|n| (n, std::time::Instant::now() + Duration::from_secs(n)));
+        let (seeds, cut) =
+            git_dir_parents_until(&roots, REPO_SEARCH_DEPTH, deadline.map(|(_, at)| at));
         let repos = collect_repos(env.runner, &seeds);
         let found = discover_worktrees(env.runner, &repos.repos);
         let mut warnings = repos.warnings;
+        let partial = deadline.filter(|_| cut).map(|(n, _)| n);
+        if let Some(n) = partial {
+            warnings.push(format!(
+                "worktrees: repo search stopped by --max-seconds {n}; worktrees of repos not reached are not listed"
+            ));
+        }
         warnings.extend(found.warnings);
         {
             let mut st = lock(&self.state);
@@ -274,6 +287,7 @@ impl<D: DirOps + 'static> Target for WorktreeTarget<D> {
             st.items.clear();
             st.unread.clear();
             st.warnings = warnings;
+            st.partial = partial;
         }
         // Probes are independent per site (a few `git` runs and a tree measure each): run them side by side,
         // keep the order git listed them in.
@@ -361,6 +375,10 @@ impl<D: DirOps + 'static> Target for WorktreeTarget<D> {
                 freed: Freed::default(),
             }),
         }
+    }
+
+    fn partial_scan(&self) -> Option<u64> {
+        lock(&self.state).partial
     }
 
     fn detail(&self, c: &Candidate) -> Option<String> {
