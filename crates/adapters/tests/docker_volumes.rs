@@ -94,12 +94,12 @@ fn docker_volumes_should_need_own_id_even_When_docker_family_named() {
     let env = rig.env();
     let volumes = DockerVolumesTarget::new(None);
     let tagged = DockerUnusedImagesTarget::new(None);
-    let dangling = DockerImagesTarget::new(None);
+    let untagged = DockerImagesTarget::new(None);
 
     // `--kinds docker` selects neither volumes nor tagged images, and needs no plan-id
     let docker_only = select(&[SelectorId::Docker]);
     assert!(!docker_only.needs_plan_id());
-    let r = plan_then_apply(vec![&volumes, &tagged, &dangling], &env, &docker_only);
+    let r = plan_then_apply(vec![&volumes, &tagged, &untagged], &env, &docker_only);
     assert_eq!(rig.runner.mutating_calls(), 0);
     assert_eq!(
         r.plan

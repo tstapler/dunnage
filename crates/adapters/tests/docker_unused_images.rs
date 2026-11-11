@@ -109,15 +109,15 @@ fn image_used_by_a_container_should_be_referenced_even_when_the_listing_count_is
 fn default_apply_should_not_touch_tagged_images_When_no_kinds() {
     assert!(!KindSelector::default_apply().contains(SelectorId::DockerImages));
     assert!(!KindSelector::default_apply().contains(SelectorId::DockerVolumes));
-    // `--kinds docker` (dangling and cache) never reaches the tagged images either
+    // `--kinds docker` (dangling images and cache) never reaches the tagged images either
     let s = three_tagged();
     let rig = Rig::new(&s);
     let env = rig.env();
     let unused = DockerUnusedImagesTarget::new(None);
-    let dangling = DockerImagesTarget::new(None);
+    let untagged = DockerImagesTarget::new(None);
     let sel = select(&[SelectorId::Docker]);
 
-    let r = plan_then_apply(vec![&unused, &dangling], &env, &sel);
+    let r = plan_then_apply(vec![&unused, &untagged], &env, &sel);
 
     assert_eq!(
         rig.runner.mutating_calls(),

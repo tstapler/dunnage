@@ -16,7 +16,7 @@ use disk_cleanup_core::{ApplyToken, SelectorId, SkipReason, Status};
 fn dangling_scene(n: usize) -> Scene {
     let mut s = Scene::default();
     for i in 0..n {
-        s.images.push(Img::dangling(&format!("{i:012x}"), "886MB"));
+        s.images.push(Img::untagged(&format!("{i:012x}"), "886MB"));
     }
     s.cache.push(("cache1".into(), "5.8GB".into(), false));
     s

@@ -1,4 +1,10 @@
-#![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    dead_code,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::unnecessary_wraps,
+    clippy::unused_self
+)]
 //! A scripted Docker daemon for the target tests: images, containers, volumes and build cache described as
 //! data, answered through a `FakeCommandRunner` in the exact shapes of the 29.8.2 fixtures. Nothing here can
 //! reach a real daemon.
@@ -92,7 +98,7 @@ pub struct Img {
 }
 
 impl Img {
-    pub fn dangling(id: &str, size: &str) -> Img {
+    pub fn untagged(id: &str, size: &str) -> Img {
         Img {
             id: id.into(),
             repo: None,
