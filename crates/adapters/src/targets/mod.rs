@@ -4,6 +4,7 @@ pub mod btrfs_report;
 pub mod build_dir;
 pub mod cache;
 pub mod cache_cmd;
+pub mod fixture_kind;
 pub mod symlink_note;
 pub mod worktree_discover;
 pub mod worktree_probe;

@@ -49,6 +49,8 @@ pub use cache_targets::{
     cache_table, cache_table_with_availability, CacheRow, CacheSource, OsSet, RowAvailability,
     CACHE_ROWS,
 };
+#[cfg(feature = "test-support")]
+pub use candidate::FixtureFacts;
 pub use candidate::{
     BtrfsFacts, BuildDirFacts, BuildDirFlavor, CacheFacts, Candidate, DockerFacts, KindFacts,
     Locator, SteamFacts, WorktreeFacts, CANDIDATE_SCHEMA,

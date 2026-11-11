@@ -339,19 +339,30 @@ fn execute_should_delete_only_through_delete_tree_When_the_ops_are_counted() {
 }
 
 #[test]
-fn execute_should_refuse_command_rows_and_leave_them_to_story_232() {
+fn execute_should_run_the_tool_for_a_command_row_and_never_delete_the_path_itself() {
     let f = fixture();
     let t = target(&f);
     let pip = f.home.join(".cache/pip");
     fill(&pip, 1, 1024);
     let rig = Rig::with_pip(&f, Some(&pip));
+    rig.runner
+        .on(&["pip", "cache", "purge"], Ok(CmdOutput::default()));
     let env = rig.env();
     let cands = t.discover(&env, &caches());
     let c = by_label(&cands, "pip cache");
 
-    let err = t.execute(c, &env, &ApplyToken::for_tests()).unwrap_err();
-    assert_eq!(err.error, DeleteError::Refused);
-    assert!(pip.join("f0").exists());
+    let freed = t.execute(c, &env, &ApplyToken::for_tests()).unwrap();
+    assert_eq!(freed.attributed_bytes.0, 0, "the fake tool removed nothing");
+    assert_eq!(
+        rig.runner
+            .calls_of(disk_cleanup_core::testing::CallKind::RunMutating)
+            .len(),
+        1
+    );
+    assert!(
+        pip.join("f0").exists(),
+        "a command row is emptied by its tool, not by delete_tree"
+    );
 }
 
 #[test]
