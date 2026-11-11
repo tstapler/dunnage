@@ -7,6 +7,7 @@ pub mod compose;
 pub mod confine;
 pub mod dirs;
 pub mod env;
+pub mod explore;
 pub mod kinds;
 pub mod run_guard;
 pub mod token;

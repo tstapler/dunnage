@@ -4,7 +4,7 @@
 //! Read-only apart from the cache write the walker itself performs.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{sync_channel, SyncSender};
 use std::sync::{Arc, Once};
 use std::time::{Duration, Instant};
@@ -22,11 +22,17 @@ pub const QUEUE_DEPTH: usize = 64;
 /// Name of the scan thread; the panic hook below recognises it.
 pub const SCAN_THREAD: &str = "explore-scan";
 
+/// Runs once per scan, right after it starts, with the scan roots and a sender on the scan's own channel.
+/// The wiring uses it for the side messages (`Headroom`, `Facts`) that share the channel with the batches.
+pub type Companion = Arc<dyn Fn(&[PathBuf], SyncSender<ScanMsg>) + Send + Sync>;
+
 /// Walks with a [`Backend`] (the real walker, or a test double).
 #[derive(Clone)]
 pub struct WalkerScanSource {
     backend: Arc<dyn Backend + Send + Sync>,
     save_guard: Option<SaveGuard>,
+    companion: Option<Companion>,
+    activity: Option<Arc<AtomicUsize>>,
 }
 
 impl WalkerScanSource {
@@ -34,7 +40,24 @@ impl WalkerScanSource {
         WalkerScanSource {
             backend: Arc::new(backend),
             save_guard: None,
+            companion: None,
+            activity: None,
         }
+    }
+
+    /// Called at the start of every scan with a sender on its channel (see [`Companion`]).
+    #[must_use]
+    pub fn with_companion(mut self, companion: Companion) -> WalkerScanSource {
+        self.companion = Some(companion);
+        self
+    }
+
+    /// The counter goes up while a walk is in progress and down before its final message is sent, so the
+    /// wiring can answer "is something still being scanned" without seeing the tree.
+    #[must_use]
+    pub fn with_activity(mut self, activity: Arc<AtomicUsize>) -> WalkerScanSource {
+        self.activity = Some(activity);
+        self
     }
 
     /// The free-space policy asked just before the cache is written (see `cache_paint::save_guard`).
@@ -67,7 +90,15 @@ impl ScanSource for WalkerScanSource {
         let (tx, rx) = sync_channel(QUEUE_DEPTH);
         let cancel = Arc::new(AtomicBool::new(false));
         let save = Arc::new(AtomicBool::new(true));
+        if let Some(c) = &self.companion {
+            c(roots, tx.clone());
+        }
+        let busy = self.activity.as_ref().map(|a| {
+            a.fetch_add(1, Ordering::SeqCst);
+            Busy(Arc::clone(a))
+        });
         let job = Job {
+            busy,
             backend: Arc::clone(&self.backend),
             guard: self.save_guard.clone(),
             roots: roots.to_vec(),
@@ -88,7 +119,17 @@ impl ScanSource for WalkerScanSource {
     }
 }
 
+/// Counts a walk as in progress until it is dropped.
+struct Busy(Arc<AtomicUsize>);
+
+impl Drop for Busy {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
 struct Job {
+    busy: Option<Busy>,
     backend: Arc<dyn Backend + Send + Sync>,
     guard: Option<SaveGuard>,
     roots: Vec<PathBuf>,
@@ -99,8 +140,9 @@ struct Job {
 }
 
 impl Job {
-    fn run(self) {
+    fn run(mut self) {
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.walk()));
+        self.busy = None;
         let msg = match outcome {
             Ok(Ok(summary)) => ScanMsg::Finished(summary),
             Ok(Err(e)) => ScanMsg::SourceFailed(format!("scan failed: {e}")),

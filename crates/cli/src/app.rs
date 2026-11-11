@@ -151,6 +151,11 @@ pub fn run(cli: &Cli, p: &Ports, io: &mut Io) -> i32 {
             io.stderr(&s.stderr);
             s.code
         }
+        // `main` dispatches `explore` before any `Ports` exist (it has its own composition root).
+        Some(Command::Explore(_)) => {
+            io.stderr("error: explore runs from the binary, not from this entry point.\n");
+            64
+        }
         Some(Command::Kinds) => {
             let extra: Vec<SelectorId> = p
                 .registered()

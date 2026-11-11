@@ -175,6 +175,9 @@ pub enum Command {
         #[command(subcommand)]
         command: SteamCommand,
     },
+    /// Interactive disk usage explorer; read-only (nothing is deleted without the reviewed `d` flow)
+    #[command(long_about = EXPLORE_LONG_ABOUT, after_help = EXPLORE_AFTER_HELP)]
+    Explore(ExploreArgs),
     /// Check the audit log: audit verify [--log PATH] [--json] (exit 0 clean, 2 a deletion outside the
     /// allowed roots, 74 log unreadable)
     Audit {
@@ -182,6 +185,29 @@ pub enum Command {
         command: AuditCommand,
     },
 }
+
+/// The first line of `explore --help` (UX-T20): the screen-reader pointer comes before anything else.
+pub const EXPLORE_LONG_ABOUT: &str = "\
+Use --text with a screen reader.
+
+Browse where the disk space went. On a terminal this opens an interactive explorer; on a pipe, with
+--text or with --json it prints the same numbers as plain text or one JSON document. The scan stays on one
+filesystem (other filesystems show as 'x' rows). PATH only chooses what is displayed; items can be marked
+only below the folders the cleaner may touch (the 'roots' of config.toml).";
+
+const EXPLORE_AFTER_HELP: &str = "\
+Exit codes: 0 ok, 2 a PATH does not exist or is unreadable, 64 usage, 74 the terminal cannot be set up,
+            130 interrupted (Ctrl-C, SIGINT), 143 (SIGTERM, SIGHUP, SIGQUIT)
+Environment:
+  DISK_CLEANUP_PLAIN=1  always print the text view
+  NO_COLOR              turn colour off (--color always overrides it)";
+
+/// What `explore` refuses with exit 64 (UX-T2; owner decision 2026-11-10: the explorer deletes with a key,
+/// never with a flag).
+pub const EXPLORE_NO_APPLY: &str = "error: explore has no --apply. In the explorer mark items with Space, press p for the plan and d to delete after typing the count; from the shell, dry run 'disk-cleanup' and use a Next: line. Nothing was deleted.";
+const EXPLORE_NO_CROSS: &str = "error: explore has no --cross-device: it never crosses into another filesystem (other filesystems show as 'x' rows). Nothing was deleted.";
+const EXPLORE_NO_MOUSE: &str = "error: explore has no --mouse: mouse reporting stays off so the terminal's own selection copies paths. Nothing was deleted.";
+const EXPLORE_NO_VERBOSITY: &str = "error: explore has no -q or -v: it prints one fixed view. Use --text or --json for plain output. Nothing was deleted.";
 
 const SCAN_AFTER_HELP: &str = "\
 The first run is cold: the old metascope/walker.cache is not migrated; this command keeps its own scan.cache.
@@ -251,6 +277,128 @@ pub struct ScanArgs {
     /// Stop walking after this many seconds and report partial results (0 = no cap)
     #[arg(long, default_value_t = 120)]
     pub max_seconds: u64,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ExploreSortArg {
+    #[default]
+    Usage,
+    Apparent,
+    Meta,
+    Items,
+    Name,
+}
+
+/// `disk-cleanup explore` (Story 6.5.4, `tui/ux-explorer.md` 1.1). The hidden flags exist only to be refused
+/// with the right text: clap's own "unexpected argument" would not say that nothing was deleted.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Args, Debug, Default)]
+pub struct ExploreArgs {
+    /// Directories to show (default: /); same as repeated --root
+    pub paths: Vec<PathBuf>,
+    /// Same as a PATH: what is displayed and scanned, never a folder the cleaner may touch
+    #[arg(long = "root", value_name = "PATH")]
+    pub root: Vec<PathBuf>,
+    /// Walker threads (default: the number of CPUs, at most 16)
+    #[arg(long, value_name = "N")]
+    pub jobs: Option<usize>,
+    /// Initial sort
+    #[arg(
+        long,
+        value_enum,
+        value_name = "usage|apparent|meta|items|name",
+        default_value = "usage"
+    )]
+    pub sort: ExploreSortArg,
+    /// Stop scanning after this many seconds and keep the partial tree
+    #[arg(long, value_name = "N")]
+    pub max_seconds: Option<u64>,
+    /// Read and write no scan cache
+    #[arg(long, conflicts_with = "rescan")]
+    pub no_cache: bool,
+    /// Ignore the cached scan, walk again and refresh the cache
+    #[arg(long)]
+    pub rescan: bool,
+    /// Print the text view, no interactive screen
+    #[arg(long)]
+    pub text: bool,
+    /// Hidden alias for --text
+    #[arg(long, hide = true)]
+    pub plain: bool,
+    /// Text and JSON: levels listed below each root
+    #[arg(long, value_name = "N", default_value_t = 1)]
+    pub depth: usize,
+    /// Text and JSON: rows per directory (0 prints every row)
+    #[arg(long, value_name = "N", default_value_t = 10)]
+    pub top: usize,
+    /// Text: draw a share bar on each row
+    #[arg(long)]
+    pub bars: bool,
+    /// Stay on one filesystem (the default; accepted for habit)
+    #[arg(short = 'x', long = "one-file-system")]
+    pub one_file_system: bool,
+    #[arg(long, hide = true)]
+    pub apply: bool,
+    #[arg(long, hide = true, value_name = "ID")]
+    pub plan_id: Option<String>,
+    #[arg(long, hide = true, value_name = "LIST")]
+    pub kinds: Option<String>,
+    #[arg(long, hide = true, value_name = "LIST")]
+    pub except: Option<String>,
+    #[arg(long, hide = true, value_name = "PATH")]
+    pub only: Vec<String>,
+    #[arg(long, hide = true)]
+    pub force: bool,
+    #[arg(short = 'y', long, hide = true)]
+    pub yes: bool,
+    #[arg(short = 'n', long = "dry-run", hide = true)]
+    pub dry_run: bool,
+    #[arg(short = 'q', long = "quiet", hide = true)]
+    pub quiet: bool,
+    #[arg(short = 'v', long = "verbose", hide = true)]
+    pub verbose: bool,
+    #[arg(long, hide = true)]
+    pub cross_device: bool,
+    #[arg(long, hide = true)]
+    pub mouse: bool,
+}
+
+impl ExploreArgs {
+    /// The text of the first refused flag (the order of the plan's list), if any was given.
+    pub fn refusal(&self) -> Option<&'static str> {
+        let deleting = self.apply
+            || self.plan_id.is_some()
+            || self.kinds.is_some()
+            || self.except.is_some()
+            || !self.only.is_empty()
+            || self.force
+            || self.yes
+            || self.dry_run;
+        if deleting {
+            Some(EXPLORE_NO_APPLY)
+        } else if self.quiet || self.verbose {
+            Some(EXPLORE_NO_VERBOSITY)
+        } else if self.cross_device {
+            Some(EXPLORE_NO_CROSS)
+        } else if self.mouse {
+            Some(EXPLORE_NO_MOUSE)
+        } else {
+            None
+        }
+    }
+
+    /// Every directory to show: the PATHs, then the `--root` values, or `/` when there are none.
+    pub fn display_roots(&self) -> Vec<PathBuf> {
+        let mut all: Vec<PathBuf> = self.paths.iter().chain(&self.root).cloned().collect();
+        if all.is_empty() {
+            all.push(PathBuf::from("/"));
+        }
+        all
+    }
+
+    pub fn wants_text(&self) -> bool {
+        self.text || self.plain
+    }
 }
 
 #[derive(Args, Debug)]
@@ -383,6 +531,28 @@ fn forced(args: &[String]) -> bool {
         .any(|a| matches!(a.as_str(), "--force" | "-y" | "--yes"))
 }
 
+/// A refused flag of `explore`, given after the subcommand or (for the cleaner's own flags) before it.
+fn explore_refusal(cli: &Cli) -> Option<&'static str> {
+    let Some(Command::Explore(args)) = &cli.command else {
+        return None;
+    };
+    args.refusal().or({
+        if cli.apply
+            || cli.dry_run
+            || cli.plan_id.is_some()
+            || cli.kinds.is_some()
+            || cli.except.is_some()
+            || !cli.only.is_empty()
+        {
+            Some(EXPLORE_NO_APPLY)
+        } else if cli.quiet || cli.verbose {
+            Some(EXPLORE_NO_VERBOSITY)
+        } else {
+            None
+        }
+    })
+}
+
 /// Parses `args` (without the program name). Never prints: the caller writes `stdout` and `stderr`.
 pub fn parse<I, T>(args: I) -> Parsed
 where
@@ -398,7 +568,14 @@ where
         .map(|a| a.to_string_lossy().into_owned())
         .collect();
     match Cli::try_parse_from(&raw) {
-        Ok(cli) => Parsed::Run(Box::new(cli)),
+        Ok(cli) => match explore_refusal(&cli) {
+            Some(text) => Parsed::Exit {
+                code: 64,
+                stdout: String::new(),
+                stderr: format!("{text}\n"),
+            },
+            None => Parsed::Run(Box::new(cli)),
+        },
         Err(e) if matches!(e.kind(), ErrorKind::DisplayHelp | ErrorKind::DisplayVersion) => {
             Parsed::Exit {
                 code: 0,

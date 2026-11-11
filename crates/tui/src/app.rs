@@ -78,6 +78,8 @@ pub struct ExplorerConfig {
     pub cache_age: Option<String>,
     pub initial_headroom: Result<FsSnapshot, String>,
     pub headroom_path: PathBuf,
+    /// Shown in the footer until the first key (the wiring's `another apply is running` note).
+    pub start_note: Option<String>,
 }
 
 impl ExplorerConfig {
@@ -100,6 +102,7 @@ impl ExplorerConfig {
             now_unix: 0,
             cache_age: None,
             initial_headroom: Err("not read yet".to_string()),
+            start_note: None,
         }
     }
 }
@@ -194,6 +197,7 @@ impl App {
     pub fn new(cfg: ExplorerConfig, ports: Ports, size: (u16, u16)) -> App {
         let (aux_tx, aux_rx) = channel();
         let state = ExploreState::new(ViewState::new(cfg.sort));
+        let start_note = cfg.start_note.clone();
         App {
             headroom: cfg.initial_headroom.clone(),
             facts: cfg.facts.clone(),
@@ -218,7 +222,7 @@ impl App {
             plan: None,
             stack: Vec::new(),
             root_note: None,
-            notice: None,
+            notice: start_note,
             diagnostics: Vec::new(),
             banner: None,
             ending: None,

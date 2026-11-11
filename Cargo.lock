@@ -459,6 +459,7 @@ dependencies = [
  "disk-cleanup-core",
  "disk-cleanup-scan",
  "disk-cleanup-tui",
+ "expectrl",
  "rustix",
  "serde",
  "serde_json",
