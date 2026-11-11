@@ -97,7 +97,7 @@ fn decide_path_common_should_mint_no_witness_for_a_dot_git_directory_so_no_explo
 }
 
 #[test]
-fn delete_tree_should_refuse_dot_git_and_leave_it_When_a_scope_made_for_a_sibling_is_reused() {
+fn safety_explorer_scope_made_for_one_path_refuses_dot_git_and_leaves_it_When_reused() {
     // The review's PoC: an Exact policy deleted `home/code/app/.git`. A scope minted for another path
     // validates only that path.
     let f = fixture();

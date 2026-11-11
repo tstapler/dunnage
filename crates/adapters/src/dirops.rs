@@ -307,6 +307,18 @@ pub fn mount_id_of(path: &Path) -> Option<u64> {
     (sx.stx_mask & StatxFlags::MNT_ID.bits() != 0).then_some(sx.stx_mnt_id)
 }
 
+/// The `statfs` filesystem type (`f_type`) at `path`, `None` when it cannot be read.
+#[cfg(target_os = "linux")]
+#[allow(clippy::unnecessary_cast, clippy::cast_sign_loss)]
+pub fn fs_type_of(path: &Path) -> Option<u64> {
+    rustix::fs::statfs(path).ok().map(|s| s.f_type as u64)
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn fs_type_of(_path: &Path) -> Option<u64> {
+    None
+}
+
 #[cfg(not(target_os = "linux"))]
 pub fn mount_id_of(_path: &Path) -> Option<u64> {
     None

@@ -304,7 +304,7 @@ fn check_plan_id_should_treat_a_future_saved_at_as_stale_When_the_clock_stepped_
 }
 
 #[test]
-fn the_plan_id_should_change_when_a_scan_root_is_replaced_during_the_session_C8() {
+fn safety_explorer_plan_id_binds_the_identity_of_each_scan_root() {
     let (w, marks) = two_marks();
     let before = plan_of(&w, &marks).plan_id();
     w.fs.replace("/home/u/code");

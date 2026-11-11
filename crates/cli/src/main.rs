@@ -108,7 +108,14 @@ fn resolve_roots(cli: &Cli, base: &Dirs) -> Result<RootSet, i32> {
     };
     let cwd = std::env::current_dir().unwrap_or_else(|_| base.home.clone());
     let flag_roots = if cleaner { cli.root.as_slice() } else { &[] };
-    match RootSet::resolve(base, flag_roots, config.roots.as_deref(), &cwd, &real_canon) {
+    match RootSet::resolve_on(
+        base,
+        flag_roots,
+        config.roots.as_deref(),
+        &cwd,
+        &real_canon,
+        &|p| disk_cleanup_core::ports::Fs::fs_type(&disk_cleanup_cli::wiring::env::RealFs, p),
+    ) {
         Ok(r) if cleaner => Ok(with_steam_libraries(r, base)),
         Ok(r) => Ok(r),
         Err(e) if cleaner => Err(root_failure(cli, &e)),

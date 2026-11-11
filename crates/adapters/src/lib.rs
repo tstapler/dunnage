@@ -31,8 +31,8 @@ pub mod treestat;
 
 pub use delete::delete_tree;
 pub use dirops::{
-    mount_id_of, open_parent, open_verified_root, DirOps, RealDirOps, VerifiedParent, VerifiedRoot,
-    DELETE_BATCH,
+    fs_type_of, mount_id_of, open_parent, open_verified_root, DirOps, RealDirOps, VerifiedParent,
+    VerifiedRoot, DELETE_BATCH,
 };
 
 pub use command::RealCommandRunner;

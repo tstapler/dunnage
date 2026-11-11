@@ -86,6 +86,10 @@ impl Fs for RealFs {
     fn read_to_string(&self, path: &Path) -> io::Result<String> {
         std::fs::read_to_string(path)
     }
+
+    fn fs_type(&self, path: &Path) -> Option<u64> {
+        disk_cleanup_adapters::fs_type_of(path)
+    }
 }
 
 /// The plan-mode guard: it never locks and never sees a signal. The real one is Story 2.2.2.

@@ -323,7 +323,7 @@ fn m3_should_compare_with_the_longest_containing_root_When_roots_are_nested() {
 }
 
 #[test]
-fn m4b_should_refuse_a_file_with_the_not_a_folder_text() {
+fn safety_explorer_cannot_mark_a_file_only_folders_When_space_is_pressed() {
     let mut w = world("/home/u", &["/data/x"]);
     w.facts.files.insert("/data/x/notes.txt".into());
     assert_eq!(

@@ -50,7 +50,7 @@ fn ident(p: &Path) -> Identity {
 }
 
 #[test]
-fn a_real_same_device_bind_mount_is_refused_by_the_mark_check_and_stopped_by_the_engine() {
+fn safety_explorer_real_bind_mount_is_refused_by_mark_check_and_stopped_by_the_engine() {
     let dir = tempfile::tempdir().unwrap();
     let base = dir.path().canonicalize().unwrap();
     std::fs::create_dir_all(base.join("src/data")).unwrap();

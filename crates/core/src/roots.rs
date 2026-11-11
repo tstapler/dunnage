@@ -35,14 +35,48 @@ pub type Canon<'a> = &'a dyn Fn(&Path) -> io::Result<(PathBuf, Identity)>;
 /// run-level `FatalError::RootsUnreadable` (exit 2).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RootError {
-    HomeOrAncestor { path: PathBuf },
-    Unreadable { path: PathBuf, errno: i32 },
+    HomeOrAncestor {
+        path: PathBuf,
+    },
+    Unreadable {
+        path: PathBuf,
+        errno: i32,
+    },
+    /// The root lies on a kernel pseudo filesystem (`proc`, `sysfs`, `cgroup`, ...): deleting there changes
+    /// the running system, not files.
+    PseudoFs {
+        path: PathBuf,
+        fs: &'static str,
+        roots_in_use: Vec<PathBuf>,
+    },
+}
+
+/// `statfs` `f_type` values of filesystems no root may sit on, with the name shown to the owner.
+const PSEUDO_FS: [(u64, &str); 9] = [
+    (0x9fa0, "proc"),
+    (0x6265_6572, "sysfs"),
+    (0x0027_e0eb, "cgroup"),
+    (0x6367_7270, "cgroup2"),
+    (0x7363_6673, "securityfs"),
+    (0x6462_6720, "debugfs"),
+    (0x7472_6163, "tracefs"),
+    (0x1cd1, "devpts"),
+    (0x6e73_6673, "nsfs"),
+];
+
+/// The pseudo filesystem type name for an `f_type`, if it is one. `devtmpfs` reports the `tmpfs` magic, so
+/// `resolve_on` also refuses any root at or below `/dev`.
+pub fn pseudo_fs_name(f_type: u64) -> Option<&'static str> {
+    PSEUDO_FS
+        .iter()
+        .find(|(m, _)| *m == f_type)
+        .map(|(_, n)| *n)
 }
 
 impl RootError {
     pub fn exit_code(&self) -> i32 {
         match self {
-            RootError::HomeOrAncestor { .. } => 64,
+            RootError::HomeOrAncestor { .. } | RootError::PseudoFs { .. } => 64,
             RootError::Unreadable { path, errno } => FatalError::RootsUnreadable {
                 path: path.clone(),
                 errno: *errno,
@@ -57,6 +91,21 @@ impl RootError {
                 "error: root is HOME or an ancestor of HOME: {}. Nothing scanned. Pass a directory below your home, for example --root ~/code.",
                 path.display()
             ),
+            RootError::PseudoFs {
+                path,
+                fs,
+                roots_in_use,
+            } => {
+                let used: Vec<String> = roots_in_use
+                    .iter()
+                    .map(|r| r.display().to_string())
+                    .collect();
+                format!(
+                    "error: root {} is on a {fs} filesystem, which is not made of files. Nothing scanned. Use a directory on a disk filesystem (roots in use: {}).",
+                    path.display(),
+                    if used.is_empty() { "none".to_string() } else { used.join(", ") }
+                )
+            }
             RootError::Unreadable { path, errno } => FatalError::RootsUnreadable {
                 path: path.clone(),
                 errno: *errno,
@@ -178,6 +227,20 @@ impl RootSet {
         cwd: &Path,
         canon: Canon<'_>,
     ) -> Result<RootSet, RootError> {
+        RootSet::resolve_on(dirs, flag_roots, config_roots, cwd, canon, &|_| None)
+    }
+
+    /// [`RootSet::resolve`] that also refuses an explicit root on a pseudo filesystem: `fs_type` answers the
+    /// `statfs` `f_type` of a canonical path (`Fs::fs_type`). A default root is skipped like any other
+    /// unusable default.
+    pub fn resolve_on(
+        dirs: &Dirs,
+        flag_roots: &[PathBuf],
+        config_roots: Option<&[PathBuf]>,
+        cwd: &Path,
+        canon: Canon<'_>,
+        fs_type: &dyn Fn(&Path) -> Option<u64>,
+    ) -> Result<RootSet, RootError> {
         let (home, home_id) = canon(&dirs.home).map_err(|e| RootError::Unreadable {
             path: dirs.home.clone(),
             errno: e.raw_os_error().unwrap_or(5),
@@ -213,6 +276,7 @@ impl RootSet {
             }
         };
         if let Some(roots) = explicit {
+            let mut accepted: Vec<PathBuf> = Vec::new();
             for raw in roots {
                 let wanted = expand(&raw, &home, cwd);
                 let (path, id) = canon(&wanted).map_err(|e| RootError::Unreadable {
@@ -222,6 +286,17 @@ impl RootSet {
                 if is_forbidden(&path, id) {
                     return Err(RootError::HomeOrAncestor { path: wanted });
                 }
+                let pseudo = fs_type(&path)
+                    .and_then(pseudo_fs_name)
+                    .or_else(|| path.starts_with("/dev").then_some("devtmpfs"));
+                if let Some(fs) = pseudo {
+                    return Err(RootError::PseudoFs {
+                        path,
+                        fs,
+                        roots_in_use: accepted,
+                    });
+                }
+                accepted.push(path.clone());
                 push(path, id);
             }
         } else {

@@ -1,0 +1,9 @@
+# Story 6.6.5 (review remediation of Epic 6.6): always active.
+safety_explorer_scope_made_for_one_path_refuses_dot_git_and_leaves_it_When_reused   # 6.6.5a: BelowScanRoot witness is per path; .git survives (crates/adapters/tests/explorer_delete_policy.rs)
+safety_explorer_cannot_mark_a_file_only_folders_When_space_is_pressed   # 6.6.5c: NotADirectory (crates/core/tests/explore_mark_check.rs)
+safety_explorer_plan_id_binds_the_identity_of_each_scan_root   # 6.6.5e: replacing a scan root changes the plan-id
+safety_explorer_real_bind_mount_is_refused_by_mark_check_and_stopped_by_the_engine   # 6.6.5f: real bind mount under unshare -rm
+safety_audit_verify_flags_a_partial_result_outside_the_table_and_names_the_path   # 6.6.5g
+safety_audit_verify_flags_an_intent_outside_the_table_even_without_a_result   # 6.6.5g
+safety_explorer_own_state_covers_the_real_directory_behind_a_symlinked_xdg_dir   # 6.6.5h
+safety_explorer_roots_on_pseudo_filesystems_are_refused   # 6.6.5j

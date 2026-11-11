@@ -276,7 +276,7 @@ fn intent(run: &str, kind: &str, path: &str) -> String {
 }
 
 #[test]
-fn verify_should_flag_a_partial_result_outside_the_table_and_name_the_path() {
+fn safety_audit_verify_flags_a_partial_result_outside_the_table_and_names_the_path() {
     let log = vec![
         start("r1", &["/home/u/code"], &[]),
         partial("r1", "node-modules", "/home/u/Documents/x/node_modules"),
@@ -293,7 +293,7 @@ fn verify_should_flag_a_partial_result_outside_the_table_and_name_the_path() {
 }
 
 #[test]
-fn verify_should_flag_an_intent_outside_the_table_even_without_a_result() {
+fn safety_audit_verify_flags_an_intent_outside_the_table_even_without_a_result() {
     let log = vec![
         start("r1", &["/home/u/code"], &[]),
         intent("r1", "node-modules", "/home/u/Documents/x/node_modules"),

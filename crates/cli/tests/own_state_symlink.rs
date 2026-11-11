@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, non_snake_case)]
 //! Task 6.6.5h: a symlinked XDG state directory leaves the audit log unmarkable (review C7), on a real tree.
 
 use disk_cleanup_cli::wiring::explore::canonical_lenient;
@@ -6,7 +6,7 @@ use disk_cleanup_core::explore::mark_check::OwnState;
 use disk_cleanup_core::Dirs;
 
 #[test]
-fn own_state_should_cover_the_real_audit_directory_When_the_state_dir_is_a_symlink() {
+fn safety_explorer_own_state_covers_the_real_directory_behind_a_symlinked_xdg_dir() {
     let tmp = tempfile::tempdir().unwrap();
     let base = tmp.path().canonicalize().unwrap();
     std::fs::create_dir_all(base.join("data/st/disk-cleanup")).unwrap();

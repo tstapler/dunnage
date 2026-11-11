@@ -17,3 +17,10 @@ fn real_fs_lstat_should_report_a_mount_id_for_a_directory_and_a_file_on_linux() 
         RealFs.lstat(&tmp.path().join("f")).unwrap().mnt_id
     );
 }
+
+#[test]
+fn real_fs_fs_type_should_name_proc_as_the_proc_magic_on_linux() {
+    if cfg!(target_os = "linux") && std::path::Path::new("/proc/self").exists() {
+        assert_eq!(RealFs.fs_type(std::path::Path::new("/proc")), Some(0x9fa0));
+    }
+}
