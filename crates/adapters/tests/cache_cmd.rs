@@ -7,7 +7,7 @@ use common::discovery::*;
 
 use std::fs;
 use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Mutex;
 
 use disk_cleanup_adapters::discover_cache::{discover_caches, CacheEnv, CacheItem, CacheVerdict};
@@ -417,7 +417,7 @@ fn root_runs_should_restrict_themselves_to_cache_apt_whatever_HOME_holds() {
     assert_eq!(skip_of(npm), None);
     assert!(matches!(
         npm.candidate.locator(),
-        Locator::Path(p) if *p == PathBuf::from(f.home.join(".npm/_cacache"))
+        Locator::Path(p) if *p == f.home.join(".npm/_cacache")
     ));
 }
 
