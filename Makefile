@@ -16,7 +16,7 @@ mutants:
 	@files=$$(cat ci/mutants.d/*.files 2>/dev/null | grep -v '^#' | sed '/^$$/d'); \
 	test -n "$$files" || { echo "no files listed in ci/mutants.d/*.files"; exit 1; }; \
 	args=""; for f in $$files; do args="$$args --file $$f"; done; \
-	cargo mutants --workspace $$args
+	env -u CARGO_TARGET_DIR cargo mutants --no-shuffle -j 3 $$args
 
 # Copies the gated binary and its stamp only if the stamp's hash equals the hash of the file copied.
 # Task 2.2.1b adds the final `disk-cleanup status` step (reserve files) once the binary has that command.
