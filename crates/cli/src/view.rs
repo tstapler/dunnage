@@ -357,6 +357,10 @@ fn build_rows(input: &PlanInput) -> Vec<ItemRow> {
                     crate::units::size(bytes)
                 ));
             }
+            // A Steam item that will be removed says why it counts as left over.
+            if status == RowStatus::Free && c.selector() == SelectorId::Steam {
+                risk_notes.extend(facts.detail.clone());
+            }
             if status == RowStatus::Risk {
                 risk_notes.push("not selected".to_string());
                 if c.kind() == Kind::DockerVolume && input.selection.docker_volumes.is_none() {

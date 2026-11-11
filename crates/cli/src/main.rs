@@ -14,6 +14,7 @@ use std::io::IsTerminal;
 use disk_cleanup_adapters::config::{config_path, read_config};
 use disk_cleanup_adapters::signals::SwallowBrokenPipe;
 use disk_cleanup_adapters::state::OutcomeMode;
+use disk_cleanup_adapters::steam::{default_steam_roots, library_roots};
 use disk_cleanup_cli::app::{self, ApplyMode, Io, Ports};
 use disk_cleanup_cli::args::{self, Cli, Command, Parsed};
 use disk_cleanup_cli::render_json::{fatal_doc, to_text};
@@ -104,10 +105,26 @@ fn resolve_roots(cli: &Cli, base: &Dirs) -> Result<RootSet, i32> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| base.home.clone());
     let flag_roots = if cleaner { cli.root.as_slice() } else { &[] };
     match RootSet::resolve(base, flag_roots, config.roots.as_deref(), &cwd, &real_canon) {
+        Ok(r) if cleaner => Ok(with_steam_libraries(r, base)),
         Ok(r) => Ok(r),
         Err(e) if cleaner => Err(root_failure(cli, &e)),
         Err(_) => Err(EXIT_USAGE),
     }
+}
+
+/// A build that registers `steam` (Gate D) bounds its deletes by the libraries Steam lists itself. No flag
+/// or config value can add one.
+fn with_steam_libraries(roots: RootSet, base: &Dirs) -> RootSet {
+    if disk_cleanup_cli::wiring::kinds::build_gate() < 'D' {
+        return roots;
+    }
+    let platform =
+        disk_cleanup_core::ports::SystemProbe::platform(&disk_cleanup_adapters::RealProbe);
+    let libraries = default_steam_roots(&base.home, platform)
+        .first()
+        .map(|root| library_roots(root))
+        .unwrap_or_default();
+    roots.with_steam_libraries(libraries)
 }
 
 fn root_failure(cli: &Cli, e: &RootError) -> i32 {

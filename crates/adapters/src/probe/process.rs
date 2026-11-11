@@ -11,8 +11,17 @@ fn comm_matches(comm: &str, name: &str) -> bool {
     comm.trim_end_matches('\n') == want
 }
 
+/// `/proc`, or `$DC_TEST_ROOT/proc` under the fixture harness so a test never sees the developer's own
+/// processes. A fixture without that directory reads as `Unknown`, which every caller treats as running.
+fn proc_dir() -> std::path::PathBuf {
+    match std::env::var_os("DC_TEST_ROOT") {
+        Some(root) => std::path::Path::new(&root).join("proc"),
+        None => std::path::PathBuf::from("/proc"),
+    }
+}
+
 pub(super) fn process_named(name: &str) -> Tri {
-    let Ok(entries) = fs::read_dir("/proc") else {
+    let Ok(entries) = fs::read_dir(proc_dir()) else {
         return Tri::Unknown;
     };
     let mut saw_any = false;

@@ -1,7 +1,14 @@
-//! Registry slot for `steam` (first registered at Gate D). Empty until the owning story fills it; the story that
-//! does calls `reg.add(...)` with its target and its gate, so the kind exists only in a build that has
-//! reached that gate.
+//! Registry slot for `steam`: listed and apply-capable from Gate D (Story 4.2.2), so the shipped binary
+//! (no `gate-*` feature) does not register it until the owner's Gate D review.
+
+use disk_cleanup_adapters::steam::target::SteamTarget;
 
 use super::{KindCtx, Registrar};
 
-pub fn register(_reg: &mut Registrar, _ctx: &KindCtx<'_>) {}
+pub fn register(reg: &mut Registrar, ctx: &KindCtx<'_>) {
+    reg.add(
+        'D',
+        'D',
+        Box::new(SteamTarget::new(ctx.roots.clone(), (ctx.ops)())),
+    );
+}
