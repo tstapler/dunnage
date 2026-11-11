@@ -703,3 +703,44 @@ fn facts_should_fill_the_reason_text_of_a_skip_row_and_an_absent_fact_should_dro
     let out = text(&input, &pipe(80));
     assert!(out.contains("dirty working tree"));
 }
+
+#[test]
+fn worktree_row_should_end_with_the_discard_note_and_the_floor_text_should_replace_the_age_text() {
+    let mut sel = selection_of(&[SelectorId::Worktrees]);
+    sel.worktree_ignored = Some(disk_cleanup_core::selector::Discard::Discard);
+    let ok = "/home/tstapler/code/app/.claude/worktrees/agent-a1";
+    let fx = Fixture::of(sel, vec![worktree(ok, 0.1, 30)]);
+    let id = fx.plan.items[0].candidate.id();
+    let mut input = fx.input();
+    input.facts.insert(
+        id,
+        ReasonFacts {
+            discards: Some((2, 12 << 10)),
+            ..ReasonFacts::default()
+        },
+    );
+    let out = text(&input, &pipe(120));
+    assert!(
+        out.contains("(discards 2 ignored files, 12.0 KiB)"),
+        "{out}"
+    );
+
+    let facts = ReasonFacts {
+        detail: Some(disk_cleanup_core::targets::worktree_guard::FLOOR_DETAIL.to_string()),
+        ..ReasonFacts::default()
+    };
+    let ctx = disk_cleanup_cli::reasontext::TextCtx {
+        selection: &fx.selection,
+        selector: SelectorId::Worktrees,
+        exe: std::path::Path::new("/bin/dc"),
+        ascii_only: true,
+    };
+    assert_eq!(
+        disk_cleanup_cli::reasontext::reason(
+            disk_cleanup_core::SkipReason::TooRecent,
+            &facts,
+            &ctx
+        ),
+        "younger than 24 h (worktree floor; --min-age cannot lower it)"
+    );
+}

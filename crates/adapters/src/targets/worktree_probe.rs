@@ -103,7 +103,7 @@ fn is_dirty(runner: &dyn CommandRunner, wt: &Path) -> bool {
     .is_none_or(|out| !out.trim().is_empty())
 }
 
-fn last_commit(runner: &dyn CommandRunner, wt: &Path) -> Option<i64> {
+pub fn last_commit(runner: &dyn CommandRunner, wt: &Path) -> Option<i64> {
     run_ok(runner, &git(wt, &["log", "-1", "--format=%ct"]))?
         .trim()
         .parse()

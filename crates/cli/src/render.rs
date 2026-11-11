@@ -196,6 +196,9 @@ fn kind_text(r: &ItemRow, verbose: bool) -> String {
 fn plan_reason(r: &ItemRow, verbose: bool) -> String {
     let base = match r.status {
         RowStatus::Risk => format!("({})", r.risk_notes.join("; ")),
+        _ if r.status == RowStatus::Free && !r.risk_notes.is_empty() => {
+            format!("({})", r.risk_notes.join("; "))
+        }
         _ => r.reason_text.clone().unwrap_or_default(),
     };
     let action = r

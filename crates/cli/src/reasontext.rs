@@ -24,6 +24,8 @@ pub struct ReasonFacts {
     pub process: Option<(String, u32)>,
     /// Count and `treestat` size of the ignored files (`HasIgnoredFiles`).
     pub ignored: Option<(u64, u64)>,
+    /// Count and size of the ignored files an allowed worktree discards (`--worktree-ignored discard`).
+    pub discards: Option<(u64, u64)>,
     /// Size of the duplicate set a build dir belongs to (`KeptAsNewest`, the RISK row note).
     pub duplicates: Option<u32>,
     /// Docker name of the image or volume, or the docker context name.
@@ -55,6 +57,10 @@ pub fn reason(why: SkipReason, facts: &ReasonFacts, ctx: &TextCtx) -> String {
     let text = why.reason_text();
     let detail = facts.detail.as_deref();
     match why {
+        // The worktree floor and an unknown age carry their own text (Story 3.1.2).
+        SkipReason::TooRecent if ctx.selector == SelectorId::Worktrees && detail.is_some() => {
+            detail.unwrap_or_default().to_string()
+        }
         SkipReason::TooRecent => {
             let age = ctx
                 .selection

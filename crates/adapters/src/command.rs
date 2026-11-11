@@ -17,6 +17,8 @@ use disk_cleanup_core::ports::{
 use disk_cleanup_core::{first_line_capped, ApplyToken, DeleteError, WorktreeRemoval};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
+/// `git worktree remove` is cut off here even when the runner's own deadline is longer (Story 3.1.3).
+const WORKTREE_REMOVE_TIMEOUT: Duration = Duration::from_secs(60);
 const POLL: Duration = Duration::from_millis(10);
 const EIO: i32 = 5;
 
@@ -167,7 +169,7 @@ impl CommandRunner for RealCommandRunner {
         spawn_inner(
             &OsString::from("git"),
             &worktree_remove_argv(w),
-            self.timeout,
+            self.timeout.min(WORKTREE_REMOVE_TIMEOUT),
             Some(desc),
         )
     }

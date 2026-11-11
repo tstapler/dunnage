@@ -350,6 +350,13 @@ fn build_rows(input: &PlanInput) -> Vec<ItemRow> {
             let facts = input.facts.get(&c.id()).unwrap_or(&none);
             let ctx = text_ctx(input, c.selector());
             let mut risk_notes = Vec::new();
+            if let Some((files, bytes)) = facts.discards {
+                risk_notes.push(format!(
+                    "discards {files} ignored file{}, {}",
+                    if files == 1 { "" } else { "s" },
+                    crate::units::size(bytes)
+                ));
+            }
             if status == RowStatus::Risk {
                 risk_notes.push("not selected".to_string());
                 if c.kind() == Kind::DockerVolume && input.selection.docker_volumes.is_none() {
