@@ -318,7 +318,7 @@ pub fn recheck_build_dir<D: DirOps>(
     }
 }
 
-fn root_meta_dev(m: &std::fs::Metadata) -> u64 {
+pub(crate) fn root_meta_dev(m: &std::fs::Metadata) -> u64 {
     use std::os::unix::fs::MetadataExt;
     m.dev()
 }
@@ -357,7 +357,7 @@ fn marker_name(f: BuildDirFlavor) -> &'static str {
     }
 }
 
-fn failure(error: DeleteError) -> DeleteFailure {
+pub(crate) fn failure(error: DeleteError) -> DeleteFailure {
     DeleteFailure {
         error,
         freed: Freed::default(),
@@ -365,7 +365,7 @@ fn failure(error: DeleteError) -> DeleteFailure {
 }
 
 /// How a guard verdict that is not a scope error reaches the outcome: as an `ERR` row, never as success.
-fn delete_error_of(r: SkipReason) -> DeleteError {
+pub(crate) fn delete_error_of(r: SkipReason) -> DeleteError {
     match r {
         SkipReason::Symlink => DeleteError::Symlink,
         SkipReason::CrossDevice => DeleteError::CrossDevice,
@@ -385,7 +385,7 @@ pub struct BuildDirTarget<D: DirOps> {
     verified: Mutex<HashMap<CandidateId, Allowed>>,
 }
 
-fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+pub(crate) fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
