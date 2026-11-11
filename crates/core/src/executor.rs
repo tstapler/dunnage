@@ -950,7 +950,7 @@ mod docker_delta_tests {
     }
 
     #[test]
-    fn docker_delta_should_be_none_When_no_docker_item_was_removed() {
+    fn docker_delta_should_be_none_when_no_docker_item_was_removed() {
         let outcomes = [out(Kind::Cache, Status::Removed, Some(7_000))];
         assert_eq!(docker_delta(&outcomes), None);
         assert_eq!(docker_delta(&[]), None);
