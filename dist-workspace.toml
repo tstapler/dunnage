@@ -18,6 +18,8 @@ targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-
 # publish-jobs = ["homebrew"]
 # Gates `host` on scripts/check-release-features.sh (workflow: check-release-artifacts.yml).
 local-artifacts-jobs = ["./check-release-artifacts"]
+# Build with `-p <package>`, not `--workspace`, so the shipped binary is built from the cli package alone (Story 5.3.1).
+precise-builds = true
 install-path = "CARGO_HOME"
 install-updater = false
 
