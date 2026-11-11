@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::cache_targets::{cache_table, CacheRow, CacheSource};
+use disk_cleanup_core::cache_targets::{cache_table, root_decision, CacheRow, CacheSource};
 use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
 use disk_cleanup_core::ports::{Cmd, CommandRunner, SystemProbe};
 use disk_cleanup_core::roots::{CacheTool, RootSet};
@@ -206,8 +206,9 @@ impl<D: DirOps> Ctx<'_, D> {
         }
         let md = std::fs::symlink_metadata(&loc.path).ok()?;
         let ident = Identity::of(&md);
-        if row.needs_root && self.env.probe.euid() != 0 {
-            return Some(Self::skipped(row, loc, ident, SkipReason::NeedsRoot));
+        // No `--root` is plumbed into discovery yet, so a root run is always restricted (Story 2.3.2).
+        if let Some(r) = root_decision(row.needs_root, self.env.probe.euid(), false) {
+            return Some(Self::skipped(row, loc, ident, r));
         }
         let facts = Facts {
             kind: Kind::Cache,
