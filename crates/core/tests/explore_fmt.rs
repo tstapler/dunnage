@@ -43,7 +43,7 @@ fn the_format_table_should_equal_the_frozen_golden_list_of_21_ranges() {
 
 #[test]
 fn needs_escape_should_hold_for_c0_del_c1_and_every_golden_format_range_only() {
-    for c in 0u32..=0x10FFFF {
+    for c in 0u32..=0x0010_FFFF {
         let Some(ch) = char::from_u32(c) else {
             continue;
         };
@@ -253,4 +253,10 @@ proptest! {
         }
         prop_assert_eq!(c.bar().chars().count(), n + 2);
     }
+}
+
+#[test]
+fn a_child_larger_than_its_parent_should_read_as_a_full_bar_at_100_percent() {
+    let c = share_cell(3 * GIB, GIB, 5);
+    assert_eq!((c.percent.as_str(), c.filled), ("100%", 5));
 }

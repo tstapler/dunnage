@@ -62,7 +62,12 @@ pub fn share_cell(usage: u64, parent: u64, bar_cells: usize) -> ShareCell {
             percent: "n/a".into(),
         };
     }
-    let (u, p, n) = (u128::from(usage), u128::from(parent), bar_cells as u128);
+    // A child larger than its parent (hard links, a stale total) reads as the whole bar, never above 100%.
+    let (u, p, n) = (
+        u128::from(usage.min(parent)),
+        u128::from(parent),
+        bar_cells as u128,
+    );
     let mut filled = ((2 * u * n + p) / (2 * p)) as usize;
     if usage > 0 {
         filled = filled.max(1);
@@ -77,4 +82,25 @@ pub fn share_cell(usage: u64, parent: u64, bar_cells: usize) -> ShareCell {
         bar_cells,
         percent,
     }
+}
+
+/// Widest ITEMS cell (`ux-explorer.md` 3.2).
+pub const ITEMS_CELL_MAX: usize = 7;
+
+/// An item count in at most 7 characters: plain digits up to 9,999,999, then `12.3M`, `1.2G`, `4.5T`,
+/// `1.0P`, `18.4E` (decimal units, one decimal), so a row never outgrows its column.
+pub fn fmt_items_cell(n: u64) -> String {
+    if n < 10_000_000 {
+        return n.to_string();
+    }
+    let wide = u128::from(n) * 10;
+    let mut div = 1_000_000u128;
+    for (i, unit) in ["M", "G", "T", "P", "E"].iter().enumerate() {
+        let tenths = (wide + div / 2) / div;
+        if tenths < 10_000 || i == 4 {
+            return format!("{}.{}{unit}", tenths / 10, tenths % 10);
+        }
+        div *= 1000;
+    }
+    unreachable!("the last unit always returns")
 }
