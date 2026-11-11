@@ -31,10 +31,14 @@ run_gate() {
     if grep -q -- '--selftest' "$script"; then step "$script --selftest" "$script" --selftest; fi
   done
   if [ "${DC_GATE_SKIP_CARGO:-0}" != 1 ]; then
+    # The kinds a gate registers are a build setting (Story 2.3.4): gate B and later build with the gate's feature,
+    # so the binary the gate stamps is the one whose registry matches ci/safety/kinds-by-gate.txt. Gate A has none.
+    local feat=()
+    case $gate in B) feat=(--features disk-cleanup/gate-b) ;; C) feat=(--features disk-cleanup/gate-c) ;; D|E|F) feat=(--features disk-cleanup/gate-d) ;; esac
     step "cargo fmt --check" cargo fmt --all -- --check
-    step "cargo clippy" cargo clippy --workspace --all-targets -- -D warnings
-    step "cargo test" env GATE="$gate" cargo test --workspace
-    step "cargo build --release" cargo build --release --locked
+    step "cargo clippy" cargo clippy --workspace --all-targets "${feat[@]}" -- -D warnings
+    step "cargo test" env GATE="$gate" cargo test --workspace "${feat[@]}"
+    step "cargo build --release" cargo build --release --locked --workspace "${feat[@]}"
   fi
   prev=$(ls -t "$(git rev-parse --git-dir)/gate-reports/$gate-"*.txt 2>/dev/null | head -1)
   prev=${prev##*/}; prev=${prev#"$gate"-}; prev=${prev%.txt}

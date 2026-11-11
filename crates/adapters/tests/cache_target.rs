@@ -339,19 +339,30 @@ fn execute_should_delete_only_through_delete_tree_When_the_ops_are_counted() {
 }
 
 #[test]
-fn execute_should_refuse_command_rows_and_leave_them_to_story_232() {
+fn execute_should_run_the_tool_for_a_command_row_and_never_delete_the_path_itself() {
     let f = fixture();
     let t = target(&f);
     let pip = f.home.join(".cache/pip");
     fill(&pip, 1, 1024);
     let rig = Rig::with_pip(&f, Some(&pip));
+    rig.runner
+        .on(&["pip", "cache", "purge"], Ok(CmdOutput::default()));
     let env = rig.env();
     let cands = t.discover(&env, &caches());
     let c = by_label(&cands, "pip cache");
 
-    let err = t.execute(c, &env, &ApplyToken::for_tests()).unwrap_err();
-    assert_eq!(err.error, DeleteError::Refused);
-    assert!(pip.join("f0").exists());
+    let freed = t.execute(c, &env, &ApplyToken::for_tests()).unwrap();
+    assert_eq!(freed.attributed_bytes.0, 0, "the fake tool removed nothing");
+    assert_eq!(
+        rig.runner
+            .calls_of(disk_cleanup_core::testing::CallKind::RunMutating)
+            .len(),
+        1
+    );
+    assert!(
+        pip.join("f0").exists(),
+        "a command row is emptied by its tool, not by delete_tree"
+    );
 }
 
 #[test]
@@ -385,4 +396,49 @@ fn removal_via_should_name_command_rows_and_path_rows() {
     );
     assert_eq!(removal_via(&row("pip cache", false)), RemovalVia::Command);
     assert_eq!(removal_via(&row("apt archives", true)), RemovalVia::Command);
+}
+
+#[test]
+fn a_missing_tool_should_be_a_Skipped_ToolMissing_item_that_names_the_last_program_tried() {
+    let f = fixture();
+    let t = target(&f);
+    let rig = Rig::new(&f); // go, pip and pip3 are not installed
+    let env = rig.env();
+    let cands = t.discover(&env, &caches());
+
+    let go = by_label(&cands, "Go build cache");
+    assert_eq!(t.guard(go, &env), Guarded::Skip(SkipReason::ToolMissing));
+    assert_eq!(t.detail(go).as_deref(), Some("go"));
+    let pip = by_label(&cands, "pip cache");
+    assert_eq!(t.guard(pip, &env), Guarded::Skip(SkipReason::ToolMissing));
+    assert_eq!(t.detail(pip).as_deref(), Some("pip3"));
+    // The row is shown, never removed.
+    assert!(
+        t.execute(pip, &env, &ApplyToken::for_tests()).is_ok()
+            || t.guard(pip, &env) != Guarded::Allow
+    );
+}
+
+#[test]
+fn a_root_run_should_skip_user_caches_as_RootRestricted_while_a_user_run_keeps_them() {
+    let f = fixture();
+    fill(&f.home.join(".npm/_cacache"), 1, 1024);
+    let t = target(&f);
+    let rig = Rig::new(&f);
+    let env = rig.env();
+    let cands = t.discover(&env, &caches());
+    let npm = by_label(&cands, "npm _cacache");
+    assert_eq!(t.guard(npm, &env), Guarded::Allow);
+
+    let mut root_rig = Rig::new(&f);
+    root_rig.probe = FakeProbe::new().with_euid(0);
+    let root_env = root_rig.env();
+    let t2 = target(&f);
+    let cands = t2.discover(&root_env, &caches());
+    let npm = by_label(&cands, "npm _cacache");
+    assert_eq!(
+        t2.guard(npm, &root_env),
+        Guarded::Skip(SkipReason::RootRestricted),
+        "a root run never removes user caches"
+    );
 }

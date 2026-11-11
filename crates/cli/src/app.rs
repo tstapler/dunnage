@@ -16,17 +16,22 @@ use disk_cleanup_adapters::state::OutcomeMode;
 use disk_cleanup_adapters::status::assess;
 use disk_cleanup_adapters::targets::btrfs_report::report_notes;
 use disk_cleanup_adapters::targets::symlink_note::symlinked_root_notes_real;
-use disk_cleanup_core::executor::{Mode, Refused, RunMeta, RunOptions, RunReport};
+use disk_cleanup_core::executor::{
+    availability_refusal, Mode, Refused, RunHooks, RunMeta, RunOptions, RunReport,
+};
 use disk_cleanup_core::plan::{GateRenderCtx, PlanId, Planned};
 use disk_cleanup_core::ports::Env;
 use disk_cleanup_core::selector::{KindSelector, Selection};
-use disk_cleanup_core::target::{Target, NOT_IN_BUILD};
+use disk_cleanup_core::target::{KindGate, Target, NOT_IN_BUILD};
 use disk_cleanup_core::{
     ApplyToken, BuildInfo, DiskVerdict, RunRoots, SaveOutcome, SelectorId, Warning,
 };
 
-use crate::apply::{finished_line, render_apply, render_refused, ApplyInput, LastDryRun};
+use crate::apply::{
+    finished_line, render_apply, render_closing, render_refused, ApplyInput, LastDryRun,
+};
 use crate::args::{AuditCommand, Cli, Command, SortArg, SteamCommand, SteamSortArg};
+use crate::reasontext::ReasonFacts;
 use crate::render::{render_plan, wrapper_note};
 use crate::render_json::{
     apply_doc, fatal_doc, gate_refusal_doc, plan_doc, to_text, SCHEMA_VERSION,
@@ -57,6 +62,9 @@ pub struct Ports<'a> {
     pub env: &'a Env<'a>,
     pub targets: Vec<&'a dyn Target>,
     pub apply: ApplyMode<'a>,
+    /// The selectors that may delete in this build (the per-gate registry of Story 2.3.4); `None` means every
+    /// registered one, which is what the fake-driven tests use.
+    pub apply_capable: Option<&'a [SelectorId]>,
     /// The stamp step of an apply, given the gate the selection needs; `StampOutcome::Confined` skips it.
     pub stamp: &'a dyn Fn(char) -> Result<StampOutcome, GateExit>,
     pub build: BuildInfo,
@@ -111,7 +119,14 @@ impl Ports<'_> {
 
     fn available_label(&self, s: SelectorId) -> String {
         match self.targets.iter().find(|t| t.selectors().contains(&s)) {
-            Some(t) => t.gate(self.env).available_label(self.env.probe.platform()),
+            Some(t) => {
+                let gate = t.selector_gate(s, self.env);
+                let listed_only = self.apply_capable.is_some_and(|c| !c.contains(&s));
+                if listed_only && gate == KindGate::Available {
+                    return "list only".to_string();
+                }
+                gate.available_label(self.env.probe.platform())
+            }
             None => NOT_IN_BUILD.to_string(),
         }
     }
@@ -137,7 +152,17 @@ pub fn run(cli: &Cli, p: &Ports, io: &mut Io) -> i32 {
             s.code
         }
         Some(Command::Kinds) => {
-            io.stdout(&kinds::run(&|s| p.available_label(s), cli.json, &p.term));
+            let extra: Vec<SelectorId> = p
+                .registered()
+                .into_iter()
+                .filter(|s| SelectorId::TEST_ONLY.contains(s))
+                .collect();
+            io.stdout(&kinds::run(
+                &|s| p.available_label(s),
+                &extra,
+                cli.json,
+                &p.term,
+            ));
             0
         }
         Some(Command::Steam {
@@ -269,7 +294,7 @@ fn plan_mode(cli: &Cli, sel: &Selection, registered: &[SelectorId], p: &Ports, i
     );
     let report = match executor.run(sel, &Mode::Plan, None) {
         Ok(r) => r,
-        Err(r) => return refused(cli, &r, sel, p, io),
+        Err(r) => return refused(cli, &r, sel, p, io, &Plain, None),
     };
     if let Some(sig) = p.env.guard.interrupted() {
         io.stderr_line("INTERRUPTED during scan. Nothing was deleted; no report produced.");
@@ -303,7 +328,7 @@ fn plan_mode(cli: &Cli, sel: &Selection, registered: &[SelectorId], p: &Ports, i
         euid,
         state_dir: p.env.dirs.state.clone(),
         home: Some(p.env.dirs.home.clone()),
-        facts: HashMap::new(),
+        facts: reason_facts(p, &report.plan),
         opts: Options {
             top: cli.top,
             sort: sort_key(cli.sort),
@@ -340,39 +365,98 @@ fn plan_mode(cli: &Cli, sel: &Selection, registered: &[SelectorId], p: &Ports, i
     0
 }
 
+/// What a composition root watches during an apply, beyond the executor's fixed points: whether L1 is already
+/// on stdout and what the stamp step found.
+pub trait ApplyHooks: RunHooks {
+    /// True when the run wrote L1 (and the bypass WARNING) to stdout as it committed.
+    fn marker_printed(&self) -> bool {
+        false
+    }
+
+    /// The stamp step passed; `warning` is the bypass line of a confirmed break-glass.
+    fn stamped(&self, _warning: Option<&str>) {}
+}
+
+/// No observer: the screen is written once, after the run.
+struct Plain;
+
+impl RunHooks for Plain {}
+impl ApplyHooks for Plain {}
+
 fn apply_mode(cli: &Cli, sel: &Selection, p: &Ports, io: &mut Io) -> i32 {
+    apply_flow(cli, sel, p, io, &Plain)
+}
+
+/// The refusal of an apply whose selection holds a selector this build cannot delete with, or `None`. A
+/// selector no target serves is ignored here: naming one is already `not available in this build`, and the
+/// default set mentions kinds that only later gates register.
+fn not_apply_capable(sel: &Selection, p: &Ports) -> Option<String> {
+    let capable = p.apply_capable?;
+    let registered = p.registered();
+    let mut chosen = sel.kinds().ids().filter(|s| registered.contains(s));
+    if !sel.kinds().ids().any(|s| capable.contains(&s)) {
+        return Some(APPLY_NOT_ENABLED.to_string());
+    }
+    chosen.find(|s| !capable.contains(s)).map(|s| {
+        format!(
+            "error: '{}' is not available in this build (see 'disk-cleanup kinds'). Nothing was deleted.",
+            s.id()
+        )
+    })
+}
+
+/// An apply in the order of `design/ux.md` 1.4: availability, the stamp, then the executor (plan-id gate, lock,
+/// audit, starvation check, deletes), with `hooks` told of each step.
+pub fn apply_flow(
+    cli: &Cli,
+    sel: &Selection,
+    p: &Ports,
+    io: &mut Io,
+    hooks: &dyn ApplyHooks,
+) -> i32 {
     let ApplyMode::Granted(mint) = &p.apply else {
         io.stderr_line(APPLY_NOT_ENABLED);
         return 64;
     };
+    if let Some(msg) = not_apply_capable(sel, p) {
+        io.stderr_line(&msg);
+        return 64;
+    }
     let supplied = cli.plan_id.map(disk_cleanup_core::plan::PlanIdArg::plan_id);
+    hooks.step("kind_availability");
+    if let Some(r) = availability_refusal(p.env, &p.targets, sel) {
+        return refused(cli, &r, sel, p, io, hooks, None);
+    }
     let kinds: Vec<disk_cleanup_core::Kind> = sel
         .kinds()
         .ids()
         .flat_map(|s| s.kinds().iter().copied())
         .collect();
+    hooks.step("check_stamp");
     let stamp = match (p.stamp)(disk_cleanup_core::required_gate(&kinds)) {
         Ok(s) => s,
         Err(e) => return stamp_refusal(cli, &e, supplied, io),
     };
+    let warning = match &stamp {
+        StampOutcome::BrokeGlass { warning, .. } => Some(warning.clone()),
+        _ => None,
+    };
+    hooks.stamped(warning.as_deref());
     let saved_before = p.env.plans.load_last();
     let executor = disk_cleanup_core::executor::Executor::new(
         p.env,
         p.targets.clone(),
         options(cli, p, &stamp),
     );
-    let mut report = match executor.run(sel, &Mode::Apply(mint()), supplied) {
+    let mut report = match executor.run_hooked(sel, &Mode::Apply(mint()), supplied, hooks) {
         Ok(r) => r,
-        Err(r) => return refused(cli, &r, sel, p, io),
+        Err(r) => return refused(cli, &r, sel, p, io, hooks, warning.as_deref()),
     };
+    hooks.step("summary");
     report
         .summary
         .notes
         .extend(report_notes(p.env, &p.env.dirs.home));
-    let warning = match &stamp {
-        StampOutcome::BrokeGlass { warning, .. } => Some(warning.clone()),
-        _ => None,
-    };
     let exit = report.exit.code();
     let will: Vec<_> = report
         .plan
@@ -419,10 +503,11 @@ fn apply_mode(cli: &Cli, sel: &Selection, p: &Ports, io: &mut Io) -> i32 {
         exe: p.exe.clone(),
         home: Some(p.env.dirs.home.clone()),
         labels: HashMap::new(),
-        facts: HashMap::new(),
+        facts: reason_facts(p, &report.plan),
         verbose: cli.verbose,
         quiet: cli.quiet,
         tty: p.stdout_tty,
+        marker_printed: hooks.marker_printed(),
     };
     for n in &report.notes {
         io.stderr_line(n);
@@ -448,7 +533,35 @@ fn apply_mode(cli: &Cli, sel: &Selection, p: &Ports, io: &mut Io) -> i32 {
         after.avail_bytes,
         after.btrfs.map(|b| b.unallocated),
     );
+    hooks.step("closing");
     exit
+}
+
+/// The detail slot of each skip text a target knows (`pip3` for a missing tool).
+fn reason_facts(
+    p: &Ports,
+    plan: &disk_cleanup_core::plan::Plan,
+) -> HashMap<disk_cleanup_core::CandidateId, ReasonFacts> {
+    let mut out = HashMap::new();
+    for item in &plan.items {
+        let Some(t) = p
+            .targets
+            .iter()
+            .find(|t| t.selectors().contains(&item.candidate.selector()))
+        else {
+            continue;
+        };
+        if let Some(detail) = t.detail(&item.candidate) {
+            out.insert(
+                item.candidate.id(),
+                ReasonFacts {
+                    detail: Some(detail),
+                    ..ReasonFacts::default()
+                },
+            );
+        }
+    }
+    out
 }
 
 fn error_doc(code: &str, message: &str, plan_id: Option<PlanId>, exit: i32) -> String {
@@ -471,7 +584,15 @@ fn stamp_refusal(cli: &Cli, e: &GateExit, supplied: Option<PlanId>, io: &mut Io)
 }
 
 /// A run that ended before any item was touched.
-fn refused(cli: &Cli, r: &Refused, sel: &Selection, p: &Ports, io: &mut Io) -> i32 {
+fn refused(
+    cli: &Cli,
+    r: &Refused,
+    sel: &Selection,
+    p: &Ports,
+    io: &mut Io,
+    hooks: &dyn ApplyHooks,
+    bypass: Option<&str>,
+) -> i32 {
     for n in &r.notes {
         if !r.text.contains(n.as_str()) {
             io.stderr_line(n);
@@ -498,6 +619,7 @@ fn refused(cli: &Cli, r: &Refused, sel: &Selection, p: &Ports, io: &mut Io) -> i
         // Every selected kind is unavailable: nothing ran, so there is no marker either.
         return code;
     };
+    hooks.step("closing");
     if cli.json {
         let doc = match &r.fatal {
             Some(f) => fatal_doc("apply", Some(&plan_id.to_string()), f),
@@ -506,7 +628,12 @@ fn refused(cli: &Cli, r: &Refused, sel: &Selection, p: &Ports, io: &mut Io) -> i
         };
         io.stdout(&to_text(&doc));
     } else {
-        io.stdout(&render_refused(plan_id, None, code, &p.term));
+        let text = if hooks.marker_printed() {
+            render_closing(code, &p.term)
+        } else {
+            render_refused(plan_id, bypass, code, &p.term)
+        };
+        io.stdout(&text);
     }
     code
 }

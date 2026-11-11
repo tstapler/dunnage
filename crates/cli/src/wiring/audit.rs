@@ -3,14 +3,10 @@
 //! plan-id gate, the lock and the audit log.
 
 use std::io;
-use std::path::Path;
 use std::sync::Arc;
 
 use disk_cleanup_adapters::audit::RealAuditSink;
-use disk_cleanup_adapters::gate_stamp::{
-    break_glass, current_exe_sha256, open_controlling_tty, read_stamp, stamp_path,
-    BreakGlassRefusal,
-};
+use disk_cleanup_adapters::gate_stamp::{break_glass, BreakGlassRefusal};
 use disk_cleanup_adapters::state::{RealPlanStore, StateDir};
 use disk_cleanup_core::{
     break_glass_warning, check_stamp, BreakGlass, BuildInfo, GateStamp, StampRefusal, StampSummary,
@@ -116,32 +112,6 @@ fn refusal_exit(r: &StampRefusal) -> GateExit {
         text: r.text(),
         json_code: r.json_code(),
     }
-}
-
-/// The production step: the installed stamp in the state dir, the hash of this executable, the real terminal.
-pub fn real_stamp_gate(
-    state_dir: &Path,
-    build: &BuildInfo,
-    required_gate: char,
-    confined: bool,
-    ungated_var: Option<&str>,
-) -> Result<StampOutcome, GateExit> {
-    if confined {
-        return Ok(StampOutcome::Confined);
-    }
-    let stamp = read_stamp(&stamp_path(state_dir));
-    let exe_sha256 = current_exe_sha256().unwrap_or_default();
-    stamp_gate(
-        &StampInputs {
-            build,
-            stamp: stamp.as_ref(),
-            exe_sha256: &exe_sha256,
-            required_gate,
-            confined,
-            ungated_var,
-        },
-        &open_controlling_tty,
-    )
 }
 
 #[cfg(test)]

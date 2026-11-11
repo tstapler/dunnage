@@ -30,7 +30,7 @@ check() {
   done <"$root/ci/safety/manifest.txt"
   for f in "$root/ci/safety-guarantees.txt" "$root"/ci/safety/*.txt; do
     [ -r "$f" ] || continue
-    case ${f##*/} in manifest.txt | README.txt) continue ;; esac
+    case ${f##*/} in manifest.txt | README.txt | kinds-by-gate.txt) continue ;; esac
     while read -r line; do
       line=${line%%#*}; read -r name _ <<<"$line"
       [ -n "${name:-}" ] && echo "$name" >>"$listed"

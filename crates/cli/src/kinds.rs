@@ -4,13 +4,18 @@
 use disk_cleanup_core::SelectorId;
 
 use crate::render::render_kinds;
-use crate::render_json::{kind_rows, kinds_doc, to_text};
+use crate::render_json::{kind_rows_with, kinds_doc, to_text};
 use crate::terminal::Terminal;
 
 /// `available` is the AVAILABLE cell of one selector (`KindGate::available_label`, or `not available in
 /// this build`).
-pub fn run(available: &dyn Fn(SelectorId) -> String, json: bool, term: &Terminal) -> String {
-    let rows = kind_rows(available);
+pub fn run(
+    available: &dyn Fn(SelectorId) -> String,
+    extra: &[SelectorId],
+    json: bool,
+    term: &Terminal,
+) -> String {
+    let rows = kind_rows_with(available, extra);
     if json {
         to_text(&kinds_doc(&rows))
     } else {

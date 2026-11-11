@@ -97,6 +97,12 @@ pub trait Target: Send + Sync {
         KindGate::Available
     }
 
+    /// The availability of one selector, for the AVAILABLE column of `kinds` only (a family can have a
+    /// selector that needs root while its sibling does not). The run itself asks [`Target::gate`].
+    fn selector_gate(&self, _selector: SelectorId, env: &Env) -> KindGate {
+        self.gate(env)
+    }
+
     /// The `<reason>` of the `SKIPPED` line, for example why the Docker daemon is not reachable.
     fn unavailable_detail(&self, _env: &Env) -> Option<String> {
         None
@@ -110,6 +116,11 @@ pub trait Target: Send + Sync {
     /// Remove one candidate. The result carries the partial `Freed` of a failed removal.
     fn execute(&self, c: &Candidate, env: &Env, proof: &ApplyToken)
         -> Result<Freed, DeleteFailure>;
+
+    /// The detail slot of an item's skip text, for example the tool a `ToolMissing` row names (`pip3`).
+    fn detail(&self, _c: &Candidate) -> Option<String> {
+        None
+    }
 
     /// Post-kind hook for whole-kind reporting; returns notes for the report.
     fn finish(&self, _outcomes: &[Outcome], _env: &Env) -> Vec<String> {
@@ -126,5 +137,7 @@ pub fn kind_order(kind: Kind) -> u8 {
         Kind::SteamPrefix | Kind::SteamShaderCache | Kind::SteamRemnant => 3,
         Kind::DockerImage | Kind::DockerBuildCache | Kind::DockerVolume => 4,
         Kind::BtrfsBalance | Kind::BtrfsTrim => 5,
+        #[cfg(feature = "test-support")]
+        Kind::FixtureStale => 2,
     }
 }

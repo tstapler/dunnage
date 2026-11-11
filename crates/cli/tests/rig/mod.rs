@@ -188,6 +188,7 @@ pub fn run(rig: &Rig, targets: &[&dyn Target], argv: &[&str], apply: bool, stamp
         } else {
             ApplyMode::Disabled
         },
+        apply_capable: None,
         stamp,
         build: build(),
         roots: RunRoots::default(),

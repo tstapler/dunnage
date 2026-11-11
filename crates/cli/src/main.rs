@@ -12,18 +12,20 @@ use std::ffi::OsString;
 use std::io::IsTerminal;
 
 use disk_cleanup_adapters::config::{config_path, read_config};
+use disk_cleanup_adapters::signals::SwallowBrokenPipe;
 use disk_cleanup_adapters::state::OutcomeMode;
 use disk_cleanup_cli::app::{self, ApplyMode, Io, Ports};
 use disk_cleanup_cli::args::{self, Cli, Command, Parsed};
 use disk_cleanup_cli::render_json::{fatal_doc, to_text};
 use disk_cleanup_cli::terminal;
-use disk_cleanup_cli::wiring::audit::{build_info, real_stamp_gate};
-use disk_cleanup_cli::wiring::cache_target::CacheTarget;
+use disk_cleanup_cli::wiring::audit::{build_info, StampOutcome};
+use disk_cleanup_cli::wiring::compose;
 use disk_cleanup_cli::wiring::confine;
 use disk_cleanup_cli::wiring::dirs::{real_canon, resolve_real_dirs};
 use disk_cleanup_cli::wiring::env::{read_root, Wired};
+use disk_cleanup_cli::wiring::kinds::{KindCtx, KindRegistry};
+use disk_cleanup_cli::wiring::run_guard;
 use disk_cleanup_core::roots::{RootError, RootSet};
-use disk_cleanup_core::target::Target;
 use disk_cleanup_core::{Dirs, DiskVerdict, FatalError};
 
 const EXIT_USAGE: i32 = 64;
@@ -74,6 +76,10 @@ fn real_main() -> i32 {
         Some(Command::Status(_)) => true,
         Some(_) => false,
     };
+    if compose::is_cleaner_apply(&cli) {
+        let argv: Vec<OsString> = std::env::args_os().skip(1).collect();
+        return compose::run_apply(argv, &cli, &base, &roots);
+    }
     run_wired(&cli, &base, &roots, writes_state)
 }
 
@@ -123,8 +129,24 @@ fn run_wired(cli: &Cli, base: &Dirs, roots: &RootSet, writes_state: bool) -> i32
     let wired = Wired::build(base, writes_state);
     let env = wired.env();
     let read = read_root();
-    let cache = CacheTarget::new(roots.clone(), read.clone(), read);
-    let targets: Vec<&dyn Target> = vec![&cache];
+    let ops = {
+        let read = read.clone();
+        move || disk_cleanup_adapters::RealDirOps::confined_to(&read)
+    };
+    let registry = KindRegistry::build(&KindCtx {
+        roots: roots.clone(),
+        fs_root: read.clone(),
+        ops: &ops,
+        fixture_mode: std::env::var_os("DC_TEST_ROOT").is_some(),
+    });
+    let capable = registry.apply_capable();
+    if cli.command.is_none() {
+        if let Err(e) = run_guard::install_plan() {
+            eprintln!(
+                "warning: cannot install the signal handlers ({e}); Ctrl-C ends the run at once."
+            );
+        }
+    }
 
     let build = build_info();
     let run_id = format!(
@@ -147,11 +169,8 @@ fn run_wired(cli: &Cli, base: &Dirs, roots: &RootSet, writes_state: bool) -> i32
             eprintln!("warning: could not record the run in outcome.jsonl ({e}).");
         }
     };
-    let ungated = std::env::var("DISK_CLEANUP_UNGATED").ok();
-    let confined = std::env::var_os("DC_TEST_ROOT").is_some();
-    let state_dir = wired.dirs.state.clone();
-    let stamp =
-        |gate: char| real_stamp_gate(&state_dir, &build, gate, confined, ungated.as_deref());
+    // Plan, status and the read-only commands never reach the stamp step; `--apply` is `wiring::compose`.
+    let stamp = |_gate: char| Ok(StampOutcome::Confined);
     let reserves_note = wired
         .state
         .dir
@@ -165,8 +184,9 @@ fn run_wired(cli: &Cli, base: &Dirs, roots: &RootSet, writes_state: bool) -> i32
         });
     let ports = Ports {
         env: &env,
-        targets,
+        targets: registry.targets(),
         apply: ApplyMode::Disabled,
+        apply_capable: Some(&capable),
         stamp: &stamp,
         build: build.clone(),
         roots: roots.run_roots(),
@@ -180,8 +200,9 @@ fn run_wired(cli: &Cli, base: &Dirs, roots: &RootSet, writes_state: bool) -> i32
         reserves_note,
         config_roots: read_config(&config_path(base)).ok().and_then(|c| c.roots),
     };
-    let mut out = std::io::stdout().lock();
-    let mut err = std::io::stderr().lock();
+    // Unlocked handles: the signal watcher writes to stderr while this thread works.
+    let mut out = SwallowBrokenPipe::new(std::io::stdout());
+    let mut err = std::io::stderr();
     app::run(
         cli,
         &ports,

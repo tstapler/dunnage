@@ -209,6 +209,10 @@ fn report_should_print_no_symlink_note_when_no_root_is_a_symlink() {
 
 #[test]
 fn apply_should_exit_64_with_not_enabled_in_this_build_and_touch_nothing() {
+    if cfg!(feature = "gate-b") {
+        // A Gate B build can apply caches; its end-to-end cases are Story 2.3.3's `e2e_apply_caches.rs`.
+        return;
+    }
     let f = Fixture::new();
     fill(&f.home().join(".npm/_cacache"));
     let before = tree_manifest(&f.home());
