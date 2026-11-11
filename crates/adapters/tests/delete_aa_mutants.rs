@@ -1119,3 +1119,47 @@ fn scan_should_buffer_at_most_DELETE_BATCH_subdirectory_names_per_level_When_the
         "one scan per empty child, plus three of the top level: DELETE_BATCH names, the one that did not fit, none"
     );
 }
+
+#[test]
+fn remove_leaf_should_buffer_at_most_DELETE_BATCH_names_When_that_many_listed_files_are_directories(
+) {
+    let fx = Fx::new();
+    let mut names = Vec::new();
+    for i in 0..=DELETE_BATCH {
+        let n = format!("d{i:04}");
+        fs::create_dir(fx.nm.join(&n)).unwrap();
+        names.push(OsString::from(n));
+    }
+    let mut spy = fx.spy();
+    spy.as_file = names;
+    let f = fx.run(&spy, &fx.policy()).unwrap();
+    assert!(!exists(&fx.nm));
+    assert_eq!(f.entries_removed, DELETE_BATCH as u64 + 2);
+    assert_eq!(
+        spy.reads.load(Ordering::SeqCst),
+        DELETE_BATCH + 1 + 3,
+        "the 1025th name does not fit the buffer and waits for the next scan"
+    );
+}
+
+#[test]
+fn unlinkat_ENOENT_on_the_only_entry_should_count_as_touched_and_trigger_the_confirming_scan() {
+    let fx = Fx::new();
+    fx.files(1);
+    let mut spy = fx.spy();
+    spy.unlink = Box::new(|_, dir, _| {
+        if dir {
+            UnlinkAct::Real
+        } else {
+            UnlinkAct::ThenErr(libc::ENOENT)
+        }
+    });
+    let f = fx.run(&spy, &fx.policy()).unwrap();
+    assert!(!exists(&fx.nm));
+    assert_eq!(f.entries_removed, 1, "only the directory is counted");
+    assert_eq!(
+        spy.reads.load(Ordering::SeqCst),
+        2,
+        "a vanished entry is a change: scan again before removing the directory"
+    );
+}
