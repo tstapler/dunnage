@@ -3,9 +3,13 @@
 # Fails if a shipped disk-cleanup artifact can carry the `test-support` feature.
 # Four independent legs (graph, built-feature set, marker bytes, marker reachability), each testable alone.
 # Every leg fails closed: missing tool, missing profile, an unselected core crate or empty input is a FAIL.
-#   check-release-features.sh                 build -p disk-cleanup under release and dist, run all legs
-#   check-release-features.sh --artifact BIN  run only the byte legs on a built artifact (cargo-dist job)
-#   check-release-features.sh --selftest      positive control + one negative per leg and per fail-open case
+#   check-release-features.sh                 Cargo leg (build -p disk-cleanup under release and dist) and Bazel leg
+#                                             (bazel build --config=dist, the binary the release archives hold), all legs
+#   check-release-features.sh --artifact BIN  run only the byte legs on a built artifact (release job)
+#   check-release-features.sh --selftest      positive control + one negative per leg and per fail-open case (Cargo)
+#   check-release-features.sh --bazel-selftest  the same controls for the Bazel leg, incl. a tainted Bazel build
+# DC_RELEASE_FEATURES_LEGS=cargo|bazel|both (default both) picks the legs of the default run. The Cargo leg stays
+# so that Cargo/Bazel drift (a feature set that differs between the two build systems) shows up as one leg failing.
 set -euo pipefail
 MARKER='dc-flavor=test-support;9f3ac7e1'   # == core::build_flavor() under test-support
 FLAVOR_PREFIX='dc-flavor='                  # both flavors start with it; present iff main reaches build_flavor()
@@ -83,6 +87,67 @@ build_and_check() {  # $1 = label, rest = cargo profile flags
   return "$rc"
 }
 
+BAZEL=${DC_BAZEL:-scripts/bazel.sh}
+BAZEL_TARGET=//crates/cli:disk-cleanup
+
+# Mirror of leg_profile for the Bazel side: --config=dist is opt plus thin LTO, as [profile.dist] is release plus thin.
+leg_bazel_profile() {
+  grep -Eq '^build:dist +--compilation_mode=opt *$' "${1:-.bazelrc}" &&
+    grep -Eq '^build:dist +--@rules_rust//rust/settings:lto=thin *$' "${1:-.bazelrc}"
+}
+
+# stdin: `bazel aquery 'mnemonic("Rustc", deps(...))' --output=jsonproto`. Same exit codes as leg_features: the core
+# crate's compile action must be present (a graph that never compiles core proves nothing) and none may be given
+# the feature (rules_rust passes `--cfg` and `feature="test-support"` as separate arguments).
+leg_bazel_features() {
+  local out
+  out=$(jq -r --arg c "--crate-name=$CORE_TARGET" '[.actions[]? | select(.mnemonic=="Rustc")] as $a
+        | if ($a | map(select(.arguments | index($c))) | length) == 0 then "none"
+          elif any($a[]; .arguments | index("feature=\"test-support\"")) then "taint" else "clean" end') || return 2
+  case "$out" in clean) return 0 ;; taint) return 1 ;; *) return 2 ;; esac
+}
+
+bazel_dist_binary() {  # builds the dist binary, prints its absolute path
+  local rel root
+  "$BAZEL" build --config=dist "$@" "$BAZEL_TARGET" >&2 || return 1
+  rel=$("$BAZEL" cquery --config=dist "$@" --output=files "$BAZEL_TARGET" 2>/dev/null | head -1) || return 1
+  root=$("$BAZEL" info --config=dist "$@" execution_root 2>/dev/null) || return 1
+  [ -n "$rel" ] && [ -f "$root/$rel" ] && printf '%s\n' "$root/$rel"
+}
+
+bazel_check() {  # real Bazel leg: aquery graph leg, then the byte legs on the dist binary
+  local rc=0 trc=0 bin
+  leg_bazel_profile .bazelrc || { echo 'FAIL bazel profile leg: .bazelrc must define build:dist as --compilation_mode=opt plus lto=thin'; rc=1; }
+  "$BAZEL" aquery --config=dist "mnemonic(\"Rustc\", deps($BAZEL_TARGET))" --output=jsonproto 2>/dev/null | leg_bazel_features || trc=$?
+  case $trc in 0) ;; 1) echo "FAIL bazel feature leg: a Rustc action in deps($BAZEL_TARGET) has feature test-support"; rc=1 ;;
+    *) echo "FAIL bazel feature leg: no Rustc action for $CORE_TARGET in the aquery output, or aquery failed"; rc=1 ;; esac
+  bin=$(bazel_dist_binary) || { echo "FAIL (bazel): could not build $BAZEL_TARGET with --config=dist"; return 1; }
+  byte_legs bazel "$bin" || rc=1
+  [ "$rc" -eq 0 ] && echo "ok (bazel dist): profile, feature set, marker and reference legs clean ($bin)"
+  return "$rc"
+}
+
+bazel_selftest() {
+  need jq; local rc=0 r bin art='{"mnemonic":"Rustc","arguments":["--crate-name='"$CORE_TARGET"'"'
+  r=0; printf '{"actions":[%s,"--cfg","feature=\\"test-support\\""]}]}\n' "$art" | leg_bazel_features || r=$?; [ "$r" -eq 1 ] && echo "ok: bazel feature leg fails (1) on a test-support Rustc action" || { echo "SELFTEST BAD: bazel feature leg missed (rc $r)"; rc=1; }
+  r=0; printf '{"actions":[%s,"--cfg","feature=\\"default\\""]}]}\n' "$art" | leg_bazel_features || r=$?; [ "$r" -eq 0 ] && echo "ok: bazel feature leg passes on a clean action" || { echo "SELFTEST BAD: bazel feature leg false positive (rc $r)"; rc=1; }
+  r=0; printf '{"actions":[{"mnemonic":"Rustc","arguments":["--crate-name=other"]}]}\n' | leg_bazel_features || r=$?; [ "$r" -eq 2 ] && echo "ok: bazel feature leg fails (2) when no core action is present" || { echo "SELFTEST BAD: missing core action passed (rc $r)"; rc=1; }
+  r=0; printf '{}\n' | leg_bazel_features || r=$?; [ "$r" -eq 2 ] && echo "ok: bazel feature leg fails (2) on empty aquery output" || { echo "SELFTEST BAD: empty aquery passed (rc $r)"; rc=1; }
+  r=0; printf 'not json\n' | leg_bazel_features 2>/dev/null || r=$?; [ "$r" -eq 2 ] && echo "ok: bazel feature leg fails (2) on garbage" || { echo "SELFTEST BAD: garbage passed (rc $r)"; rc=1; }
+  TAINT_DIR=$(mktemp -d); local t="$TAINT_DIR"
+  printf 'build:dist --compilation_mode=opt\nbuild:dist --@rules_rust//rust/settings:lto=thin\n' > "$t/rc"; leg_bazel_profile "$t/rc" && echo "ok: dist config with opt and thin LTO accepted" || { echo "SELFTEST BAD: dist config rejected"; rc=1; }
+  printf 'build:dist --compilation_mode=opt\n' > "$t/rc"; leg_bazel_profile "$t/rc" && { echo "SELFTEST BAD: dist config without thin LTO accepted"; rc=1; } || echo "ok: dist config without thin LTO rejected"
+  printf 'build:other --compilation_mode=opt\nbuild:other --@rules_rust//rust/settings:lto=thin\n' > "$t/rc"; leg_bazel_profile "$t/rc" && { echo "SELFTEST BAD: settings of another config accepted"; rc=1; } || echo "ok: settings of another config do not satisfy build:dist"
+  # end to end: a deliberately tainted dist build (the //build:test_support flag) must fail every byte leg and the aquery leg
+  r=0; "$BAZEL" aquery --config=dist --//build:test_support=true "mnemonic(\"Rustc\", deps($BAZEL_TARGET))" --output=jsonproto 2>/dev/null | leg_bazel_features || r=$?
+  [ "$r" -eq 1 ] && echo "ok: tainted bazel build, aquery feature leg fails" || { echo "SELFTEST BAD: tainted bazel build, aquery feature leg passed (rc $r)"; rc=1; }
+  if bin=$(bazel_dist_binary --//build:test_support=true); then
+    scanner_sees_marker "$bin" && echo "ok: tainted bazel build, marker found (scanner is not blind)" || { echo "SELFTEST BAD: marker absent from a tainted bazel binary"; rc=1; }
+    leg_marker "$bin" && { echo "SELFTEST BAD: tainted bazel build, marker leg passed"; rc=1; } || echo "ok: tainted bazel build, marker leg fails"
+  else echo "SELFTEST BAD: tainted bazel build failed to build"; rc=1; fi
+  return "$rc"
+}
+
 cleanup_selftest() { [ -n "$TAINT_DIR" ] && rm -rf "$TAINT_DIR"; return 0; }
 
 selftest() {
@@ -133,10 +198,20 @@ selftest() {
 trap cleanup_selftest EXIT INT TERM
 case "${1:-}" in
   --selftest) selftest ;;
+  --bazel-selftest) bazel_selftest ;;
   --artifact) need grep; [ -f "${2:?path}" ] || die "$2 is not a file"; byte_legs artifact "$2" && echo "ok: no marker in $2 and main reaches build_flavor()" || exit 1 ;;
-  "") need jq; need cargo
-      leg_resolver Cargo.toml || die 'workspace Cargo.toml must pin resolver = "2"'
-      leg_profile Cargo.toml || die 'workspace Cargo.toml must define [profile.dist] with inherits = "release" (Task 0.1.1b; cargo-dist writes the same block)'
-      rc=0; build_and_check --release --release || rc=1; build_and_check "--profile dist" --profile dist || rc=1; exit "$rc" ;;
-  *) echo "usage: $0 [--artifact BIN | --selftest]" >&2; exit 64 ;;
+  "") need jq; legs=${DC_RELEASE_FEATURES_LEGS:-both}; rc=0
+      case $legs in cargo | bazel | both) ;; *) die "DC_RELEASE_FEATURES_LEGS must be cargo, bazel or both" ;; esac
+      if [ "$legs" != bazel ]; then
+        need cargo
+        leg_resolver Cargo.toml || die 'workspace Cargo.toml must pin resolver = "2"'
+        leg_profile Cargo.toml || die 'workspace Cargo.toml must define [profile.dist] with inherits = "release" (Task 0.1.1b)'
+        build_and_check --release --release || rc=1; build_and_check "--profile dist" --profile dist || rc=1
+      fi
+      if [ "$legs" != cargo ]; then
+        [ -x "$BAZEL" ] || command -v "$BAZEL" >/dev/null 2>&1 || die "$BAZEL not found (the Bazel leg cannot run, so it does not pass; DC_RELEASE_FEATURES_LEGS=cargo skips it)"
+        bazel_check || rc=1
+      fi
+      exit "$rc" ;;
+  *) echo "usage: $0 [--artifact BIN | --selftest | --bazel-selftest]" >&2; exit 64 ;;
 esac

@@ -123,5 +123,8 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-[ -n "${DC_BENCH_BIN:-}" ] || [ "$bin" != "${CARGO_TARGET_DIR:-target}/release/disk-cleanup" ] || cargo build --release --locked -q || fail "cargo build --release failed"
+if [ "${DC_BENCH_BAZEL:-0}" = 1 ] && [ -z "${DC_BENCH_BIN:-}" ] && [ "$bin" = "${CARGO_TARGET_DIR:-target}/release/disk-cleanup" ]; then
+  bin=$(cd "$(dirname "$0")/.." && scripts/gate-binary.sh none) || fail "bazel build failed"   # set by scripts/gate.sh
+fi
+[ -n "${DC_BENCH_BIN:-}" ] || [ "$bin" != "${CARGO_TARGET_DIR:-target}/release/disk-cleanup" ] || [ "${DC_BENCH_BAZEL:-0}" = 1 ] || cargo build --release --locked -q || fail "cargo build --release failed"
 run "$bin"
