@@ -27,10 +27,10 @@ fn classify_should_accept_every_mutating_command_the_plan_runs_When_each_of_15_a
         "docker volume rm myvol",
         "docker builder prune --force --filter until=24h",
         "btrfs balance start -dusage=0 /",
-        "btrfs balance start -dusage=5 /",
-        "btrfs balance start -dusage=10 /",
-        "btrfs balance start -dusage=20 /",
-        "btrfs balance start -dusage=40 /",
+        "btrfs balance start -dusage=5,limit=8 /",
+        "btrfs balance start -dusage=10,limit=8 /",
+        "btrfs balance start -dusage=20,limit=8 /",
+        "btrfs balance start -dusage=40,limit=8 /",
         "fstrim -v /",
         "go clean -cache",
         "pip cache purge",
@@ -56,6 +56,8 @@ fn classify_should_accept_the_read_only_commands_When_each_argv_given() {
         "docker system df",
         "docker context show",
         "btrfs balance status /",
+        "btrfs scrub status /",
+        "systemctl is-active btrfs-balance.timer",
         "go env GOCACHE",
         "pip cache dir",
         "git worktree list --porcelain",
@@ -325,8 +327,8 @@ fn check_refuse_the_remove_worktree_argv_in_both_classes() {
 }
 
 #[test]
-fn classify_should_accept_exactly_the_15_mutating_and_27_read_only_rows() {
-    assert_eq!(allowlist_row_counts(), (15, 27));
+fn classify_should_accept_exactly_the_15_mutating_and_29_read_only_rows() {
+    assert_eq!(allowlist_row_counts(), (15, 29));
 }
 
 #[test]
@@ -334,4 +336,30 @@ fn classify_should_ignore_label_and_refuse_non_utf8_empty_nul_and_the_remove_wor
     check_refuse_non_utf8_empty_and_nul();
     check_ignore_the_label_in_both_directions();
     check_refuse_the_remove_worktree_argv_in_both_classes();
+}
+
+#[test]
+fn classify_should_refuse_an_unbounded_non_zero_balance_step_and_other_timers_and_scrub_starts() {
+    for l in [
+        "btrfs balance start -dusage=5 /",
+        "btrfs balance start -dusage=40 /",
+        "btrfs balance start -dusage=5,limit=9 /",
+        "btrfs balance start -dusage=5,limit=8,devid=1 /",
+        "btrfs balance start -dusage=0,limit=8 /",
+        "btrfs scrub start /",
+        "btrfs scrub cancel /",
+        "systemctl is-active sshd.service",
+        "systemctl stop btrfs-balance.timer",
+        "systemctl is-active",
+    ] {
+        for mutating in [true, false] {
+            let mut cmd = c(l);
+            cmd.mutating = mutating;
+            assert_eq!(
+                classify(&cmd),
+                None,
+                "should refuse (label {mutating}): {l}"
+            );
+        }
+    }
 }
