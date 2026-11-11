@@ -5,11 +5,12 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::sync_channel;
 use std::sync::{Arc, Mutex};
 
-use super::msg::{FileRows, PlanPreview, ScanMsg};
+use super::confirm::{ConfirmRecord, ConfirmedPlan};
+use super::msg::{DeleteMsg, FileRows, PlanPreview, ScanMsg};
 
 use super::ports::{
-    DirLister, ExplorerActions, Handoff, PreviewHandle, ScanHandle, ScanOpts, ScanSource,
-    TermSignals,
+    DeleteHandle, DirLister, ExplorerActions, Handoff, PreviewHandle, ScanHandle, ScanOpts,
+    ScanSource, TermSignals, TypedCountSource,
 };
 /// The walker's record types, so a crate that builds `NodeEvent`s in tests (the `tui` crate, which may not
 /// depend on the scan crate) names them here.
@@ -185,6 +186,8 @@ pub struct FakeExplorerActions {
     pub plan: PlanPreview,
     previews: Mutex<Vec<Vec<PathBuf>>>,
     finishes: Mutex<Vec<Vec<PathBuf>>>,
+    delete_script: Mutex<Vec<DeleteMsg>>,
+    deletes: Mutex<Vec<ConfirmRecord>>,
 }
 
 impl FakeExplorerActions {
@@ -193,7 +196,27 @@ impl FakeExplorerActions {
             plan,
             previews: Mutex::new(Vec::new()),
             finishes: Mutex::new(Vec::new()),
+            delete_script: Mutex::new(Vec::new()),
+            deletes: Mutex::new(Vec::new()),
         }
+    }
+
+    /// The messages every `delete` replays (default: an immediate `Done` with nothing removed).
+    #[must_use]
+    pub fn with_delete_script(self, script: Vec<DeleteMsg>) -> FakeExplorerActions {
+        *self
+            .delete_script
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = script;
+        self
+    }
+
+    /// What each `delete` call was confirmed with (plan-id, count, bytes, typed text).
+    pub fn deletes(&self) -> Vec<ConfirmRecord> {
+        self.deletes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     pub fn previews(&self) -> Vec<Vec<PathBuf>> {
@@ -228,5 +251,53 @@ impl ExplorerActions for FakeExplorerActions {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push(marks.to_vec());
         Handoff::default()
+    }
+
+    fn delete(&self, confirmed: ConfirmedPlan) -> DeleteHandle {
+        self.deletes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(confirmed.record());
+        let script = self
+            .delete_script
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let script = if script.is_empty() {
+            vec![DeleteMsg::Done(super::msg::DeleteSummary::default())]
+        } else {
+            script
+        };
+        let (tx, rx) = sync_channel(script.len().max(1));
+        for m in script {
+            let _ = tx.send(m);
+        }
+        DeleteHandle::new(rx, Arc::new(AtomicBool::new(false)))
+    }
+}
+
+/// A scripted [`TypedCountSource`]: answers the listed entries in order, then cancels.
+#[derive(Debug)]
+pub struct FakeTypedCount {
+    terminal: bool,
+    entries: std::collections::VecDeque<String>,
+}
+
+impl FakeTypedCount {
+    pub fn new(terminal: bool, entries: &[&str]) -> FakeTypedCount {
+        FakeTypedCount {
+            terminal,
+            entries: entries.iter().map(|e| (*e).to_string()).collect(),
+        }
+    }
+}
+
+impl TypedCountSource for FakeTypedCount {
+    fn is_terminal(&self) -> bool {
+        self.terminal
+    }
+
+    fn next_entry(&mut self) -> Option<String> {
+        self.entries.pop_front()
     }
 }

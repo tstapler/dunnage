@@ -282,11 +282,12 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::Mutex;
 use std::time::Duration;
 
+use disk_cleanup_core::explore::confirm::ConfirmedPlan;
 use disk_cleanup_core::explore::keymap::Key;
 use disk_cleanup_core::explore::msg::{PlanPreview, ScanMsg};
 use disk_cleanup_core::explore::ports::{
-    DirLister, ExplorerActions, Handoff, PreviewHandle, ScanHandle, ScanOpts, ScanSource,
-    TermSignals,
+    DeleteHandle, DirLister, ExplorerActions, Handoff, PreviewHandle, ScanHandle, ScanOpts,
+    ScanSource, TermSignals,
 };
 use disk_cleanup_core::explore::testing::FakeDirLister;
 use disk_cleanup_core::ids::Identity;
@@ -577,6 +578,12 @@ impl ExplorerActions for SlowActions {
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
         let _ = tx.send(ScanMsg::Preview(self.plan.clone()));
         PreviewHandle::new(rx, cancel)
+    }
+
+    fn delete(&self, _confirmed: ConfirmedPlan) -> DeleteHandle {
+        self.calls.push("delete");
+        let (_tx, rx) = std::sync::mpsc::sync_channel(1);
+        DeleteHandle::new(rx, Arc::new(AtomicBool::new(false)))
     }
 
     fn finish(&self, _marks: &[PathBuf]) -> Handoff {

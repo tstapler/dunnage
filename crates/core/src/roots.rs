@@ -161,6 +161,11 @@ pub struct RootIdentity {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RootSet {
     home: PathBuf,
+    home_id: Identity,
+    /// `$HOME` and every ancestor of it, by the `(dev, ino)` that `canon` reported when the roots were
+    /// resolved (the first entry is `home_id`). Kept after resolution so a directory reached under another
+    /// spelling (a bind mount of `/home`) is still recognised by identity (Task 6.6.3f, review 2 N3).
+    home_chain: Vec<Identity>,
     scan_roots: Vec<PathBuf>,
     root_idents: Vec<RootIdentity>,
     cache_paths: Vec<PathBuf>,
@@ -315,6 +320,8 @@ impl RootSet {
         let cache_paths = CACHE_PATHS.iter().map(|p| home.join(p)).collect();
         Ok(RootSet {
             home,
+            home_id,
+            home_chain: forbidden,
             scan_roots,
             root_idents,
             cache_paths,
@@ -352,6 +359,21 @@ impl RootSet {
 
     pub fn home(&self) -> &Path {
         &self.home
+    }
+
+    /// The identity of `$HOME`'s directory as resolved.
+    pub fn home_id(&self) -> Identity {
+        self.home_id
+    }
+
+    /// `$HOME` and its ancestors by identity, `$HOME` first.
+    pub fn home_chain(&self) -> &[Identity] {
+        &self.home_chain
+    }
+
+    /// `ident` is `$HOME` or an ancestor of it, whatever path it was reached by.
+    pub fn in_home_chain(&self, ident: Identity) -> bool {
+        self.home_chain.contains(&ident)
     }
 
     /// The canonical scan roots, in resolution order.

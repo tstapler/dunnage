@@ -52,6 +52,10 @@ pub fn decide_path_common(facts: &Facts, roots: &RootSet) -> GuardDecision {
     if protected_position(path, roots.scan_roots()) {
         return Skip(SkipReason::ProtectedPath);
     }
+    // `$HOME` or an ancestor under another spelling (a bind mount): the lexical test above cannot see it.
+    if roots.in_home_chain(facts.ident) {
+        return Skip(SkipReason::ProtectedPath);
+    }
     if !facts.ident.on_dev(facts.root_dev) {
         return Skip(SkipReason::CrossDevice);
     }

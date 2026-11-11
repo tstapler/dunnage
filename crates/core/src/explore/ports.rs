@@ -7,7 +7,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 
-use super::msg::{FileRows, PlanPreview, ScanMsg};
+use super::confirm::ConfirmedPlan;
+use super::msg::{DeleteMsg, FileRows, PlanPreview, ScanMsg};
 
 /// What a scan is asked to do.
 #[derive(Debug, Clone)]
@@ -110,11 +111,50 @@ impl PreviewHandle {
     }
 }
 
+/// A running explorer delete: its message channel and the switch that stops it at the next item boundary
+/// (the real worker maps `abort` onto the engine's `AbortFlag`, so a large tree stops promptly; Task 6.6.3b).
+#[derive(Debug)]
+pub struct DeleteHandle {
+    pub rx: Receiver<DeleteMsg>,
+    abort: Arc<AtomicBool>,
+}
+
+impl DeleteHandle {
+    pub fn new(rx: Receiver<DeleteMsg>, abort: Arc<AtomicBool>) -> DeleteHandle {
+        DeleteHandle { rx, abort }
+    }
+
+    /// Asks the delete to stop. Items already removed keep their results.
+    pub fn abort(&self) {
+        self.abort.store(true, Ordering::SeqCst);
+    }
+
+    pub fn is_aborted(&self) -> bool {
+        self.abort.load(Ordering::SeqCst)
+    }
+}
+
+/// Where the typed count comes from. The real reader opens the controlling terminal through `/dev/tty`
+/// (Story 6.6.4c) and is the loop's single tty reader: the count is never read by a second one (review 2, N8).
+/// It is a speed bump against a reflex, not a defence against another program of the same uid, which can
+/// write the same bytes to the same terminal (ADR-006 A6, review C11).
+pub trait TypedCountSource: Send {
+    /// False when stdin is not a terminal: the delete is refused with `Deleting needs a terminal. Nothing was
+    /// deleted.`
+    fn is_terminal(&self) -> bool;
+    /// The next entry the owner submitted, `None` when the owner cancelled (Esc) or the terminal closed.
+    fn next_entry(&mut self) -> Option<String>;
+}
+
 /// What the TUI calls to leave the screen. The `tui` crate holds no planner, store or renderer, so it
-/// cannot delete by itself (`delete` joins this trait in Story 6.6.3).
+/// cannot delete by itself: `delete` takes only a [`ConfirmedPlan`], which exists only as the result of
+/// `Confirm::accepts` on a `ReviewedPlan` (Story 6.6.3), so the type system forbids a delete that skipped the
+/// review or the typed count.
 pub trait ExplorerActions: Send + Sync {
     fn preview(&self, marks: &[PathBuf], cancel: Arc<AtomicBool>) -> PreviewHandle;
     fn finish(&self, marks: &[PathBuf]) -> Handoff;
+    /// Starts the delete of the confirmed plan on a worker; consumes the plan.
+    fn delete(&self, confirmed: ConfirmedPlan) -> DeleteHandle;
 }
 
 /// Kept so a fake can answer a preview without a channel of its own.

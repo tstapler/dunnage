@@ -1,0 +1,2 @@
+# Task 6.6.3a: the typed count and ConfirmedPlan. (Task 6.6.3f's code is in floor_rule.rs, already listed by engine.files and 6.6.5k.files.)
+crates/core/src/explore/confirm.rs
