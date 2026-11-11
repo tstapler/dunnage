@@ -23,6 +23,7 @@ pub mod guard;
 pub mod ids;
 pub mod kind;
 pub mod outcome;
+pub mod par;
 pub mod plan;
 pub mod plan_state;
 pub mod platform;

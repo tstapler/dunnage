@@ -110,6 +110,12 @@ impl NewestStore {
         }
     }
 
+    /// Takes over the entries `other` recorded (parallel probes each fill their own store).
+    pub fn absorb(&mut self, other: NewestStore) {
+        self.dirty |= other.dirty;
+        self.map.extend(other.map);
+    }
+
     pub fn len(&self) -> usize {
         self.map.len()
     }

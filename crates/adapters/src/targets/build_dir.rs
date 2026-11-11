@@ -377,6 +377,9 @@ pub(crate) fn delete_error_of(r: SkipReason) -> DeleteError {
 }
 
 /// The `build-dirs` kind: `node_modules` and cargo `target` below the scan roots.
+/// The cleaner's own walker cache below `Dirs.cache`.
+const WALKER_CACHE_FILE: &str = "disk-cleanup/walker.cache";
+
 pub struct BuildDirTarget<D: DirOps> {
     roots: RootSet,
     ops: D,
@@ -538,7 +541,9 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
             kinds: BuildKinds::ALL,
             max_duration: None,
             rescan: false,
-            walker_cache: None,
+            // Directories unchanged since the last run come from the cache (a changed mtime relists them);
+            // `scan.cache` belongs to the `scan` subcommand.
+            walker_cache: Some(env.dirs.cache.join(WALKER_CACHE_FILE)),
         };
         let benv = BuildEnv {
             ops: &self.ops,

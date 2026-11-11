@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use disk_cleanup_core::par::{default_workers, par_map};
 use disk_cleanup_core::ports::{Cmd, Env};
 use disk_cleanup_core::roots::RootSet;
 use disk_cleanup_core::selector::Selection;
@@ -166,15 +167,25 @@ impl<D: DirOps> WorktreeTarget<D> {
         opts: WorktreeOpts,
     ) -> (WorktreeProbed, WorktreeGuard) {
         let mut store = std::mem::take(&mut lock(&self.state).store);
-        let out = guard_worktree(
+        let out = self.probe_with(env, site, opts, &mut store);
+        lock(&self.state).store = store;
+        out
+    }
+
+    fn probe_with(
+        &self,
+        env: &Env,
+        site: &WorktreeSite,
+        opts: WorktreeOpts,
+        store: &mut NewestStore,
+    ) -> (WorktreeProbed, WorktreeGuard) {
+        guard_worktree(
             &self.probe_env(env),
             site,
             env.clock.now_epoch(),
             opts,
-            &mut store,
-        );
-        lock(&self.state).store = store;
-        out
+            store,
+        )
     }
 
     /// A fresh guard of `c`: `Err` is the skip that stopped it, `Ok` the witness and the probe.
@@ -264,9 +275,11 @@ impl<D: DirOps + 'static> Target for WorktreeTarget<D> {
             st.unread.clear();
             st.warnings = warnings;
         }
-        let mut out = Vec::new();
-        for site in &found.sites {
-            let (probed, guard) = self.probe(env, site, opts);
+        // Probes are independent per site (a few `git` runs and a tree measure each): run them side by side,
+        // keep the order git listed them in.
+        let probed = par_map(&found.sites, default_workers(), |site| {
+            let mut store = NewestStore::in_memory();
+            let (probed, guard) = self.probe_with(env, site, opts, &mut store);
             let ident = probed.facts.as_ref().map_or(probed.planned, |f| f.ident);
             let est = if matches!(guard, WorktreeGuard::Allow(_)) {
                 self.measure_tree(&site.entry.path, ident).attributed_bytes
@@ -283,13 +296,18 @@ impl<D: DirOps + 'static> Target for WorktreeTarget<D> {
                 age_epoch(env, site, &probed),
                 probed.planned,
             );
-            let mut st = lock(&self.state);
-            st.items
-                .insert(c.id(), item_of(&probed, &guard, opts.discard_ignored));
+            let item = item_of(&probed, &guard, opts.discard_ignored);
+            (c, item, store)
+        });
+        let mut out = Vec::with_capacity(probed.len());
+        let mut st = lock(&self.state);
+        for (c, item, store) in probed {
+            st.items.insert(c.id(), item);
             st.unread.insert(c.id());
-            drop(st);
+            st.store.absorb(store);
             out.push(c);
         }
+        drop(st);
         out
     }
 

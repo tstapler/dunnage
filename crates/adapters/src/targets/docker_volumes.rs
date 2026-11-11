@@ -28,6 +28,7 @@ use crate::targets::docker_common::{
     failure, freed_of, lock, read, remove, skip_of, GateMemo, DOCKER_IDENT,
 };
 use crate::targets::docker_images::DAEMON_SIDE_NOTE;
+use disk_cleanup_core::par::{default_workers, par_map};
 
 const COMPOSE_PROJECT: &str = "com.docker.compose.project";
 const COMPOSE_WORKING_DIR: &str = "com.docker.compose.project.working_dir";
@@ -263,8 +264,8 @@ impl Target for DockerVolumesTarget {
             return Vec::new();
         };
         let now = env.clock.now_epoch();
-        let mut out = Vec::new();
-        for v in &volumes {
+        // One read-only `volume inspect` per volume: independent, so side by side, kept in listing order.
+        let decided = par_map(&volumes, default_workers(), |v| {
             let inspected = Self::inspect(env, &v.name);
             let (facts, evidence) = Self::facts(env, v, &inspected, used_by(v, &containers));
             let verdict = decide_volume(&facts, &Self::opts(&run, now));
@@ -278,13 +279,17 @@ impl Target for DockerVolumesTarget {
                 facts.created_epoch,
                 DOCKER_IDENT,
             );
-            let mut st = lock(&self.state);
+            (c, verdict, evidence, v.approx_size_bytes)
+        });
+        let mut out = Vec::with_capacity(decided.len());
+        let mut st = lock(&self.state);
+        for (c, verdict, evidence, size) in decided {
             st.verdicts.insert(c.id(), (verdict.reason, verdict.detail));
             st.evidence.insert(c.id(), evidence);
-            st.sizes.insert(c.id(), v.approx_size_bytes);
-            drop(st);
+            st.sizes.insert(c.id(), size);
             out.push(c);
         }
+        drop(st);
         out
     }
 

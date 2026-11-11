@@ -8,6 +8,7 @@ use std::ffi::OsString;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 
+use disk_cleanup_core::par::{default_workers, par_map};
 use disk_cleanup_core::ports::{Cmd, CommandRunner};
 use disk_cleanup_core::Identity;
 
@@ -100,34 +101,44 @@ fn git(repo: &Path, args: &[&str]) -> Cmd {
 /// Lists the worktrees of every main repo, one `git worktree list --porcelain -z` each. A repo whose list
 /// fails yields a `warning:` line and no candidates; nothing is guessed from a directory walk.
 pub fn discover_worktrees(runner: &dyn CommandRunner, main_repos: &[PathBuf]) -> WorktreeDiscovery {
+    let per_repo = par_map(main_repos, default_workers(), |repo| {
+        list_repo(runner, repo)
+    });
     let mut out = WorktreeDiscovery::default();
-    for repo in main_repos {
-        let listed = runner.run(&git(repo, &["worktree", "list", "--porcelain", "-z"]));
-        let bytes = match listed {
-            Ok(o) => o.stdout,
-            Err(e) => {
-                out.warnings.push(format!(
-                    "warning: {}: git worktree list failed ({e:?}); its worktrees were not examined",
-                    repo.display()
-                ));
-                continue;
-            }
-        };
-        for entry in parse_porcelain_z(&bytes) {
-            if entry.bare || !is_agent_worktree_path(repo, &entry.path) {
-                continue;
-            }
+    for (sites, warning) in per_repo {
+        out.sites.extend(sites);
+        out.warnings.extend(warning);
+    }
+    out
+}
+
+fn list_repo(runner: &dyn CommandRunner, repo: &Path) -> (Vec<WorktreeSite>, Option<String>) {
+    let listed = runner.run(&git(repo, &["worktree", "list", "--porcelain", "-z"]));
+    let bytes = match listed {
+        Ok(o) => o.stdout,
+        Err(e) => {
+            let w = format!(
+                "warning: {}: git worktree list failed ({e:?}); its worktrees were not examined",
+                repo.display()
+            );
+            return (Vec::new(), Some(w));
+        }
+    };
+    let sites = parse_porcelain_z(&bytes)
+        .into_iter()
+        .filter(|entry| !entry.bare && is_agent_worktree_path(repo, &entry.path))
+        .map(|entry| {
             let ident = std::fs::symlink_metadata(&entry.path)
                 .ok()
                 .map(|m| Identity::of(&m));
-            out.sites.push(WorktreeSite {
-                main_repo: repo.clone(),
+            WorktreeSite {
+                main_repo: repo.to_path_buf(),
                 entry,
                 ident,
-            });
-        }
-    }
-    out
+            }
+        })
+        .collect();
+    (sites, None)
 }
 
 /// The main repo that owns `checkout`, from `git rev-parse --git-common-dir` (the common git directory is
@@ -165,8 +176,9 @@ pub struct RepoCollection {
 pub fn collect_repos(runner: &dyn CommandRunner, seeds: &[PathBuf]) -> RepoCollection {
     let mut set = BTreeSet::new();
     let mut warnings = Vec::new();
-    for seed in seeds {
-        match main_repo_of(runner, seed) {
+    let mains = par_map(seeds, default_workers(), |seed| main_repo_of(runner, seed));
+    for (seed, main) in seeds.iter().zip(mains) {
+        match main {
             Ok(main) => {
                 set.insert(main);
             }

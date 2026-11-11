@@ -30,6 +30,10 @@ use crate::target::{kind_order, Guarded, KindGate, Target};
 /// The `--jobs` default: the worker bound when the flag is absent (Story 3.2.4, benchmark in `spikes.md`).
 pub const DEFAULT_JOBS: usize = 4;
 
+/// Kinds discovered at once (there are about a dozen); each kind's wall time is its own, the sum no longer
+/// equals `discover_ms`.
+const DISCOVERY_WORKERS: usize = 16;
+
 /// Fixed points of an apply that the composition root observes (Story 2.3.4). `step` names the point so a
 /// test can assert the order of `design/ux.md` 1.4; `committed` runs once the plan-id gate has passed and may
 /// still end the run; `item_started` feeds the live `[n/m] removing` progress lines.
@@ -218,6 +222,7 @@ pub struct Executor<'a> {
     targets: Vec<&'a dyn Target>,
     opts: RunOptions,
     extents: Option<&'a dyn ExtentProbe>,
+    discovery_workers: usize,
 }
 
 struct Shared<'t> {
@@ -349,7 +354,15 @@ impl<'a> Executor<'a> {
             targets,
             opts,
             extents: None,
+            discovery_workers: DISCOVERY_WORKERS,
         }
+    }
+
+    /// Kinds discovered at once; 1 is the sequential order the concurrent result must equal.
+    #[must_use]
+    pub fn with_discovery_workers(mut self, workers: usize) -> Executor<'a> {
+        self.discovery_workers = workers;
+        self
     }
 
     /// Shared-extent attribution for the removed set (ADR-004). Without a probe the summary says the
@@ -398,6 +411,44 @@ impl<'a> Executor<'a> {
         self.run_hooked(sel, mode, supplied, &NoHooks)
     }
 
+    /// Gate probe and discovery of every target, `workers` at a time. Discovery only reads, so the kinds run
+    /// concurrently; results are assembled in registration order, so candidates (hence plan ids and `Next:`
+    /// lines) are the same for any `workers`.
+    fn discover_all(
+        &self,
+        sel: &Selection,
+        avail: &Availability,
+        workers: usize,
+    ) -> (Vec<Candidate>, Vec<(&'static str, u64)>) {
+        let env = self.env;
+        let per_kind = crate::par::par_map(&self.targets, workers, |t| {
+            // Gate probe and discovery together: an unselected kind's gate can be the slow part (e.g. a process scan).
+            let t_start = Instant::now();
+            let selected = t.selectors().iter().any(|s| sel.selects(*s));
+            let down = if selected {
+                avail.is_unavailable(*t)
+            } else {
+                // An unselected kind is still listed (its items are `RISK` rows), unless it is down.
+                t.gate(env).is_unavailable()
+            };
+            let found = if down {
+                Vec::new()
+            } else {
+                t.discover(env, sel)
+            };
+            (found, millis(t_start))
+        });
+        let mut candidates = Vec::new();
+        let mut kind_ms = Vec::new();
+        for (t, (found, ms)) in self.targets.iter().zip(per_kind) {
+            candidates.extend(found);
+            if let Some(id) = t.selectors().first() {
+                kind_ms.push((id.id(), ms));
+            }
+        }
+        (candidates, kind_ms)
+    }
+
     /// [`run`](Self::run) with the composition root watching the fixed points of an apply.
     pub fn run_hooked(
         &self,
@@ -423,24 +474,8 @@ impl<'a> Executor<'a> {
             return Err(all_down_refusal(avail));
         }
 
-        let mut candidates: Vec<Candidate> = Vec::new();
-        for t in self.targets.iter().copied() {
-            // Gate probe and discovery together: an unselected kind's gate can be the slow part (e.g. a process scan).
-            let t_start = Instant::now();
-            let selected = t.selectors().iter().any(|s| sel.selects(*s));
-            let down = if selected {
-                avail.is_unavailable(t)
-            } else {
-                // An unselected kind is still listed (its items are `RISK` rows), unless it is down.
-                t.gate(env).is_unavailable()
-            };
-            if !down {
-                candidates.extend(t.discover(env, sel));
-            }
-            if let Some(id) = t.selectors().first() {
-                by_kind.push((id.id(), millis(t_start)));
-            }
-        }
+        let (candidates, kind_ms) = self.discover_all(sel, &avail, self.discovery_workers);
+        by_kind.extend(kind_ms);
         if let Some(refused) = only_refusal(sel, &candidates, &avail) {
             return Err(refused);
         }
