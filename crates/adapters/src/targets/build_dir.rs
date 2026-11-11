@@ -14,7 +14,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
+use disk_cleanup_core::guard::Facts;
 use disk_cleanup_core::ports::{Env, SystemProbe};
 use disk_cleanup_core::roots::RootSet;
 use disk_cleanup_core::selector::Selection;
@@ -245,34 +245,6 @@ fn gather<D: DirOps>(
 
 /// The detail of a `Skip(MountPoint)` that stands for "the mount table could not be read".
 pub const DETAIL_MOUNTS_UNREADABLE: &str = "the mount table could not be read";
-
-/// A fresh `Allowed` for a build dir planned with identity `planned`: the common path checks, the identity
-/// and the sibling marker, and nothing that walks the tree. `execute` calls it when no guard has just
-/// verified the item.
-pub fn rederive_allowed<D: DirOps>(
-    env: &RecheckEnv<'_, D>,
-    flavor: BuildDirFlavor,
-    path: &Path,
-    planned: Identity,
-) -> Result<Allowed, SkipReason> {
-    let g = gather(env, flavor, path).map_err(|r| match r.guard {
-        BuildGuard::Skip { reason, .. } => reason,
-        BuildGuard::Allow(_) => SkipReason::OutsideRoot,
-    })?;
-    if g.st.kind != FileKind::Dir {
-        return Err(SkipReason::IdentityChanged);
-    }
-    match decide_path_common(&g.path_facts, env.roots) {
-        GuardDecision::Skip(r) => Err(r),
-        GuardDecision::Allow(a) => {
-            if g.st.ident != planned || !g.marker {
-                Err(SkipReason::IdentityChanged)
-            } else {
-                Ok(a)
-            }
-        }
-    }
-}
 
 /// Re-validates `path` (a build dir planned with identity `planned`) against fresh state. `now` is Unix
 /// seconds and `min_age` the `--min-age` flag; the 60-minute floor is applied by the pure decision.

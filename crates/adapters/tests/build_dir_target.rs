@@ -12,13 +12,13 @@ mod common;
 use common::discovery::*;
 
 use std::fs;
-use std::os::unix::fs::symlink;
+use std::os::unix::fs::{symlink, MetadataExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use disk_cleanup_adapters::targets::build_dir::{BuildDirTarget, DETAIL_MOUNTS_UNREADABLE};
-use disk_cleanup_adapters::testing::FaultDirOps;
+use disk_cleanup_adapters::testing::{At, FaultDirOps, Op};
 use disk_cleanup_adapters::RealDirOps;
 use disk_cleanup_core::audit_types::RunRoots;
 use disk_cleanup_core::executor::{
@@ -33,8 +33,8 @@ use disk_cleanup_core::testing::{
     FakeSpaceMeter,
 };
 use disk_cleanup_core::{
-    ApplyToken, BuildInfo, Candidate, CandidateId, DeleteError, DeleteFailure, Freed, SelectorId,
-    SkipReason, Status,
+    ApplyToken, BuildInfo, Candidate, CandidateId, DeleteError, DeleteFailure, Freed, MountEntry,
+    SelectorId, SkipReason, Status,
 };
 
 const MIB: usize = 1 << 20;
@@ -394,6 +394,187 @@ fn safety_build_dir_unreadable_mount_table_fails_closed() {
         .plan_notes(&env, &sel())
         .iter()
         .any(|n| n.contains(DETAIL_MOUNTS_UNREADABLE)));
+}
+
+#[test]
+fn guard_before_delete_should_skip_with_mount_point_only_for_the_dir_that_is_a_mount_point() {
+    let f = fixture();
+    let on_mount = stale_node(&f, "mounted", Some("l1"), 30);
+    let plain = stale_node(&f, "plain", Some("l2"), 30);
+    let mount = |p: &Path| MountEntry {
+        mount_point: p.to_path_buf(),
+        dev: 1,
+        mnt_id: 2,
+    };
+    let probe =
+        FakeProbe::new().with_mounts(vec![mount(&on_mount), mount(Path::new("/elsewhere"))]);
+    let t = target(&f);
+    let rig = Rig::with_probe(&f, probe);
+    let env = rig.env();
+    let cands = t.discover(&env, &sel());
+
+    assert_eq!(
+        t.guard_before_delete(find(&cands, &on_mount), &env),
+        Guarded::Skip(SkipReason::MountPoint)
+    );
+    assert_eq!(
+        t.guard_before_delete(find(&cands, &plain), &env),
+        Guarded::Allow
+    );
+}
+
+#[test]
+fn guard_before_delete_should_skip_with_identity_changed_not_gone_When_the_dir_cannot_be_stat_ed() {
+    let f = fixture();
+    let nm = stale_node(&f, "app", Some("l"), 30);
+    let ops = FaultDirOps::wrap(RealDirOps::confined_to(&f.home))
+        .errno_on(Op::StatAt, At::Name("node_modules".into()), libc::EACCES)
+        .build();
+    let t = BuildDirTarget::new(roots_for(&f), ops);
+    let rig = Rig::new(&f);
+    let env = rig.env();
+    let cands = t.discover(&env, &sel());
+
+    assert_eq!(
+        t.guard_before_delete(find(&cands, &nm), &env),
+        Guarded::Skip(SkipReason::IdentityChanged)
+    );
+    assert!(nm.join("x").exists());
+}
+
+#[test]
+fn guard_before_delete_should_skip_too_recent_When_a_nested_file_is_young_though_the_dir_looks_old()
+{
+    let f = fixture();
+    let nm = stale_node(&f, "app", Some("l"), 30);
+    let t = target(&f);
+    let rig = Rig::new(&f);
+    let env = rig.env();
+    let mut s = sel();
+    s.min_age_secs = Some(3 * 3600);
+    let cands = t.discover(&env, &s);
+    let c = find(&cands, &nm);
+    // A file written in place two hours ago deep inside: no directory on the way moved, so only the walk sees it.
+    fs::create_dir_all(nm.join("pkg/lib")).unwrap();
+    fs::write(nm.join("pkg/lib/fresh"), "x").unwrap();
+    set_age(&nm.join("pkg/lib/fresh"), 2 * HOUR);
+    for d in [nm.join("pkg/lib"), nm.join("pkg"), nm.clone()] {
+        set_age(&d, Duration::from_secs(30 * 86_400));
+    }
+
+    assert_eq!(
+        t.guard_before_delete(c, &env),
+        Guarded::Skip(SkipReason::TooRecent),
+        "a 2 h old file under a 3 h --min-age"
+    );
+    set_age(&nm.join("pkg/lib/fresh"), 5 * HOUR);
+    for d in [nm.join("pkg/lib"), nm.join("pkg"), nm.clone()] {
+        set_age(&d, Duration::from_secs(30 * 86_400));
+    }
+    assert_eq!(
+        t.guard_before_delete(c, &env),
+        Guarded::Allow,
+        "the same file at 5 h is older than the 3 h flag"
+    );
+}
+
+#[test]
+fn guard_before_delete_should_apply_the_min_age_flag_and_not_only_the_floor_When_a_file_is_a_day_old(
+) {
+    let f = fixture();
+    let nm = stale_node(&f, "app", Some("l"), 90);
+    let t = target(&f);
+    let rig = Rig::new(&f);
+    let env = rig.env();
+    let mut s = sel();
+    s.min_age_secs = Some(60 * 86_400);
+    let cands = t.discover(&env, &s);
+    let c = find(&cands, &nm);
+    assert_eq!(t.guard(c, &env), Guarded::Allow);
+
+    // After the plan a day-old file appears: past the 60 minute floor, inside the 60 day flag.
+    fs::write(nm.join("recent"), "x").unwrap();
+    set_age(&nm.join("recent"), DAY);
+    set_age(&nm, Duration::from_secs(90 * 86_400));
+
+    assert_eq!(
+        t.guard_before_delete(c, &env),
+        Guarded::Skip(SkipReason::TooRecent)
+    );
+}
+
+#[test]
+fn execute_should_map_a_changed_dir_to_the_matching_error_When_no_guard_ran_first() {
+    let f = fixture();
+    let nm = stale_node(&f, "app", Some("l"), 30);
+    let t = target(&f);
+    let rig = Rig::new(&f);
+    let env = rig.env();
+    let cands = t.discover(&env, &sel());
+    let c = find(&cands, &nm);
+    let old_ino = c.ident().ino;
+
+    fs::remove_dir_all(&nm).unwrap();
+    fs::create_dir_all(&nm).unwrap();
+    fs::write(nm.join("x"), "x").unwrap();
+    set_age(&nm.join("x"), 30 * DAY);
+    set_age(&nm, 30 * DAY);
+    if fs::metadata(&nm).unwrap().ino() == old_ino {
+        return; // inode reused: the directory looks unchanged
+    }
+
+    let err = t.execute(c, &env, &ApplyToken::for_tests()).unwrap_err();
+    assert_eq!(err.error, DeleteError::IdentityMismatch);
+    assert!(nm.join("x").exists());
+}
+
+#[test]
+fn execute_should_refuse_with_cross_device_When_the_dir_reports_another_device() {
+    let f = fixture();
+    let nm = stale_node(&f, "app", Some("l"), 30);
+    let ops = FaultDirOps::wrap(RealDirOps::confined_to(&f.home))
+        .report_dev(At::Name("node_modules".into()), 4242)
+        .build();
+    let t = BuildDirTarget::new(roots_for(&f), ops);
+    let rig = Rig::new(&f);
+    let env = rig.env();
+    let cands = t.discover(&env, &sel());
+
+    let err = t
+        .execute(find(&cands, &nm), &env, &ApplyToken::for_tests())
+        .unwrap_err();
+
+    assert_eq!(err.error, DeleteError::CrossDevice);
+    assert!(nm.join("x").exists());
+}
+
+#[test]
+fn execute_should_refuse_a_running_build_When_no_guard_ran_first() {
+    let f = fixture();
+    let nm = stale_node(&f, "app", Some("l"), 30);
+    let t = target(&f);
+    let rig = Rig::with_probe(&f, FakeProbe::new().run_state_of(&nm, RunState::Running));
+    let env = rig.env();
+    let cands = t.discover(&env, &sel());
+
+    let err = t
+        .execute(find(&cands, &nm), &env, &ApplyToken::for_tests())
+        .unwrap_err();
+
+    assert_eq!(err.error, DeleteError::Refused);
+    assert!(nm.join("x").exists());
+}
+
+#[test]
+fn a_dir_with_a_unique_lockfile_should_belong_to_no_duplicate_set_and_the_target_should_be_named() {
+    let f = fixture();
+    let solo = stale_node(&f, "solo", Some("only-one"), 30);
+    let t = target(&f);
+    let rig = Rig::new(&f);
+    let env = rig.env();
+    let cands = t.discover(&env, &sel());
+    assert_eq!(t.duplicate_set_size(find(&cands, &solo)), None);
+    assert_eq!(t.name(), "build-dirs");
 }
 
 #[test]
