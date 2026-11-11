@@ -81,8 +81,9 @@ fn kinds_should_list_caches_as_available_and_the_other_gates_as_not_available_Wh
         "btrfs",
         "btrfs-trim",
     ] {
-        if cfg!(feature = "gate-d") && id == "btrfs" {
-            // Gate D registers the balance (Story 4.3.2); `btrfs_balance.rs` and `cli.rs` cover it.
+        if cfg!(feature = "gate-d") && id.starts_with("btrfs") {
+            // Gate D registers the balance and the trim (Stories 4.3.2, 4.3.3); `btrfs_balance.rs`,
+            // `btrfs_trim.rs` and `cli.rs` cover them.
             continue;
         }
         if cfg!(feature = "gate-c") && (id == "worktrees" || id == "build-dirs") {
