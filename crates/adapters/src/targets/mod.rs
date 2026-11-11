@@ -5,3 +5,4 @@ pub mod build_dir;
 pub mod cache_cmd;
 pub mod symlink_note;
 pub mod worktree_discover;
+pub mod worktree_probe;

@@ -78,49 +78,10 @@ pub use summary::{
     SnapshotFacts, StageTimings, WalkerCounters,
 };
 
-use std::path::PathBuf;
-
-/// A Claude Code agent worktree (`.claude/worktrees/agent-*`) considered for
-/// removal, with everything the staleness rule needs already gathered.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorktreeCandidate {
-    pub path: PathBuf,
-    /// Unix seconds of the worktree's last commit, or `None` if it has none.
-    pub last_commit_epoch: Option<i64>,
-    pub locked: bool,
-    pub dirty: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Verdict {
-    Stale,
-    SkipLocked,
-    SkipDirty,
-    SkipTooRecent,
-}
-
-/// Decide whether a worktree is safe to remove.
-///
-/// Order matters: locked beats dirty beats age — a lock is the strongest
-/// "don't touch" signal a caller can give, and uncommitted changes must
-/// never be discarded just because the last *commit* is old.
-#[must_use]
-pub fn worktree_verdict(candidate: &WorktreeCandidate, now_epoch: i64, stale_days: u32) -> Verdict {
-    if candidate.locked {
-        return Verdict::SkipLocked;
-    }
-    if candidate.dirty {
-        return Verdict::SkipDirty;
-    }
-    let age_days = candidate
-        .last_commit_epoch
-        .map_or(0, |commit| (now_epoch - commit).max(0) / 86_400);
-    if age_days >= i64::from(stale_days) {
-        Verdict::Stale
-    } else {
-        Verdict::SkipTooRecent
-    }
-}
+pub use targets::worktree_guard::{
+    decide_worktree, worktree_verdict, IgnoredFiles, PushState, Verdict, WorktreeCandidate,
+    WorktreeGuard, WorktreeOpts, WORKTREE_MIN_AGE,
+};
 
 /// A cache directory disk-cleanup knows how to reclaim, expressed relative
 /// to `$HOME` so the (pure) list can be unit tested without touching disk.
@@ -187,72 +148,6 @@ pub const MACOS_CACHE_TARGETS: &[CacheTarget] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const NOW: i64 = 1_000_000;
-
-    fn candidate(days_old: i64, locked: bool, dirty: bool) -> WorktreeCandidate {
-        WorktreeCandidate {
-            path: PathBuf::from("/tmp/wt"),
-            last_commit_epoch: Some(NOW - days_old * 86_400),
-            locked,
-            dirty,
-        }
-    }
-
-    #[test]
-    fn stale_when_old_clean_unlocked() {
-        assert_eq!(
-            worktree_verdict(&candidate(30, false, false), NOW, 14),
-            Verdict::Stale
-        );
-    }
-
-    #[test]
-    fn skip_when_too_recent() {
-        assert_eq!(
-            worktree_verdict(&candidate(1, false, false), NOW, 14),
-            Verdict::SkipTooRecent
-        );
-    }
-
-    #[test]
-    fn boundary_exactly_stale_days_is_stale() {
-        assert_eq!(
-            worktree_verdict(&candidate(14, false, false), NOW, 14),
-            Verdict::Stale
-        );
-    }
-
-    #[test]
-    fn locked_wins_even_when_old_and_clean() {
-        assert_eq!(
-            worktree_verdict(&candidate(30, true, false), NOW, 14),
-            Verdict::SkipLocked
-        );
-    }
-
-    #[test]
-    fn dirty_wins_over_age_but_not_over_lock() {
-        assert_eq!(
-            worktree_verdict(&candidate(30, false, true), NOW, 14),
-            Verdict::SkipDirty
-        );
-        assert_eq!(
-            worktree_verdict(&candidate(30, true, true), NOW, 14),
-            Verdict::SkipLocked
-        );
-    }
-
-    #[test]
-    fn no_commits_is_treated_as_brand_new_not_stale() {
-        let c = WorktreeCandidate {
-            path: PathBuf::from("/tmp/wt"),
-            last_commit_epoch: None,
-            locked: false,
-            dirty: false,
-        };
-        assert_eq!(worktree_verdict(&c, NOW, 14), Verdict::SkipTooRecent);
-    }
 
     #[test]
     fn cache_target_lists_are_nonempty_and_relative() {
