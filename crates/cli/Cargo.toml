@@ -39,5 +39,6 @@ rustix = { workspace = true, features = ["termios"] }
 
 [dev-dependencies]
 tempfile = "3"
+expectrl = "0.7"
 disk-cleanup-core = { path = "../core", features = ["test-support"] }
 disk-cleanup-adapters = { path = "../adapters", features = ["test-support"] }
