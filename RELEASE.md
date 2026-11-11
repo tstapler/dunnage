@@ -41,3 +41,22 @@ git push origin main --tags
 The tag push triggers `release.yml`: cross-compiles for the configured
 targets, creates the GitHub Release (using `CHANGELOG.md` for notes), and
 runs whichever `publish-jobs` are configured in `dist-workspace.toml`.
+
+## Owner waits (Gates A to D)
+
+A gate is not reviewed, and the next wave does not start, until its precondition is attached to the gate report
+(`.git/gate-reports/<gate>-<sha>.txt`, from `make gate GATE=<letter>` for the tagged commit):
+
+- [ ] The gate report for the tagged commit is all green (0 failed).
+- [ ] From Gate B on: `make safety` passes on both profiles (it first runs `scripts/check-safety-manifest.sh`, so
+      a renamed or deleted `safety_` test fails here; raise `active-gate` in `ci/safety/manifest.txt` first).
+- [ ] From Gate B on: `disk-cleanup audit verify` over the live audit log reports 0 deletions outside the allowed
+      roots. A violation keeps the gate closed.
+- [ ] Gate B only: the full-disk rehearsal (`scripts/rehearse-full-disk.sh`, Story 2.3.3) is recorded, with the
+      commands typed per case.
+- [ ] Gate D only: one decision recorded in `spikes.md` for each of O-1, SM-2 and CV-1 that missed. Run
+      `scripts/outcome-report.sh` (it classifies the first three real runs of 5 GiB or more from the audit log,
+      never from the summary's prose); its last line names the metrics that need a decision. A FAIL run keeps
+      the gate open until the finding is in `spikes.md`. Pass `--cutover YYYY-MM-DD` for O-2.
+- [ ] The UX-41 and UX-42 review checklist (`design/ux.md` section 8) is ticked: UX-41 is automated for the
+      catalogue texts, so the checklist covers the section 4 tables; UX-42 covers every flow of section 5.

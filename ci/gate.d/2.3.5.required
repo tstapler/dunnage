@@ -1,0 +1,4 @@
+# <first-gate> <last-gate|-> <command>   (Story 2.3.5: the safety list and the safety_ tests agree; the owner-wait outcome report classifies from fixtures)
+A - scripts/check-safety-manifest.sh
+A - scripts/check-safety-manifest.sh --selftest
+A - scripts/outcome-report.sh --selftest
