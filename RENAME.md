@@ -25,7 +25,7 @@ the deliberate old-name acceptances and history.
 
 ## Order
 
-1. `git mv` nothing: the crate directories are `crates/<role>` and keep their names.
+1. The crate directories are `crates/<role>` and keep their names; no `git mv`.
 2. Edit the manifests, then `cargo build --workspace` (regenerates `Cargo.lock`).
 3. Edit scripts and the Makefile; run every `scripts/check-*.sh --selftest`.
 4. `dist generate` and `dist plan`: the archive names change to `dunnage-<target>.tar.xz`.
