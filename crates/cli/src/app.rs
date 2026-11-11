@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use disk_cleanup_adapters::state::OutcomeMode;
 use disk_cleanup_adapters::status::assess;
+use disk_cleanup_adapters::targets::btrfs_report::report_notes;
 use disk_cleanup_core::executor::{Mode, Refused, RunMeta, RunOptions, RunReport};
 use disk_cleanup_core::plan::{GateRenderCtx, PlanId, Planned};
 use disk_cleanup_core::ports::Env;
@@ -118,7 +119,14 @@ impl Ports<'_> {
 pub fn run(cli: &Cli, p: &Ports, io: &mut Io) -> i32 {
     match &cli.command {
         Some(Command::Status(args)) => {
-            let s = status::run(args, cli.json, p.env.space, &p.term, Some(&p.env.dirs.home));
+            let mut s = status::run(args, cli.json, p.env.space, &p.term, Some(&p.env.dirs.home));
+            if !cli.json && s.outcome.is_some() {
+                for n in report_notes(p.env, &args.path) {
+                    s.stdout.push_str("Note: ");
+                    s.stdout.push_str(&n);
+                    s.stdout.push('\n');
+                }
+            }
             if let Some((verdict, free, unalloc)) = s.outcome {
                 (p.outcome)(OutcomeMode::Status, verdict, free, unalloc);
             }
@@ -251,7 +259,7 @@ fn plan_mode(cli: &Cli, sel: &Selection, registered: &[SelectorId], p: &Ports, i
         fs: Some(fs.clone()),
         partial_scan: None,
         not_built: unbuilt(registered),
-        notes: report.notes.clone(),
+        notes: [report.notes.clone(), report_notes(p.env, &p.env.dirs.home)].concat(),
         wrapper_note: wrapper_note(p.via.as_deref(), cli.dry_run),
         exe: p.exe.clone(),
         euid,
@@ -315,10 +323,14 @@ fn apply_mode(cli: &Cli, sel: &Selection, p: &Ports, io: &mut Io) -> i32 {
         p.targets.clone(),
         options(cli, p, &stamp),
     );
-    let report = match executor.run(sel, &Mode::Apply(mint()), supplied) {
+    let mut report = match executor.run(sel, &Mode::Apply(mint()), supplied) {
         Ok(r) => r,
         Err(r) => return refused(cli, &r, sel, p, io),
     };
+    report
+        .summary
+        .notes
+        .extend(report_notes(p.env, &p.env.dirs.home));
     let warning = match &stamp {
         StampOutcome::BrokeGlass { warning, .. } => Some(warning.clone()),
         _ => None,

@@ -5,8 +5,10 @@ gate:
 	@test -n "$(GATE)" || { echo "usage: make gate GATE=<A-E>"; exit 64; }
 	scripts/gate.sh $(GATE)
 
-# Runs every test whose name starts with safety_ on both profiles, printing the names.
+# Checks that ci/safety lists and the safety_ tests agree (Story 2.3.5b), then runs every test whose name
+# starts with safety_ on both profiles, printing the names.
 safety:
+	scripts/check-safety-manifest.sh
 	cargo test --workspace safety_ -- --nocapture
 	cargo test --workspace --release safety_ -- --nocapture
 
