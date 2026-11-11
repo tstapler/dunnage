@@ -19,6 +19,12 @@ path = "src/main.rs"
 # `disk-cleanup explore`; off, the subcommand exits 64 with "'explore' is not available in this build".
 default = ["explore"]
 explore = ["dep:disk-cleanup-tui"]
+# Per-gate kind registry (Story 2.3.4, owner decision 2026-11-10): a build registers an apply-capable kind only
+# once the owner has reviewed its gate. No feature is on by default, so the shipped binary refuses `--apply`;
+# `make gate GATE=B` builds with `gate-b`, and the owner adds it to `default` after the Gate B review.
+gate-b = []
+gate-c = ["gate-b"]
+gate-d = ["gate-c"]
 
 [dependencies]
 disk-cleanup-tui = { path = "../tui", optional = true }

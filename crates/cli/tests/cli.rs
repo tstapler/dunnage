@@ -176,6 +176,12 @@ fn apply_should_be_refused_with_the_gate_a_text_and_never_read_stdin_or_delete()
     // stdin stays open and is never written: a prompt would hang here and the watchdog fails the test.
     let out = wait_or_kill(child, 20).expect("--apply must not wait for input");
     let (stdout, stderr) = text(&out);
+    if cfg!(feature = "gate-b") {
+        // A build that reached Gate B registers `caches`: the bare apply runs and needs no input.
+        assert_eq!(out.status.code(), Some(0), "{stderr}");
+        assert!(stdout.contains("APPLY FINISHED - exit 0."), "{stdout}");
+        return;
+    }
     assert_eq!(out.status.code(), Some(64));
     assert!(stdout.is_empty());
     assert!(
@@ -436,7 +442,13 @@ fn kinds_should_list_every_selector_with_availability_and_exit_0() {
             .unwrap_or_else(|| panic!("{id} missing: {stdout}"))
             .to_string()
     };
-    assert!(row("caches").contains(" yes "));
+    // Caches are listed in every build and can delete only in a build that reached Gate B (Story 2.3.4).
+    let caches = row("caches");
+    if cfg!(feature = "gate-b") {
+        assert!(caches.contains(" yes "), "{caches}");
+    } else {
+        assert!(caches.contains("list only"), "{caches}");
+    }
     for unbuilt in ["worktrees", "build-dirs", "docker", "steam", "btrfs"] {
         assert!(
             row(unbuilt).contains("not available in this build"),
@@ -445,7 +457,10 @@ fn kinds_should_list_every_selector_with_availability_and_exit_0() {
     }
     let json = f.fixture_cmd().args(["kinds", "--json"]).output().unwrap();
     let d: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
-    assert_eq!(d["kinds"].as_array().unwrap().len(), 10);
+    // The ten selectors plus the test-only `fixture-destructive`, which a `test-support` build lists under
+    // `DC_TEST_ROOT` (Story 2.3.4).
+    assert_eq!(d["kinds"].as_array().unwrap().len(), 11);
+    assert!(row("fixture-destructive").contains("destructive"));
 }
 
 #[test]

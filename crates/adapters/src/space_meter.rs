@@ -213,3 +213,47 @@ fn darwin_fs_type(path: &Path) -> String {
 fn darwin_fs_type(_path: &Path) -> String {
     UNKNOWN_FS.to_string()
 }
+
+/// The meter of a run. A `test-support` build with `DC_FAKE_STARVED` set reports a starved btrfs (100 MiB
+/// unallocated, no metadata headroom) so the spawned binary's exit-3 refusal is testable; any other build
+/// returns `inner` unchanged and holds no such variable name.
+pub fn run_meter(inner: RealSpaceMeter) -> Box<dyn disk_cleanup_core::ports::SpaceMeter> {
+    #[cfg(feature = "test-support")]
+    if std::env::var_os("DC_FAKE_STARVED").is_some() {
+        return Box::new(starved::StarvedMeter(inner));
+    }
+    Box::new(inner)
+}
+
+#[cfg(feature = "test-support")]
+mod starved {
+    use std::path::Path;
+    use std::time::Duration;
+
+    use disk_cleanup_core::ports::SpaceMeter;
+    use disk_cleanup_core::snapshot_types::{AllocSnapshot, FsSnapshot, Settled, SpaceUse};
+
+    pub struct StarvedMeter(pub super::RealSpaceMeter);
+
+    impl SpaceMeter for StarvedMeter {
+        fn snapshot(&self, path: &Path) -> FsSnapshot {
+            let mut s = self.0.snapshot(path);
+            let space = |used: u64, total: u64| SpaceUse {
+                bytes_used: used,
+                total_bytes: total,
+            };
+            s.fs_type = "btrfs".into();
+            s.btrfs = Some(AllocSnapshot {
+                data: space(900 << 30, 950 << 30),
+                metadata: space(10 << 30, (10 << 30) + (10 << 20)),
+                system: space(1 << 20, 8 << 20),
+                unallocated: 100 << 20,
+            });
+            s
+        }
+
+        fn settle(&self, path: &Path, timeout: Duration) -> Settled {
+            self.0.settle(path, timeout)
+        }
+    }
+}

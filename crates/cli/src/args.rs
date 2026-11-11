@@ -505,7 +505,12 @@ fn parse_kinds(list: &str) -> Result<KindSelector, UsageError> {
             return Err(UsageError(format!("error: '+{rest}' is not accepted: --kinds replaces the default set, so write the whole list, for example --kinds caches,worktrees,build-dirs. Nothing was deleted.")));
         }
     }
-    KindSelector::parse(list, &SelectorId::ALL).map_err(|e| {
+    let known: Vec<SelectorId> = SelectorId::ALL
+        .iter()
+        .chain(SelectorId::TEST_ONLY.iter())
+        .copied()
+        .collect();
+    KindSelector::parse(list, &known).map_err(|e| {
         let text = e.to_string();
         UsageError(if text.starts_with("error: ") {
             text

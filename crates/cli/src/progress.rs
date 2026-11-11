@@ -39,14 +39,14 @@ pub const STALL_AFTER_MS: u64 = 15_000;
 /// Writes progress lines to `sink` with the time taken from the caller, so a test needs no clock.
 pub struct Progress<'a> {
     mode: ProgressMode,
-    sink: &'a mut dyn Write,
+    sink: &'a mut (dyn Write + Send),
     last_line_ms: Option<u64>,
     last_progress_ms: u64,
     warned: bool,
 }
 
 impl<'a> Progress<'a> {
-    pub fn new(mode: ProgressMode, sink: &'a mut dyn Write, now_ms: u64) -> Progress<'a> {
+    pub fn new(mode: ProgressMode, sink: &'a mut (dyn Write + Send), now_ms: u64) -> Progress<'a> {
         Progress {
             mode,
             sink,

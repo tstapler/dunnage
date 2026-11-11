@@ -500,6 +500,7 @@ impl RunFx {
             verbose: false,
             quiet: false,
             tty: false,
+            marker_printed: false,
         }
     }
 }

@@ -36,6 +36,7 @@ pub enum LastDryRun {
 }
 
 /// Everything an apply screen is built from.
+#[allow(clippy::struct_excessive_bools)] // independent render switches, not a state machine
 pub struct ApplyInput<'a> {
     pub plan_id: PlanId,
     pub selection: &'a Selection,
@@ -57,6 +58,9 @@ pub struct ApplyInput<'a> {
     pub verbose: bool,
     pub quiet: bool,
     pub tty: bool,
+    /// L1 (and the bypass WARNING) were already written to stdout when the run committed
+    /// (`render_marker`), so the screen continues below them.
+    pub marker_printed: bool,
 }
 
 /// The rows of an apply: one per outcome, in completion order.
@@ -476,6 +480,17 @@ fn row_table(out: &mut Out, input: &ApplyInput, rows: &[ItemRow]) {
     }
 }
 
+/// L1 and the optional bypass WARNING: what stdout shows the moment the run passes step 4 of
+/// `design/ux.md` 1.4, before the lock, so every later refusal still sits under a marker.
+pub fn render_marker(plan_id: PlanId, gate_bypass: Option<&str>, term: &Terminal) -> String {
+    let mut out = Out::new(term);
+    marker(&mut out, &format!("{APPLYING} plan-id {plan_id}"));
+    if let Some(w) = gate_bypass {
+        out.text(w);
+    }
+    out.finish()
+}
+
 /// L1, the optional WARNING and nothing else: the shape of a run refused by the lock, the audit log or the
 /// starvation check (`design/ux.md` 3.1).
 pub fn render_refused(
@@ -493,10 +508,19 @@ pub fn render_refused(
     out.finish()
 }
 
+/// The closing line alone, for a refusal after `render_marker` already wrote the marker.
+pub fn render_closing(exit_code: i32, term: &Terminal) -> String {
+    let mut out = Out::new(term);
+    out.text(&finished_line(exit_code));
+    out.finish()
+}
+
 fn header(out: &mut Out, input: &ApplyInput) {
-    marker(out, &format!("{APPLYING} plan-id {}", input.plan_id));
-    if let Some(w) = &input.gate_bypass {
-        out.text(w);
+    if !input.marker_printed {
+        marker(out, &format!("{APPLYING} plan-id {}", input.plan_id));
+        if let Some(w) = &input.gate_bypass {
+            out.text(w);
+        }
     }
     if let Some(p) = &input.audit_path {
         out.text(&format!(
