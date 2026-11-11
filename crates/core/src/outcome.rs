@@ -130,4 +130,8 @@ pub struct Outcome {
     #[serde(with = "FreedDef")]
     pub freed: Freed,
     pub elapsed_ms: u64,
+    /// What `fstrim` reported (Story 4.3.3, UX-14): discarded blocks, never bytes freed, so it is kept out of
+    /// `freed` and `measured_bytes`. Absent from the audit line for every other item.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trimmed_bytes: Option<u64>,
 }

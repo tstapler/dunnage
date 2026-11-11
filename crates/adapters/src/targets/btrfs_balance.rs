@@ -153,6 +153,30 @@ fn is_enospc(e: &DeleteError) -> bool {
     }
 }
 
+/// `+38.0 GiB, ` from the two re-read values; an empty string when either is unreadable, and `did not grow, `
+/// when the balance returned no more than 1 GiB, so the line never claims space it cannot show (UX-12).
+fn unallocated_change(before: Option<u64>, after: Option<u64>) -> String {
+    let (Some(b), Some(a)) = (before, after) else {
+        return String::new();
+    };
+    if a <= b.saturating_add(1 << 30) {
+        return format!("unallocated did not grow, {}, ", signed_size(a, b));
+    }
+    format!("{}, ", signed_size(a, b))
+}
+
+fn signed_size(after: u64, before: u64) -> String {
+    let (sign, d) = if after >= before {
+        ('+', after - before)
+    } else {
+        ('-', before - after)
+    };
+    if d == 0 {
+        return "+0 B".to_string();
+    }
+    format!("{sign}{}", unallocated_text(Some(d)))
+}
+
 impl Target for BtrfsBalanceTarget {
     fn name(&self) -> &'static str {
         "btrfs"
@@ -331,8 +355,9 @@ impl Target for BtrfsBalanceTarget {
         if !log.steps.is_empty() {
             let last = log.steps.last().and_then(|(_, a)| *a);
             notes.push(format!(
-                "btrfs unallocated: {was} before, {} after (re-read from the filesystem)",
-                unallocated_text(last)
+                "btrfs unallocated: {was} before, {} after ({}re-read from the filesystem)",
+                unallocated_text(last),
+                unallocated_change(log.start_unallocated, last)
             ));
         }
         notes

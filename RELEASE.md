@@ -140,3 +140,19 @@ The tool never calls `sudo` and never cancels a balance.
    exits at once. The audit log records that step as `running` and `run_end` as `interrupted`.
 6. Save the "after" state the same way as step 1 and keep both beside the gate report. `disk-cleanup audit
    verify` and `make safety` must pass as for the other gates.
+
+## OWNER WAIT D, btrfs trim (Story 4.3.3)
+
+`btrfs-trim` is built but not registered in the shipped binary (`gate-d` is not a default feature). A trim hands
+unused blocks back to the SSD; it frees no filesystem space and does not change `unallocated`, so the tool prints
+it on its own line and never counts it as freed.
+
+1. Dry run as you: `disk-cleanup --kinds btrfs-trim`. The row is `SKIP needs root` and the `Next:` line is
+   `sudo <absolute path of the binary> --apply --kinds btrfs-trim`. The tool never runs `sudo` itself.
+2. Run that line. Exactly one command runs: `fstrim -v /` (the mount that holds your HOME). Read the output:
+   `trimmed N GiB (fstrim; discarded blocks, not freed space)` with the figure `fstrim` printed. If `fstrim`
+   printed text the tool could not read, the line says so instead of a number. The figure is UNVERIFIED against
+   this host's `fstrim`; compare it with `sudo fstrim -v /` output by eye the first time.
+3. A device without discard support ends the item as an error with `fstrim`'s own text and changes nothing.
+4. Check `disk-cleanup status` before and after: `unallocated` and `df avail` must not have moved because of the
+   trim. The audit `result` line carries `trimmed_bytes` and `measured_bytes: 0`.

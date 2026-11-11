@@ -198,6 +198,7 @@ fn summary_json(s: &RunSummary) -> Value {
         "provisional": s.provisional,
         "verdict_after": verdict_id(s.verdict_after),
         "docker_delta_bytes": s.docker_delta_bytes,
+        "trimmed_bytes": s.trimmed_bytes,
         "shared_est_bytes": s.shared_est_bytes,
         "explained": s.explained,
         "causes": s.causes.iter().map(|c| json!({

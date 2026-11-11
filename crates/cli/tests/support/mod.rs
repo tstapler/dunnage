@@ -340,6 +340,7 @@ pub fn outcome(
             ..Freed::default()
         },
         elapsed_ms: 1_100,
+        trimmed_bytes: None,
     }
 }
 

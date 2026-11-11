@@ -272,7 +272,17 @@ mod tests {
         fs::create_dir_all(&d).unwrap();
         let lock = fs::File::create(d.join(".cargo-lock")).unwrap();
         assert_eq!(cargo_lock_held(&d), RunState::Idle);
-        flock(&lock, FlockOperation::NonBlockingLockExclusive).unwrap();
+        // The probe above held a shared lock on its own descriptor; a sibling test that forks at that instant
+        // keeps a copy of it until its exec, so the exclusive lock can say WouldBlock for a moment.
+        let mut taken = flock(&lock, FlockOperation::NonBlockingLockExclusive);
+        for _ in 0..100 {
+            if taken.is_ok() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            taken = flock(&lock, FlockOperation::NonBlockingLockExclusive);
+        }
+        taken.unwrap();
         assert_eq!(cargo_lock_held(&d), RunState::Running);
         assert_eq!(scan_proc(Path::new("/proc"), &d, me()), RunState::Running);
         drop(lock);

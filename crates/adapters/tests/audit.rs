@@ -81,6 +81,7 @@ fn result(run: &str, path: &Path) -> ItemResult {
         measured_bytes: Some(4096),
         freed: Freed::default(),
         elapsed_ms: 3,
+        trimmed_bytes: None,
     })
 }
 

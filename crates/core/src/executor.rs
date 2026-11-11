@@ -265,6 +265,7 @@ fn outcome(
         est_bytes: c.est_bytes().0,
         freed,
         elapsed_ms: millis(started),
+        trimmed_bytes: None,
     }
 }
 
@@ -288,6 +289,22 @@ fn status_of_failure(e: &DeleteError) -> Status {
 
 fn is_no_space(e: &DeleteError) -> bool {
     matches!(e, DeleteError::NoSpace | DeleteError::Io(28))
+}
+
+/// The daemon-side bytes the removed Docker items report (their `measured_bytes` is the `docker system df`
+/// before/after delta for the build cache and the listed size for an image); `None` when no Docker item was
+/// removed, so the summary keeps the cause `unmeasured` instead of printing 0.
+fn docker_delta(outcomes: &[Outcome]) -> Option<u64> {
+    let removed = outcomes.iter().filter(|o| {
+        o.status == Status::Removed
+            && matches!(
+                o.kind,
+                Kind::DockerImage | Kind::DockerBuildCache | Kind::DockerVolume
+            )
+    });
+    removed
+        .map(|o| o.measured_bytes.unwrap_or(o.freed.attributed_bytes.0))
+        .reduce(u64::saturating_add)
 }
 
 fn data_bytes_used(s: &FsSnapshot) -> Option<u64> {
@@ -520,6 +537,7 @@ impl<'a> Executor<'a> {
             notes.extend(t.finish(&mine, env));
         }
         let extents = self.extent_attribution(&outcomes);
+        let docker_delta_bytes = docker_delta(&outcomes);
         let summary = RunSummary::finish(FinishInput {
             fs_before,
             fs_after: Some(fs_after),
@@ -530,7 +548,7 @@ impl<'a> Executor<'a> {
             delete_window_ms: execute_ms + settle_ms,
             held: Vec::new(),
             snapshots: None,
-            docker_delta_bytes: None,
+            docker_delta_bytes,
             verdict_after: DiskVerdict::Unknown,
             timings: StageTimings {
                 discover_ms,
@@ -780,7 +798,11 @@ impl<'a> Executor<'a> {
                 }
                 outcome(env, run_id, c, Status::Running, freed, started)
             }
-            Ok(freed) => outcome(env, run_id, c, Status::Removed, freed, started),
+            Ok(freed) => {
+                let mut o = outcome(env, run_id, c, Status::Removed, freed, started);
+                o.trimmed_bytes = target.trimmed_bytes(c);
+                o
+            }
             Err(DeleteFailure { error, freed }) => {
                 if is_no_space(&error) {
                     self.set_abort(shared, AbortCause::NoSpace);
@@ -891,5 +913,46 @@ impl Availability {
 
     fn is_unavailable(&self, t: &dyn Target) -> bool {
         self.gate_of(t).is_some_and(|g| g.is_unavailable())
+    }
+}
+
+#[cfg(test)]
+mod docker_delta_tests {
+    use super::*;
+
+    fn out(kind: Kind, status: Status, measured: Option<u64>) -> Outcome {
+        let locator = Locator::Docker(crate::DockerId(format!("{kind:?}")));
+        Outcome {
+            ts: 0,
+            run_id: "r".into(),
+            kind,
+            selector: SelectorId::Docker,
+            id: crate::CandidateId::new(kind, &locator),
+            path: None,
+            status,
+            est_bytes: 0,
+            measured_bytes: measured,
+            freed: Freed::default(),
+            elapsed_ms: 0,
+            trimmed_bytes: None,
+        }
+    }
+
+    #[test]
+    fn docker_delta_should_sum_removed_docker_items_and_ignore_everything_else() {
+        let outcomes = [
+            out(Kind::DockerBuildCache, Status::Removed, Some(18_100)),
+            out(Kind::DockerImage, Status::Removed, Some(900)),
+            out(Kind::DockerImage, Status::Error("x".into()), Some(5_000)),
+            out(Kind::Cache, Status::Removed, Some(7_000)),
+        ];
+        assert_eq!(docker_delta(&outcomes), Some(19_000));
+    }
+
+    #[test]
+    fn docker_delta_should_be_none_when_no_docker_item_was_removed() {
+        let outcomes = [out(Kind::Cache, Status::Removed, Some(7_000))];
+        assert_eq!(docker_delta(&outcomes), None);
+        assert_eq!(docker_delta(&[]), None);
     }
 }

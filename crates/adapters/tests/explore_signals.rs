@@ -151,17 +151,35 @@ fn suspend_should_stop_the_process_and_return_on_sigcont_and_work_a_second_time(
     p.finish();
 }
 
+/// `SigIgn` in `/proc/self/status` is a hex mask; bit 0 is SIGHUP.
+fn sighup_is_ignored_here() -> bool {
+    std::fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|s| {
+            s.lines()
+                .find_map(|l| l.strip_prefix("SigIgn:").map(|v| v.trim().to_string()))
+        })
+        .and_then(|v| u64::from_str_radix(&v, 16).ok())
+        .is_some_and(|m| m & 1 == 1)
+}
+
 #[test]
 fn the_run_guard_signal_handlers_should_be_unchanged_and_sighup_should_keep_its_default_during_an_apply(
 ) {
-    let p = Probe::start_with(&["apply"]);
-    p.send(Signal::HUP);
-    let status = wait_for(&p, WaitOptions::empty());
-    assert_eq!(
-        status.terminating_signal(),
-        Some(Signal::HUP.as_raw()),
-        "SIGHUP must still kill an apply run: {status:?}"
-    );
+    if sighup_is_ignored_here() {
+        // A child inherits an ignored SIGHUP and no safe code can reset it (a shell cannot either), so the
+        // default-disposition half proves nothing under nohup. The SIGINT half below still runs.
+        eprintln!("SKIPPED the SIGHUP half: this test run inherited SIGHUP as ignored (nohup or a background launch)");
+    } else {
+        let p = Probe::start_with(&["apply"]);
+        p.send(Signal::HUP);
+        let status = wait_for(&p, WaitOptions::empty());
+        assert_eq!(
+            status.terminating_signal(),
+            Some(Signal::HUP.as_raw()),
+            "SIGHUP must still kill an apply run: {status:?}"
+        );
+    }
     // SIGINT in apply mode is still the run's own handler (the abort flag), not the explorer's
     let mut p = Probe::start_with(&["apply"]);
     p.send(Signal::INT);

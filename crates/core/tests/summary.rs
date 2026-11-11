@@ -61,6 +61,7 @@ fn removed(kind: Kind, path: &str, bytes: u64) -> Outcome {
             ..Freed::default()
         },
         elapsed_ms: 1,
+        trimmed_bytes: None,
     }
 }
 

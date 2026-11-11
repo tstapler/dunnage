@@ -129,6 +129,7 @@ fn docker_item_should_use_system_df_delta_and_daemon_side_note_When_18_2_to_0_1_
             measured_bytes: Some(freed.attributed_bytes.0),
             freed,
             elapsed_ms: 0,
+            trimmed_bytes: None,
         }],
         &env,
     );

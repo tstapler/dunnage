@@ -167,6 +167,12 @@ pub trait Target: Send + Sync {
         false
     }
 
+    /// What `execute` of `c` reported as trimmed (`fstrim`), recorded as `trimmed_bytes` and never as freed
+    /// (Story 4.3.3, UX-14).
+    fn trimmed_bytes(&self, _c: &Candidate) -> Option<u64> {
+        None
+    }
+
     /// The size of the duplicate set `c` belongs to, for the `kept as newest of N duplicates` text.
     fn duplicate_set_size(&self, _c: &Candidate) -> Option<usize> {
         None

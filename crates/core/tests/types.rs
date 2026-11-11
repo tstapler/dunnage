@@ -255,6 +255,7 @@ fn outcome_should_serialize_est_bytes_and_measured_bytes_and_freed_When_serde_js
             inodes_freed: 1,
         },
         elapsed_ms: 3,
+        trimmed_bytes: None,
     };
     let v = serde_json::to_value(&o).unwrap();
     assert_eq!(v["est_bytes"], 10);
