@@ -174,8 +174,8 @@ EOF
 
 selftest() {
   need python3
-  local t n=0 bad=0 d out rc
-  t=$(mktemp -d); trap 'rm -rf "$t"' EXIT INT TERM; 
+  local n=0 bad=0 d out rc
+  t=$(mktemp -d); trap 'rm -rf "$t"' EXIT INT TERM   # global: the EXIT trap runs after this function's locals are gone
   export DC_SYNC_BAZEL=0
   expect() {  # want(pass|fail) name pattern mutation-command...
     local want=$1 name=$2 pat=$3; shift 3
