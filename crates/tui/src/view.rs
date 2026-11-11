@@ -60,6 +60,8 @@ pub struct Screen<'a> {
     pub unreadable: &'a [UnreadableEntry],
     /// `(another filesystem: /dev/sdb1)` after a new root's path.
     pub root_note: Option<&'a str>,
+    /// The path being scanned, shown before the first directory arrives.
+    pub scan_root: &'a Path,
     /// Footer text from the loop when the keys said nothing (the first-frame disk note, a stalled directory).
     pub notice: Option<&'a str>,
 }
@@ -157,6 +159,7 @@ fn draw_main_row(
             ColumnKind::Usage => pad_left(&fmt_size_cell(row.usage), c.width),
             ColumnKind::Apparent if na => pad_left("n/a", c.width),
             ColumnKind::Apparent => pad_left(&fmt_size_cell(row.apparent), c.width),
+            ColumnKind::Meta if na => pad_left("n/a", c.width),
             ColumnKind::Meta => pad_left(&row.meta.map_or("n/a".into(), fmt_size_cell), c.width),
             ColumnKind::Items if na => pad_left("n/a", c.width),
             ColumnKind::Items => pad_left(
@@ -381,10 +384,10 @@ fn row_note(s: &Screen<'_>, row: Option<&Row>) -> Option<String> {
 }
 
 fn location_text(s: &Screen<'_>) -> String {
-    let Some(dir) = s.state.view.dir() else {
-        return "(waiting for the first directory)".to_string();
+    let mut t = match s.state.view.dir() {
+        Some(dir) => tilde(&s.tree.path_of(dir), s.home),
+        None => tilde(s.scan_root, s.home),
     };
-    let mut t = tilde(&s.tree.path_of(dir), s.home);
     if let Some(note) = s.root_note {
         t.push(' ');
         t.push_str(note);

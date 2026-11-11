@@ -201,6 +201,7 @@ impl Fixture {
             now_unix: 1_700_000_000,
             unreadable: &[],
             root_note: None,
+            scan_root: Path::new("/home/u/code/app"),
             notice: None,
         }
     }
@@ -270,4 +271,494 @@ impl Backend for Spy {
         self.flushes.fetch_add(1, Ordering::SeqCst);
         self.inner.flush()
     }
+}
+
+// ----- the loop harness -----
+
+use std::collections::VecDeque;
+use std::io;
+use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::mpsc::{channel, Sender};
+use std::sync::Mutex;
+use std::time::Duration;
+
+use disk_cleanup_core::explore::keymap::Key;
+use disk_cleanup_core::explore::msg::{PlanPreview, ScanMsg};
+use disk_cleanup_core::explore::ports::{
+    DirLister, ExplorerActions, Handoff, PreviewHandle, ScanHandle, ScanOpts, ScanSource,
+    TermSignals,
+};
+use disk_cleanup_core::explore::testing::FakeDirLister;
+use disk_cleanup_core::ids::Identity;
+use disk_cleanup_core::roots::RootSet;
+use disk_cleanup_tui::app::{ExplorerConfig, Ports};
+use disk_cleanup_tui::event_loop::{
+    run_explorer, Clock, EventSource, ExplorerExit, Input, Restore, Runtime, SizeSource,
+    SystemClock, Tuning,
+};
+use disk_cleanup_tui::terminal::{fixed_terminal, DiagQueue};
+
+pub fn root_set() -> RootSet {
+    let dirs = disk_cleanup_core::dirs::Dirs {
+        home: "/h".into(),
+        state: "/h/.local/state".into(),
+        cache: "/h/.cache".into(),
+        config: "/h/.config".into(),
+    };
+    let canon = |p: &Path| -> io::Result<(PathBuf, Identity)> {
+        let ino = p
+            .to_string_lossy()
+            .bytes()
+            .fold(7u64, |a, b| a.wrapping_mul(31).wrapping_add(u64::from(b)));
+        Ok((p.to_path_buf(), Identity { dev: 1, ino }))
+    };
+    RootSet::resolve(
+        &dirs,
+        &[],
+        Some(&[PathBuf::from("/h/code")]),
+        Path::new("/h"),
+        &canon,
+    )
+    .unwrap()
+}
+
+#[derive(Debug, Default)]
+pub struct FakeClock(AtomicU64);
+
+impl FakeClock {
+    pub fn advance(&self, ms: u64) {
+        self.0.fetch_add(ms, Ordering::SeqCst);
+    }
+}
+
+impl Clock for FakeClock {
+    fn now_ms(&self) -> u64 {
+        self.0.load(Ordering::SeqCst)
+    }
+}
+
+#[derive(Clone)]
+pub enum Time {
+    Virtual(Arc<FakeClock>),
+    Real(Arc<SystemClock>),
+}
+
+impl Time {
+    pub fn now(&self) -> u64 {
+        match self {
+            Time::Virtual(c) => c.now_ms(),
+            Time::Real(c) => c.now_ms(),
+        }
+    }
+
+    fn wait(&self, ms: u64) {
+        match self {
+            Time::Virtual(c) => c.advance(ms),
+            Time::Real(_) => std::thread::sleep(Duration::from_millis(ms)),
+        }
+    }
+
+    pub fn clock(&self) -> Arc<dyn Clock + Send + Sync> {
+        match self {
+            Time::Virtual(c) => c.clone(),
+            Time::Real(c) => c.clone(),
+        }
+    }
+}
+
+/// Scripted input at clock times; records every poll timeout and the frames drawn at that moment.
+pub struct FakeEvents {
+    pub time: Time,
+    queue: VecDeque<(u64, Input)>,
+    pub polls: Arc<Mutex<Vec<(Duration, u64, usize)>>>,
+    flushes: Arc<std::sync::atomic::AtomicUsize>,
+    safety: u64,
+}
+
+impl FakeEvents {
+    pub fn new(
+        time: Time,
+        script: Vec<(u64, Input)>,
+        flushes: Arc<std::sync::atomic::AtomicUsize>,
+    ) -> FakeEvents {
+        FakeEvents {
+            time,
+            queue: script.into(),
+            polls: Arc::new(Mutex::new(Vec::new())),
+            flushes,
+            safety: 0,
+        }
+    }
+}
+
+impl EventSource for FakeEvents {
+    fn poll(&mut self, timeout: Duration) -> io::Result<bool> {
+        self.safety += 1;
+        assert!(self.safety < 20_000_000, "the loop spins");
+        let now = self.time.now();
+        self.polls
+            .lock()
+            .unwrap()
+            .push((timeout, now, self.flushes.load(Ordering::SeqCst)));
+        let ready =
+            |q: &VecDeque<(u64, Input)>, now: u64| q.front().is_some_and(|(at, _)| *at <= now);
+        if ready(&self.queue, now) {
+            return Ok(true);
+        }
+        let to_next = self.queue.front().map(|(at, _)| at - now);
+        let ms = u64::try_from(timeout.as_millis()).unwrap();
+        let wait = to_next.map_or(ms, |n| n.min(ms));
+        if wait == 0 {
+            return Ok(false);
+        }
+        self.time.wait(wait);
+        Ok(ready(&self.queue, self.time.now()))
+    }
+
+    fn read(&mut self) -> io::Result<Input> {
+        Ok(self.queue.pop_front().unwrap().1)
+    }
+}
+
+pub fn key(k: Key) -> Input {
+    Input::Key(k)
+}
+
+pub fn ch(c: char) -> Input {
+    Input::Key(Key::Char(c))
+}
+
+pub struct FakeSize(
+    pub Arc<Mutex<Option<(u16, u16)>>>,
+    pub Arc<std::sync::atomic::AtomicUsize>,
+);
+
+impl SizeSource for FakeSize {
+    fn size(&mut self) -> Option<(u16, u16)> {
+        self.1.fetch_add(1, Ordering::SeqCst);
+        *self.0.lock().unwrap()
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct Log(pub Arc<Mutex<Vec<&'static str>>>);
+
+impl Log {
+    pub fn push(&self, s: &'static str) {
+        self.0.lock().unwrap().push(s);
+    }
+
+    pub fn get(&self) -> Vec<&'static str> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+pub struct FakeRestore {
+    pub log: Log,
+    pub fail: bool,
+}
+
+impl Restore for FakeRestore {
+    fn restore(&mut self) -> io::Result<()> {
+        self.log.push("restore");
+        if self.fail {
+            Err(io::Error::from_raw_os_error(5))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn reenter(&mut self) -> io::Result<()> {
+        self.log.push("reenter");
+        Ok(())
+    }
+}
+
+/// Reports `signal` from the `at_poll`-th call of `interrupted()`; logs a suspend.
+pub struct LogSignals {
+    pub log: Log,
+    pub signal: Mutex<Option<(usize, i32)>>,
+    pub polls: std::sync::atomic::AtomicUsize,
+    pub suspend: AtomicBool,
+}
+
+impl LogSignals {
+    pub fn never(log: &Log) -> Arc<LogSignals> {
+        Arc::new(LogSignals {
+            log: log.clone(),
+            signal: Mutex::new(None),
+            polls: std::sync::atomic::AtomicUsize::new(0),
+            suspend: AtomicBool::new(false),
+        })
+    }
+
+    pub fn at(log: &Log, tick: usize, sig: i32) -> Arc<LogSignals> {
+        let s = LogSignals::never(log);
+        *s.signal.lock().unwrap() = Some((tick, sig));
+        s
+    }
+}
+
+impl TermSignals for LogSignals {
+    fn interrupted(&self) -> Option<i32> {
+        let n = self.polls.fetch_add(1, Ordering::SeqCst) + 1;
+        self.signal
+            .lock()
+            .unwrap()
+            .filter(|(t, _)| n >= *t)
+            .map(|(_, s)| s)
+    }
+
+    fn suspend_requested(&self) -> bool {
+        self.suspend.swap(false, Ordering::SeqCst)
+    }
+
+    fn suspend(&self) {
+        self.log.push("suspend");
+    }
+}
+
+/// One `start()` of a [`ControlSource`].
+pub struct StartRec {
+    pub roots: Vec<PathBuf>,
+    pub opts: ScanOpts,
+    pub tx: Sender<ScanMsg>,
+    pub cancel: Arc<AtomicBool>,
+    pub save: Arc<AtomicBool>,
+}
+
+/// A scan source the test drives by hand.
+#[derive(Default)]
+pub struct ControlSource {
+    pub starts: Mutex<Vec<StartRec>>,
+    pub prefill: Mutex<Vec<ScanMsg>>,
+}
+
+impl ControlSource {
+    pub fn send(&self, nth: usize, m: ScanMsg) -> bool {
+        self.starts.lock().unwrap()[nth].tx.send(m).is_ok()
+    }
+
+    pub fn count(&self) -> usize {
+        self.starts.lock().unwrap().len()
+    }
+}
+
+impl ScanSource for ControlSource {
+    fn start(&self, roots: &[PathBuf], opts: &ScanOpts) -> ScanHandle {
+        let (tx, rx) = channel();
+        for m in std::mem::take(&mut *self.prefill.lock().unwrap()) {
+            tx.send(m).unwrap();
+        }
+        let cancel = Arc::new(AtomicBool::new(false));
+        let save = Arc::new(AtomicBool::new(true));
+        self.starts.lock().unwrap().push(StartRec {
+            roots: roots.to_vec(),
+            opts: opts.clone(),
+            tx,
+            cancel: Arc::clone(&cancel),
+            save: Arc::clone(&save),
+        });
+        ScanHandle::new(rx, cancel, save)
+    }
+}
+
+/// Blocks `delay` inside `preview` and `finish`, on the worker thread the app starts.
+pub struct SlowActions {
+    pub delay: Duration,
+    pub plan: PlanPreview,
+    pub calls: Log,
+}
+
+impl ExplorerActions for SlowActions {
+    fn preview(&self, _marks: &[PathBuf], cancel: Arc<AtomicBool>) -> PreviewHandle {
+        self.calls.push("preview");
+        std::thread::sleep(self.delay);
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        let _ = tx.send(ScanMsg::Preview(self.plan.clone()));
+        PreviewHandle::new(rx, cancel)
+    }
+
+    fn finish(&self, _marks: &[PathBuf]) -> Handoff {
+        self.calls.push("finish");
+        std::thread::sleep(self.delay);
+        Handoff {
+            lines: vec!["DRY RUN - nothing was deleted.".into()],
+            exit_code: 0,
+        }
+    }
+}
+
+pub fn plan_fixture() -> PlanPreview {
+    PlanPreview {
+        plan_id: "5d2e77a1".into(),
+        saved: true,
+        rows: vec![],
+        est_bytes: 0,
+        scope_line: "1 marked item".into(),
+        guards_line: "Guards run now.".into(),
+    }
+}
+
+pub struct Run {
+    pub source: Arc<ControlSource>,
+    pub signals: Arc<LogSignals>,
+    pub actions: Arc<dyn ExplorerActions>,
+    pub lister: Arc<dyn DirLister>,
+    pub time: Time,
+    pub script: Vec<(u64, Input)>,
+    pub size: (u16, u16),
+    pub fail_restore: bool,
+    pub tuning: Tuning,
+    pub log: Log,
+    pub tweak: Box<dyn FnOnce(&mut ExplorerConfig)>,
+    pub resize_to: Option<(u16, u16)>,
+}
+
+impl Run {
+    pub fn virtual_time(script: Vec<(u64, Input)>) -> Run {
+        let log = Log::default();
+        Run {
+            source: Arc::new(ControlSource::default()),
+            signals: LogSignals::never(&log),
+            actions: Arc::new(SlowActions {
+                delay: Duration::ZERO,
+                plan: plan_fixture(),
+                calls: Log::default(),
+            }),
+            lister: Arc::new(FakeDirLister::default()),
+            time: Time::Virtual(Arc::new(FakeClock::default())),
+            script,
+            size: (100, 24),
+            fail_restore: false,
+            tuning: Tuning::default(),
+            log,
+            tweak: Box::new(|_| {}),
+            resize_to: None,
+        }
+    }
+
+    pub fn real_time(script: Vec<(u64, Input)>) -> Run {
+        let mut r = Run::virtual_time(script);
+        r.time = Time::Real(Arc::new(SystemClock::default()));
+        r
+    }
+}
+
+pub struct Outcome {
+    pub exit: ExplorerExit,
+    pub screen: String,
+    pub polls: Vec<(Duration, u64, usize)>,
+    pub log: Vec<&'static str>,
+    pub frames: usize,
+    pub elapsed_ms: u64,
+    pub size_queries: usize,
+    pub diagnostics: Arc<DiagQueue>,
+}
+
+pub fn run(r: Run) -> Outcome {
+    let spy = Spy::new(r.size.0, r.size.1);
+    let flushes = Arc::clone(&spy.flushes);
+    let mut term = fixed_terminal(spy, r.size.0, r.size.1).unwrap();
+    let mut events = FakeEvents::new(r.time.clone(), r.script, Arc::clone(&flushes));
+    let polls = Arc::clone(&events.polls);
+    let queries = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let mut sizer = FakeSize(Arc::new(Mutex::new(r.resize_to)), Arc::clone(&queries));
+    let mut guard = FakeRestore {
+        log: r.log.clone(),
+        fail: r.fail_restore,
+    };
+    let diagnostics = Arc::new(DiagQueue::default());
+    let clock = r.time.clock();
+    let mut cfg = ExplorerConfig::new(vec![PathBuf::from("/h/code/app")], root_set());
+    cfg.now_unix = 1_700_000_000;
+    cfg.home = Some(PathBuf::from("/h"));
+    (r.tweak)(&mut cfg);
+    let ports = Ports {
+        scan: r.source.clone(),
+        lister: r.lister,
+        signals: r.signals,
+        actions: r.actions,
+    };
+    let started = r.time.now();
+    let exit = {
+        let mut rt = Runtime {
+            term: &mut term,
+            guard: &mut guard,
+            events: &mut events,
+            sizer: &mut sizer,
+            clock: &*clock,
+            tuning: r.tuning,
+            diagnostics: Arc::clone(&diagnostics),
+        };
+        run_explorer(&mut rt, ports, cfg, r.size)
+    };
+    let elapsed_ms = r.time.now() - started;
+    let screen = buffer_text(term.backend().inner().inner.buffer());
+    let polls = polls.lock().unwrap().clone();
+    Outcome {
+        exit,
+        screen,
+        polls,
+        log: r.log.get(),
+        frames: flushes.load(Ordering::SeqCst),
+        elapsed_ms,
+        size_queries: queries.load(Ordering::SeqCst),
+        diagnostics,
+    }
+}
+
+/// A root with `kids` children and the batch that carries them; `open` keeps the root unfinished.
+pub fn root_batch(kids: &[(&str, u64)], open: bool) -> ScanMsg {
+    let mut ev = vec![dir_ev(
+        0,
+        NO_PARENT,
+        "/h/code/app",
+        stats(1, kids.len() as u64, 4096, 400),
+        if open { 1_000_000 } else { kids.len() as u32 },
+        1_700_000_000,
+    )];
+    for (i, (n, a)) in kids.iter().enumerate() {
+        ev.push(dir_ev(
+            1 + i as u64,
+            0,
+            n,
+            stats(2, 0, *a, *a),
+            0,
+            1_700_000_000,
+        ));
+    }
+    ScanMsg::Batch {
+        generation: 0,
+        mode: ScanMode::Fresh,
+        events: ev,
+    }
+}
+
+pub fn finished(
+    generation: u32,
+    truncated: bool,
+    stop: disk_cleanup_core::explore::msg::StopCause,
+) -> ScanMsg {
+    ScanMsg::Finished(ScanSummary {
+        generation,
+        truncated,
+        stop,
+        ..ScanSummary::default()
+    })
+}
+
+/// The buffer as plain text, one line per row, trailing blanks trimmed.
+pub fn buffer_text(buf: &ratatui::buffer::Buffer) -> String {
+    let a = buf.area;
+    (0..a.height)
+        .map(|y| {
+            let mut line = String::new();
+            for x in 0..a.width {
+                line.push_str(buf[(x, y)].symbol());
+            }
+            line.trim_end().to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }

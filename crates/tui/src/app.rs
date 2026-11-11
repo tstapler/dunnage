@@ -680,7 +680,17 @@ impl App {
                 self.start_scan(&paths, &opts, now_ms);
             }
         }
-        self.state.view.note_key(now_ms);
+        self.rebuild_view_now(now_ms);
+    }
+
+    /// The owner asked for a different set of rows (a rescan): rebuild at once instead of waiting for the
+    /// throttled re-sort, which would keep rows of the dropped subtree on screen for two seconds.
+    fn rebuild_view_now(&mut self, now_ms: u64) {
+        let text = self.state.view.text_filter().to_string();
+        let badge = badge_fn(&self.tree, &self.cfg.roots, &self.facts);
+        self.state
+            .view
+            .set_text_filter(&text, &self.tree, now_ms, &badge);
     }
 
     fn new_root(&mut self, path: &Path, now_ms: u64) {
@@ -838,6 +848,10 @@ impl App {
             now_unix: self.cfg.now_unix,
             unreadable: &unreadable,
             root_note: self.root_note.as_deref(),
+            scan_root: self
+                .scan_roots
+                .first()
+                .map_or(Path::new(""), PathBuf::as_path),
             notice: self.notice.as_deref(),
         };
         render(frame, &screen);

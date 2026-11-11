@@ -246,7 +246,7 @@ where
             break Why::Signal(signal_exit_code(sig));
         }
         if signals.suspend_requested() {
-            if suspend(rt, &signals).is_err() {
+            if suspend(rt, &signals, app.size).is_err() {
                 break Why::TerminalLost;
             }
             ui_dirty = true;
@@ -293,7 +293,7 @@ where
         if ui_dirty || app.force_clear || scan_due {
             if app.force_clear {
                 app.force_clear = false;
-                if rt.term.clear().is_err() {
+                if repaint(rt.term, app.size).is_err() {
                     break Why::TerminalLost;
                 }
             }
@@ -355,7 +355,7 @@ where
                 Input::Resize => resize_pending = true,
                 Input::Other => {}
                 Input::Key(Key::Ctrl('z')) => {
-                    if suspend(rt, &signals).is_err() {
+                    if suspend(rt, &signals, app.size).is_err() {
                         break 'run Why::TerminalLost;
                     }
                     ui_dirty = true;
@@ -389,6 +389,7 @@ where
 fn suspend<B, E, R, S>(
     rt: &mut Runtime<'_, B, E, R, S>,
     signals: &Arc<dyn TermSignals>,
+    size: (u16, u16),
 ) -> io::Result<()>
 where
     B: Backend,
@@ -400,7 +401,7 @@ where
     rt.guard.restore()?;
     signals.suspend();
     rt.guard.reenter()?;
-    rt.term.clear().map_err(|e| io::Error::other(e.to_string()))
+    repaint(rt.term, size).map_err(|e| io::Error::other(e.to_string()))
 }
 
 fn finish<B, E, R, S>(
@@ -447,4 +448,14 @@ fn backend_hangup<E: std::error::Error + 'static>(e: &E) -> bool {
     (e as &dyn std::error::Error)
         .downcast_ref::<io::Error>()
         .is_some_and(io_hangup)
+}
+
+/// Forgets what is on the screen so the next frame is a full repaint. `Terminal::clear()` would ask the
+/// terminal for the cursor position (`ESC[6n`) and wait for the answer, which a stopped-and-continued
+/// session may never get; resizing the fixed viewport to its own size clears without asking.
+fn repaint<B: Backend>(
+    term: &mut Terminal<FixedSizeBackend<B>>,
+    size: (u16, u16),
+) -> Result<(), B::Error> {
+    term.resize(Rect::new(0, 0, size.0, size.1))
 }

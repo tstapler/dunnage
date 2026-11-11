@@ -312,8 +312,8 @@ pub fn plan_lines(p: &PlanPreview, width: usize, height: usize, tty: bool) -> Ve
     let tail: Vec<String> = tail
         .iter()
         .flat_map(|l| {
-            if l.is_empty() {
-                vec![String::new()]
+            if l.is_empty() || cells(l) <= width {
+                vec![l.clone()]
             } else {
                 wrap_plain(l, width)
             }
