@@ -117,3 +117,21 @@ fn facts_should_fill_the_clauses_of_the_reason_texts() {
         "the 24h worktree floor applies"
     );
 }
+
+#[test]
+fn cache_apt_needs_root_should_name_the_finest_id_with_a_quoted_binary_path_and_never_caches() {
+    let sel = default_selection();
+    let exe = PathBuf::from("/opt/my tools/disk-cleanup");
+    let ctx = TextCtx {
+        selection: &sel,
+        selector: SelectorId::CacheApt,
+        exe: &exe,
+        ascii_only: true,
+    };
+    let text = next_action(SkipReason::NeedsRoot, &ReasonFacts::default(), &ctx);
+    assert_eq!(
+        text,
+        "sudo '/opt/my tools/disk-cleanup' --apply --kinds cache-apt"
+    );
+    assert!(!text.contains("--kinds caches"));
+}

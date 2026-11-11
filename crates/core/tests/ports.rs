@@ -156,6 +156,7 @@ fn fake_audit_sink_should_fail_the_second_intent_and_not_record_it() {
         selector: SelectorId::Caches,
         locator,
         est_bytes: 1,
+        argv: Vec::new(),
     };
     assert!(sink.intent(&intent).is_ok());
     assert_eq!(sink.intent(&intent).unwrap_err().raw_os_error(), Some(5));
