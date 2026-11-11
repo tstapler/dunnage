@@ -5,7 +5,7 @@
 
 use std::io::{self, Write};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use disk_cleanup_core::AbortFlag;
@@ -156,7 +156,7 @@ extern "C" fn on_signal(sig: libc::c_int) {
 }
 
 /// `signal(2)` on Linux and macOS restarts interrupted system calls, which is what the run wants.
-fn set_handler(sig: i32, handler: libc::sighandler_t) -> io::Result<()> {
+pub(crate) fn set_handler(sig: i32, handler: libc::sighandler_t) -> io::Result<()> {
     if unsafe { libc::signal(sig, handler) } == libc::SIG_ERR {
         return Err(io::Error::last_os_error());
     }
@@ -178,6 +178,11 @@ static INSTALLED: OnceLock<()> = OnceLock::new();
 /// Installs the SIGINT and SIGTERM handlers and the watcher thread, once per process (a second call is an
 /// error: the handlers feed one state). `err` receives the acknowledgement and interrupt lines.
 pub fn install(mode: Mode, state: Arc<SignalState>, err: Box<dyn Write + Send>) -> io::Result<()> {
+    if TERM_INSTALLED.load(Ordering::SeqCst) {
+        return Err(io::Error::other(
+            "the explorer's terminal signal handlers are installed in this process",
+        ));
+    }
     if INSTALLED.set(()).is_err() {
         return Err(io::Error::other("signal handlers are already installed"));
     }
@@ -233,6 +238,80 @@ fn watch(mode: Mode, state: &SignalState, rd: &OwnedFd, mut err: Box<dyn Write +
             }
         }
     }
+}
+
+// ---------------------------------------------------------------- the explorer's signals (Story 6.3.3)
+//
+// The explorer reads signals as data from its own loop: the handlers below only store into atomics
+// (async-signal-safe), nothing is written and nothing exits. They are installed by `RealTermSignals` and
+// never by `install`, so an apply keeps SIGHUP at its default action.
+
+static TERM_INSTALLED: AtomicBool = AtomicBool::new(false);
+static TERM_SIGNAL: AtomicI32 = AtomicI32::new(0);
+static TSTP_PENDING: AtomicBool = AtomicBool::new(false);
+
+extern "C" fn on_term_signal(sig: libc::c_int) {
+    if sig == libc::SIGTSTP {
+        TSTP_PENDING.store(true, Ordering::SeqCst);
+    } else {
+        let _ = TERM_SIGNAL.compare_exchange(0, sig, Ordering::SeqCst, Ordering::SeqCst);
+    }
+}
+
+fn set_term_handler(sig: i32) -> io::Result<()> {
+    set_handler(
+        sig,
+        on_term_signal as extern "C" fn(libc::c_int) as libc::sighandler_t,
+    )
+}
+
+/// Registers SIGINT, SIGTERM, SIGHUP, SIGQUIT and SIGTSTP for the explorer. Refused when `install` has
+/// already claimed SIGINT and SIGTERM in this process (the two modes never share one).
+pub fn install_term_handlers() -> io::Result<()> {
+    if INSTALLED.get().is_some() {
+        return Err(io::Error::other(
+            "the run's signal handlers are installed in this process",
+        ));
+    }
+    TERM_INSTALLED.store(true, Ordering::SeqCst);
+    for sig in [
+        libc::SIGINT,
+        libc::SIGTERM,
+        libc::SIGHUP,
+        libc::SIGQUIT,
+        libc::SIGTSTP,
+    ] {
+        set_term_handler(sig)?;
+    }
+    Ok(())
+}
+
+/// The first of SIGINT, SIGTERM, SIGHUP and SIGQUIT received since the handlers were installed.
+pub fn term_signal() -> Option<i32> {
+    match TERM_SIGNAL.load(Ordering::SeqCst) {
+        0 => None,
+        s => Some(s),
+    }
+}
+
+/// Whether a SIGTSTP arrived since the last call (reads and clears).
+pub fn take_tstp() -> bool {
+    TSTP_PENDING.swap(false, Ordering::SeqCst)
+}
+
+/// Stops the whole process with SIGTSTP's default action and returns once SIGCONT resumes it, then puts the
+/// explorer's SIGTSTP handler back.
+pub fn suspend_process() -> io::Result<()> {
+    set_handler(libc::SIGTSTP, libc::SIG_DFL)?;
+    let raised = unsafe { libc::raise(libc::SIGTSTP) };
+    let outcome = if raised == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    };
+    TSTP_PENDING.store(false, Ordering::SeqCst);
+    set_term_handler(libc::SIGTSTP)?;
+    outcome
 }
 
 /// Wraps a writer so a closed pipe never fails the run: after the first `EPIPE` every write is dropped.

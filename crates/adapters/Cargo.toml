@@ -11,6 +11,11 @@ workspace = true
 default = []
 test-support = ["disk-cleanup-core/test-support"]
 
+[[bin]]
+name = "dc-sigprobe"
+path = "src/bin/dc-sigprobe.rs"
+required-features = ["test-support"]
+
 [dependencies]
 disk-cleanup-core = { path = "../core" }
 disk-cleanup-scan = { path = "../scan" }
@@ -27,3 +32,5 @@ serde_json.workspace = true
 disk-cleanup-adapters = { path = ".", features = ["test-support"] }
 tempfile = "3"
 proptest = "1"
+# a safe counting allocator for the lister's memory bound; check-token-sites.sh forbids `unsafe` in tests
+peak_alloc = "0.3"
