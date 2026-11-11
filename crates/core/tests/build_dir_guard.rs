@@ -138,7 +138,7 @@ fn guard_should_skip_too_recent_When_newest_is_20_minutes_old_whatever_min_age_s
 
 #[test]
 fn guard_should_honour_a_higher_min_age_without_the_floor_wording() {
-    let two_h = Duration::from_secs(2 * 3600);
+    let two_h = Duration::from_hours(2);
     let (r, d) = skip(decide_build_dir(
         &facts(Kind::CargoTarget, 90),
         &roots(),
