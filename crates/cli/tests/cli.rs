@@ -199,18 +199,28 @@ fn apply_should_be_refused_with_the_gate_a_text_and_never_read_stdin_or_delete()
 #[test]
 fn a_named_kind_this_build_does_not_ship_should_exit_64_with_the_catalogue_text() {
     let f = Fixture::new();
-    let out = f
-        .fixture_cmd()
-        .args(["--kinds", "build-dirs"])
-        .output()
-        .unwrap();
-    let (stdout, stderr) = text(&out);
-    assert_eq!(out.status.code(), Some(64));
-    assert!(stdout.is_empty());
-    assert!(
-        stderr.contains("'build-dirs' is not available in this build (see 'disk-cleanup kinds')"),
-        "{stderr}"
-    );
+    // The first kind the build under test does not ship: build-dirs before Gate C, docker from Gate C on.
+    let unshipped = if cfg!(feature = "gate-c") {
+        "docker"
+    } else {
+        "build-dirs"
+    };
+    if !cfg!(feature = "gate-d") {
+        let out = f
+            .fixture_cmd()
+            .args(["--kinds", unshipped])
+            .output()
+            .unwrap();
+        let (stdout, stderr) = text(&out);
+        assert_eq!(out.status.code(), Some(64));
+        assert!(stdout.is_empty());
+        assert!(
+            stderr.contains(&format!(
+                "'{unshipped}' is not available in this build (see 'disk-cleanup kinds')"
+            )),
+            "{stderr}"
+        );
+    }
     let out = f.fixture_cmd().args(["--kinds", "dockr"]).output().unwrap();
     assert_eq!(out.status.code(), Some(64));
     assert!(text(&out)
@@ -449,8 +459,10 @@ fn kinds_should_list_every_selector_with_availability_and_exit_0() {
     } else {
         assert!(caches.contains("list only"), "{caches}");
     }
+    let gate_c = cfg!(feature = "gate-c");
     for unbuilt in ["worktrees", "build-dirs", "docker", "steam", "btrfs"] {
-        if cfg!(feature = "gate-c") && unbuilt == "worktrees" {
+        if gate_c && (unbuilt == "worktrees" || unbuilt == "build-dirs") {
+            assert!(row(unbuilt).contains(" yes "), "{unbuilt}");
             continue;
         }
         assert!(

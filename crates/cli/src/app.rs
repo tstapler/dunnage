@@ -571,10 +571,17 @@ fn reason_facts(
         };
         let detail = t.detail(&item.candidate);
         let f = t.item_facts(&item.candidate);
-        if detail.is_some() || f != disk_cleanup_core::target::ItemFacts::default() {
+        let duplicates = t
+            .duplicate_set_size(&item.candidate)
+            .and_then(|n| u32::try_from(n).ok());
+        if detail.is_some()
+            || duplicates.is_some()
+            || f != disk_cleanup_core::target::ItemFacts::default()
+        {
             out.insert(
                 item.candidate.id(),
                 ReasonFacts {
+                    duplicates,
                     detail,
                     unpushed: f.unpushed,
                     process: f.process,

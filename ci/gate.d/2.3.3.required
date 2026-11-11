@@ -2,6 +2,6 @@
 # The full-disk rehearsal helper proves its fill, reserve release, caller uid and private mount; the owner runs it at OWNER WAIT B.
 B - scripts/rehearse-full-disk.sh --selftest
 # The seconds assertion of the speed protocol on a fixture HOME (median <= 12.7 s); the owner-machine run is DC_BENCH_OWNER_MACHINE=1 scripts/bench-dry-run.sh.
-B - scripts/bench-dry-run.sh --budget
+B B scripts/bench-dry-run.sh --budget
 # The safety_ guarantees on both profiles, built with the gate's feature (Story 2.3.5 owner-wait precondition).
 B - make safety

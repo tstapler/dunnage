@@ -27,6 +27,9 @@ use crate::summary::{
 };
 use crate::target::{kind_order, Guarded, KindGate, Target};
 
+/// The `--jobs` default: the worker bound when the flag is absent (Story 3.2.4, benchmark in `spikes.md`).
+pub const DEFAULT_JOBS: usize = 4;
+
 /// Fixed points of an apply that the composition root observes (Story 2.3.4). `step` names the point so a
 /// test can assert the order of `design/ux.md` 1.4; `committed` runs once the plan-id gate has passed and may
 /// still end the run; `item_started` feeds the live `[n/m] removing` progress lines.
@@ -390,7 +393,7 @@ impl<'a> Executor<'a> {
         let fs_before = env.space.snapshot(self.meter_path());
         let t0 = env.clock.now_epoch();
 
-        let avail = self.availability(sel, applying);
+        let mut avail = self.availability(sel, applying);
         if applying && every_selector_down(sel, &avail) {
             return Err(all_down_refusal(avail));
         }
@@ -410,6 +413,12 @@ impl<'a> Executor<'a> {
         }
         if let Some(refused) = only_refusal(sel, &candidates, &avail) {
             return Err(refused);
+        }
+        for t in self.targets.iter().copied() {
+            let selected = t.selectors().iter().any(|s| sel.selects(*s));
+            if selected && !avail.is_unavailable(t) {
+                avail.notes.extend(t.plan_notes(env, sel));
+            }
         }
         let discover_ms = millis(discover_start);
         let plan_start = Instant::now();
@@ -751,7 +760,7 @@ impl<'a> Executor<'a> {
         let Some(target) = self.target_for(c) else {
             return skip_outcome(env, run_id, item, SkipReason::ToolMissing);
         };
-        if let Guarded::Skip(r) = target.guard(c, env) {
+        if let Guarded::Skip(r) = target.guard_before_delete(c, env) {
             lock(&shared.guard_skips).push(c.id());
             return skip_outcome(env, run_id, item, r);
         }

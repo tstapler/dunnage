@@ -2,7 +2,7 @@
 
 # The safety_ tests that need a deleting build (Gate B on) are compiled only with the gate's feature; without it
 # `make safety` would skip them silently. Raise this with the active gate (gate-c, gate-d).
-SAFETY_FEATURES ?= --features disk-cleanup/gate-b
+SAFETY_FEATURES ?= --features disk-cleanup/gate-c
 
 # make gate GATE=<A-E>: every required check for that gate plus fmt, clippy, test and a release build.
 gate:
