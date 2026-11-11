@@ -124,11 +124,17 @@ pub fn fs_block_with(out: &mut Out, fs: &FsBlock, home: Option<&Path>, verdict_o
         verdict_text(fs.verdict)
     };
     let Some(b) = s.btrfs else {
-        out.text(&format!(
-            "{}n/a (filesystem is {})",
-            label("btrfs"),
-            s.fs_type
-        ));
+        if s.fs_type == "btrfs" {
+            for name in ["data", "metadata", "unallocated"] {
+                out.text(&format!("{}n/a (needs root)", label(name)));
+            }
+        } else {
+            out.text(&format!(
+                "{}n/a (filesystem is {})",
+                label("btrfs"),
+                s.fs_type
+            ));
+        }
         if !verdict_on_title {
             out.text(&format!("{}{verdict}", label("")));
         }

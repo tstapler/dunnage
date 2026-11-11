@@ -133,14 +133,18 @@ impl Default for Fixture {
 /// The `plan_id` of a `--json` document, else the id after `--plan-id` in a `next[]` command.
 pub fn extract_plan_id(json: &str) -> Option<String> {
     let is_id = |s: &str| s.len() == 8 && s.bytes().all(|b| b.is_ascii_hexdigit());
-    if let Some(at) = json.find("\"plan_id\"") {
-        let rest = json[at + "\"plan_id\"".len()..]
-            .trim_start()
-            .strip_prefix(':')?;
-        let rest = rest.trim_start().strip_prefix('"')?;
-        let id = &rest[..rest.find('"')?];
-        if is_id(id) {
-            return Some(id.to_string());
+    // Every `"plan_id"` key: a `next[]` entry can carry `null` before the top-level field does.
+    for (at, _) in json.match_indices("\"plan_id\"") {
+        let rest = json[at + "\"plan_id\"".len()..].trim_start();
+        let Some(rest) = rest.strip_prefix(':').map(str::trim_start) else {
+            continue;
+        };
+        let Some(rest) = rest.strip_prefix('"') else {
+            continue;
+        };
+        let Some(end) = rest.find('"') else { continue };
+        if is_id(&rest[..end]) {
+            return Some(rest[..end].to_string());
         }
     }
     let at = json.find("--plan-id ")?;

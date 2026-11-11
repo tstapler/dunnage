@@ -2,20 +2,19 @@
 //! documents. Each is exactly one document with `schema_version`, `mode`, `exit_code` and `errors[]`; bytes
 //! are exact integers, paths are absolute, and nothing is coloured, truncated or locale-formatted.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use disk_cleanup_core::kind::SelectorId;
 use disk_cleanup_core::outcome::SkipReason;
 use disk_cleanup_core::plan::{ChangeCause, GateRefusal, GateRenderCtx, BIN};
-use disk_cleanup_core::reasons::{errno_phrase, FatalError};
+use disk_cleanup_core::reasons::FatalError;
 use disk_cleanup_core::selector::{default_min_age_secs, format_age, KindSelector};
 use disk_cleanup_core::snapshot_types::FsSnapshot;
 use disk_cleanup_core::summary::{DiskVerdict, RunSummary};
-use disk_cleanup_core::Starvation;
 use serde_json::{json, Map, Value};
 
 use crate::apply::{apply_rows, freed_total, ApplyInput};
-use crate::escape::{escape_os, path_hex, shell_quote};
+use crate::escape::path_hex;
 use crate::view::{family, ErrorEntry, FsBlock, ItemRow, PlanInput, PlanView, RowStatus};
 
 pub const SCHEMA_VERSION: u32 = 1;
@@ -252,20 +251,51 @@ pub fn apply_doc(input: &ApplyInput) -> Value {
     })
 }
 
-/// The `status` document.
+/// What the `status` document carries besides the filesystem snapshot: the six keys of the old
+/// `metascope status --json` (`fs`, `allocation`, `unallocated_bytes`, `metadata_headroom_bytes`, `verdict`,
+/// `findings`) take their old values.
+#[derive(Debug, Clone, Default)]
+pub struct StatusExtra {
+    /// The `/sys/fs/btrfs/<uuid>` directory.
+    pub fs_dir: Option<PathBuf>,
+    /// The old `allocation` object.
+    pub allocation: Option<Value>,
+    pub findings: Vec<(String, String)>,
+}
+
+/// The `status` document: a superset of the old `metascope status --json`. `fs` is the sysfs directory
+/// as before (null when not btrfs), the df snapshot is `filesystem`.
 pub fn status_doc(
     path: &Path,
     fs: Option<&FsBlock>,
     errors: &[ErrorEntry],
     exit_code: i32,
 ) -> Value {
+    status_doc_with(path, fs, errors, exit_code, &StatusExtra::default())
+}
+
+pub fn status_doc_with(
+    path: &Path,
+    fs: Option<&FsBlock>,
+    errors: &[ErrorEntry],
+    exit_code: i32,
+    extra: &StatusExtra,
+) -> Value {
+    let alloc = fs.and_then(|f| f.snapshot.btrfs);
     json!({
         "schema_version": SCHEMA_VERSION,
         "mode": "status",
         "exit_code": exit_code,
         "path": lossy(path),
         "verdict": verdict_id(fs.map_or(DiskVerdict::Unknown, |f| f.verdict)),
-        "fs": {"before": fs.map(|f| snapshot_json(&f.snapshot)), "after": null},
+        "fs": extra.fs_dir.as_deref().map(lossy),
+        "allocation": extra.allocation,
+        "unallocated_bytes": alloc.map(|a| a.unallocated),
+        "metadata_headroom_bytes": alloc.map(|a| a.metadata_headroom_bytes()),
+        "findings": extra.findings.iter()
+            .map(|(sev, msg)| json!({"severity": sev, "message": msg}))
+            .collect::<Vec<_>>(),
+        "filesystem": {"before": fs.map(|f| snapshot_json(&f.snapshot)), "after": null},
         "notes": [],
         "errors": errors_json(errors),
     })
@@ -334,67 +364,33 @@ pub fn kinds_doc(rows: &[KindRow]) -> Value {
     })
 }
 
-/// Figures a run-level text prints that `FatalError` does not carry (Story 1.1.1 froze its fields).
-#[derive(Debug, Clone, Default)]
-pub struct FatalCtx {
-    pub starvation: Option<Starvation>,
-    pub errno: Option<i32>,
-    pub reason: Option<String>,
-}
-
-fn shown(p: &Path) -> String {
-    escape_os(p.as_os_str(), false)
-}
-
-/// The stderr text of a run-level error, with the measured figures of `design/ux.md` 3.5 when the caller
-/// has them, and `FatalError::text()` otherwise.
-pub fn fatal_text(e: &FatalError, ctx: &FatalCtx) -> String {
-    match (e, ctx) {
-        (FatalError::Starved, FatalCtx { starvation: Some(s), .. }) => format!(
-            "error: btrfs unallocated {} MiB and metadata headroom {} MiB: deleting could fail with ENOSPC. Nothing was deleted. Free ~1 GiB by hand (empty trash, remove one known-disposable file), then re-run.",
-            s.unallocated_mib, s.metadata_headroom_mib
-        ),
-        (FatalError::RootsUnreadable { path }, FatalCtx { errno: Some(n), .. }) => format!(
-            "error: root {} does not exist or is unreadable ({}). Nothing scanned. Check the spelling of --root (it must be a directory you can read) or drop --root to use the default roots.",
-            shown(path),
-            errno_phrase(*n)
-        ),
-        (FatalError::StateUnreadable { path }, FatalCtx { reason: Some(r), .. }) => format!(
-            "error: cannot read filesystem state for {}: {r}. Check that the path is mounted ('df -- {}') or run as a user that can read /sys/fs/btrfs.",
-            shown(path),
-            shell_quote(path.as_os_str(), true)
-        ),
-        _ => e.text(),
-    }
-}
-
 fn fatal_code(e: &FatalError) -> &'static str {
     match e {
         FatalError::LockHeld { .. } => "lock_held",
         FatalError::AuditUnwritable { .. } => "audit_unwritable",
         FatalError::RootsUnreadable { .. } => "roots_unreadable",
-        FatalError::Starved => "starved",
+        FatalError::Starved { .. } => "starved",
         FatalError::StateUnreadable { .. } => "state_unreadable",
     }
 }
 
 /// The `errors[]` element of a run-level error.
-pub fn fatal_entry(e: &FatalError, ctx: &FatalCtx) -> ErrorEntry {
+pub fn fatal_entry(e: &FatalError) -> ErrorEntry {
     let path = match e {
         FatalError::AuditUnwritable { path, .. }
-        | FatalError::RootsUnreadable { path }
-        | FatalError::StateUnreadable { path } => Some(path.clone()),
+        | FatalError::RootsUnreadable { path, .. }
+        | FatalError::StateUnreadable { path, .. } => Some(path.clone()),
         _ => None,
     };
     ErrorEntry {
         code: fatal_code(e).into(),
         path,
-        message: fatal_text(e, ctx),
+        message: e.text(),
     }
 }
 
 /// A fatal runtime error: the document of the mode with `items` as far as known and `errors[]` filled.
-pub fn fatal_doc(mode: &str, plan_id: Option<&str>, e: &FatalError, ctx: &FatalCtx) -> Value {
+pub fn fatal_doc(mode: &str, plan_id: Option<&str>, e: &FatalError) -> Value {
     json!({
         "schema_version": SCHEMA_VERSION,
         "mode": mode,
@@ -404,17 +400,35 @@ pub fn fatal_doc(mode: &str, plan_id: Option<&str>, e: &FatalError, ctx: &FatalC
         "items": [],
         "next": [],
         "notes": [],
-        "errors": errors_json(&[fatal_entry(e, ctx)]),
+        "errors": errors_json(&[fatal_entry(e)]),
     })
+}
+
+fn recent_saved(ctx: &GateRenderCtx) -> Value {
+    let mut entries: Vec<&disk_cleanup_core::SavedSelection> = ctx
+        .saved
+        .map(|s| s.entries.iter().collect())
+        .unwrap_or_default();
+    entries.sort_by_key(|e| std::cmp::Reverse(e.saved_at));
+    entries
+        .into_iter()
+        .take(3)
+        .map(|e| {
+            json!({
+                "plan_id": e.plan_id,
+                "kinds": e.kinds,
+                "flags": e.flags,
+                "saved_at": e.saved_at,
+            })
+        })
+        .collect()
 }
 
 /// A gate refusal under `--json` is data: one document with the refusal in `errors[]` (UX-55).
 pub fn gate_refusal_doc(r: &GateRefusal, ctx: &GateRenderCtx) -> Value {
-    let recent_of = |v: &[disk_cleanup_core::plan::RecentPlan]| -> Value {
-        v.iter()
-            .map(|p| json!({"plan_id": p.plan_id, "args": p.args, "age_secs": p.age_secs}))
-            .collect()
-    };
+    // The three newest saved dry runs, as `design/ux.md` S7 shows them (`plan_id`, `kinds`, `flags`,
+    // `saved_at`); the refusal's own `recent` list carries only ids and ages.
+    let recent_of = |_v: &[disk_cleanup_core::plan::RecentPlan]| -> Value { recent_saved(ctx) };
     let dry = format!("{BIN} {}", ctx.selection.dry_run_args());
     let (code, supplied, detail) = match r {
         GateRefusal::MissingPlanId { recent } => (
@@ -454,6 +468,7 @@ pub fn gate_refusal_doc(r: &GateRefusal, ctx: &GateRenderCtx) -> Value {
                         "vanished": vanished.iter().map(disk_cleanup_core::ItemKey::as_str).collect::<Vec<_>>(),
                         "appeared": appeared.iter().map(disk_cleanup_core::ItemKey::as_str).collect::<Vec<_>>(),
                         "incomplete": incomplete,
+                        "recent": recent_saved(ctx),
                         "dry_run_command": dry,
                     }),
                 ),
@@ -469,6 +484,7 @@ pub fn gate_refusal_doc(r: &GateRefusal, ctx: &GateRenderCtx) -> Value {
                         "recomputed": recomputed.to_string(),
                         "saved": {"kinds": saved_kinds, "flags": saved_flags},
                         "now": {"kinds": now_kinds, "flags": now_flags},
+                        "recent": recent_saved(ctx),
                         "dry_run_command": dry,
                     }),
                 ),

@@ -10,8 +10,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use disk_cleanup_cli::render_json::{
-    apply_doc, fatal_doc, kind_rows, kinds_doc, plan_doc, status_doc, to_text, FatalCtx,
-    JQ_TSV_ONE_LINER,
+    apply_doc, fatal_doc, kind_rows, kinds_doc, plan_doc, status_doc, to_text, JQ_TSV_ONE_LINER,
 };
 use disk_cleanup_cli::view::PlanView;
 use disk_cleanup_core::reasons::FatalError;
@@ -40,7 +39,6 @@ fn current(name: &str) -> Value {
             "apply",
             Some("91be04d7"),
             &FatalError::LockHeld { pid: 4242 },
-            &FatalCtx::default(),
         ),
         other => panic!("{other}"),
     }

@@ -3,7 +3,7 @@
 
 use std::ffi::OsString;
 
-use crate::wiring::audit::build_info;
+use disk_cleanup_cli::wiring::audit::build_info;
 
 pub fn line() -> String {
     let b = build_info();

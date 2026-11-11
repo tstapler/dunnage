@@ -414,7 +414,13 @@ fn human_bytes(n: u64) -> String {
 }
 
 pub trait SpaceMeter: Send + Sync {
+    /// Infallible: an unreadable filesystem yields zero figures and fs type `unknown`.
     fn snapshot(&self, path: &Path) -> FsSnapshot;
+    /// The same read, but a filesystem that cannot be read at all is an error (`status` exits 74 on it, so
+    /// "cannot tell" stays distinct from a verdict). The default never fails.
+    fn try_snapshot(&self, path: &Path) -> io::Result<FsSnapshot> {
+        Ok(self.snapshot(path))
+    }
     fn settle(&self, path: &Path, timeout: Duration) -> Settled;
 }
 

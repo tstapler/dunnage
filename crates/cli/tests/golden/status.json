@@ -1,7 +1,8 @@
 {
+  "allocation": null,
   "errors": [],
   "exit_code": 1,
-  "fs": {
+  "filesystem": {
     "after": null,
     "before": {
       "btrfs": {
@@ -29,9 +30,13 @@
       }
     }
   },
+  "findings": [],
+  "fs": null,
+  "metadata_headroom_bytes": 2040109466,
   "mode": "status",
   "notes": [],
   "path": "/",
   "schema_version": 1,
+  "unallocated_bytes": 10522669875,
   "verdict": "warn"
 }

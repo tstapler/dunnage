@@ -4,12 +4,19 @@
 
 #![forbid(unsafe_code)]
 
+pub mod app;
 pub mod apply;
+pub mod args;
+pub mod audit_cmd;
 pub mod escape;
+pub mod kinds;
 pub mod layout;
+pub mod progress;
 pub mod reasontext;
 pub mod render;
 pub mod render_json;
+pub mod status;
 pub mod terminal;
 pub mod units;
 pub mod view;
+pub mod wiring;

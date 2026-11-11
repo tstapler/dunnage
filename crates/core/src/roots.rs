@@ -36,16 +36,18 @@ pub type Canon<'a> = &'a dyn Fn(&Path) -> io::Result<(PathBuf, Identity)>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RootError {
     HomeOrAncestor { path: PathBuf },
-    Unreadable { path: PathBuf },
+    Unreadable { path: PathBuf, errno: i32 },
 }
 
 impl RootError {
     pub fn exit_code(&self) -> i32 {
         match self {
             RootError::HomeOrAncestor { .. } => 64,
-            RootError::Unreadable { path } => {
-                FatalError::RootsUnreadable { path: path.clone() }.exit_code()
+            RootError::Unreadable { path, errno } => FatalError::RootsUnreadable {
+                path: path.clone(),
+                errno: *errno,
             }
+            .exit_code(),
         }
     }
 
@@ -55,9 +57,11 @@ impl RootError {
                 "error: root is HOME or an ancestor of HOME: {}. Nothing scanned. Pass a directory below your home, for example --root ~/code.",
                 path.display()
             ),
-            RootError::Unreadable { path } => {
-                FatalError::RootsUnreadable { path: path.clone() }.text()
+            RootError::Unreadable { path, errno } => FatalError::RootsUnreadable {
+                path: path.clone(),
+                errno: *errno,
             }
+            .text(),
         }
     }
 }
@@ -87,7 +91,7 @@ pub enum CacheTool {
 }
 
 impl CacheTool {
-    fn basename(self) -> &'static str {
+    pub fn basename(self) -> &'static str {
         match self {
             CacheTool::Go => "go-build",
             CacheTool::Pip => "pip",
@@ -157,8 +161,9 @@ impl RootSet {
         cwd: &Path,
         canon: Canon<'_>,
     ) -> Result<RootSet, RootError> {
-        let (home, home_id) = canon(&dirs.home).map_err(|_| RootError::Unreadable {
+        let (home, home_id) = canon(&dirs.home).map_err(|e| RootError::Unreadable {
             path: dirs.home.clone(),
+            errno: e.raw_os_error().unwrap_or(5),
         })?;
         let mut forbidden = vec![home_id];
         let mut forbidden_paths = vec![home.clone()];
@@ -188,8 +193,9 @@ impl RootSet {
         if let Some(roots) = explicit {
             for raw in roots {
                 let wanted = expand(&raw, &home, cwd);
-                let (path, id) = canon(&wanted).map_err(|_| RootError::Unreadable {
+                let (path, id) = canon(&wanted).map_err(|e| RootError::Unreadable {
                     path: wanted.clone(),
+                    errno: e.raw_os_error().unwrap_or(5),
                 })?;
                 if is_forbidden(&path, id) {
                     return Err(RootError::HomeOrAncestor { path: wanted });

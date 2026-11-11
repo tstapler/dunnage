@@ -160,21 +160,21 @@ fn every_fatal_error_text_should_end_with_a_next_action_or_an_explicit_none() {
             "Fix the ownership or mode of /home/u/.local/state/disk-cleanup, or point XDG_STATE_HOME at a writable directory, then run again.",
         ),
         (
-            FatalError::RootsUnreadable { path: "/nope".into() },
+            FatalError::RootsUnreadable { path: "/nope".into(), errno: 2 },
             2,
-            "error: root /nope does not exist or is unreadable. Nothing scanned. Check the spelling of --root (it must be a directory you can read) or drop --root to use the default roots.",
+            "error: root /nope does not exist or is unreadable (no such file or directory). Nothing scanned. Check the spelling of --root (it must be a directory you can read) or drop --root to use the default roots.",
             "Check the spelling of --root (it must be a directory you can read) or drop --root to use the default roots.",
         ),
         (
-            FatalError::Starved,
+            FatalError::Starved { unallocated_mib: 600, metadata_headroom_mib: 32 },
             3,
-            "error: btrfs unallocated space and metadata headroom are too low: deleting could fail with ENOSPC. Nothing was deleted. Free ~1 GiB by hand (empty trash, remove one known-disposable file), then re-run.",
+            "error: btrfs unallocated 600 MiB and metadata headroom 32 MiB: deleting could fail with ENOSPC. Nothing was deleted. Free ~1 GiB by hand (empty trash, remove one known-disposable file), then re-run.",
             "Free ~1 GiB by hand (empty trash, remove one known-disposable file), then re-run.",
         ),
         (
-            FatalError::StateUnreadable { path: "/".into() },
+            FatalError::StateUnreadable { path: "/".into(), reason: "permission denied".into() },
             74,
-            "error: cannot read filesystem state for /. Check that the path is mounted ('df /') or run as a user that can read /sys/fs/btrfs.",
+            "error: cannot read filesystem state for /: permission denied. Check that the path is mounted ('df -- /') or run as a user that can read /sys/fs/btrfs.",
             "run as a user that can read /sys/fs/btrfs.",
         ),
     ];

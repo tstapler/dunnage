@@ -67,7 +67,7 @@ impl StampRefusal {
 
     /// The `code` of the `--json` error document.
     pub fn json_code(&self) -> &'static str {
-        "gate_stamp"
+        "stamp_refused"
     }
 }
 

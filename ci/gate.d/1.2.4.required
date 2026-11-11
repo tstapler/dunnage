@@ -1,0 +1,2 @@
+# <first-gate> <last-gate|-> <command>   (Story 1.2.4, E-10: the owner-reviewed table `audit verify` compares deletions with; re-pin with `sha256sum ci/allowed-roots.txt > ci/allowed-roots.sha256` after review)
+A - sha256sum -c ci/allowed-roots.sha256

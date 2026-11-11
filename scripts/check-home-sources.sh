@@ -6,9 +6,8 @@
 set -u -o pipefail
 ALLOWED=crates/cli/src/wiring/dirs.rs
 # Named exceptions, each with a reason; a new entry is a reviewed change.
-#  - the hash-pinned adversarial suite (ADR-003, frozen) reads HOME only to place its fixture directory;
-#  - the legacy cli main.rs, which Story 1.2.4 replaces with wiring::dirs.
-EXCEPTIONS="crates/adapters/tests/delete_adversarial.rs crates/cli/src/main.rs"
+#  - the hash-pinned adversarial suite (ADR-003, frozen) reads HOME only to place its fixture directory.
+EXCEPTIONS="crates/adapters/tests/delete_adversarial.rs"
 forbidden_crates='dirs dirs-next directories etcetera shellexpand'
 # shellcheck disable=SC2016
 pattern='getpwuid|getpwuid_r|home_dir|dirs_next|directories::|etcetera|shellexpand|User::from_uid|nix::unistd::User|env::var(_os)?[(][[:space:]]*"HOME"'

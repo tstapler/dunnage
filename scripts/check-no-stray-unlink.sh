@@ -6,7 +6,8 @@
 #     remove_dir_all, unlink, unlinkat or rmdir, except in the files in UNLINK_OK: delete.rs (the engine), dirops.rs
 #     (the `DirOps` trait and its one `rustix::fs::unlinkat`) and testing.rs (the fault wrapper forwarding that call).
 #     Also allowed: one line marked `readonly-ok(cache-temp)` in crates/scan/src/cache.rs (the scan cache's own temp
-#     file, policed by check-scan-readonly.sh) and the LEGACY_OK file below.
+#     file, policed by check-scan-readonly.sh). There is no other exemption: the legacy cleaner's `remove_dir_all`
+#     and `git worktree remove --force` in crates/cli/src/main.rs went with the Story 1.2.4 rewrite.
 #  2. Worktree leg: outside crates/adapters/src/command.rs and crates/core/src/ports.rs, the non-comment text of a
 #     file (joined, so line breaks do not hide it) must not hold "worktree" followed within 120 characters by
 #     "remove" as string literals, nor the words `worktree remove` in one string. A text search is the second line;
@@ -17,15 +18,12 @@ set -u -o pipefail
 
 UNLINK_OK='^crates/adapters/src/(delete|dirops|testing)\.rs$'
 WORKTREE_OK='^crates/(adapters/src/command|core/src/ports)\.rs$'
-# Pre-existing `std::fs::remove_dir_all` and `git worktree remove --force` in the legacy cleaner in crates/cli/src/main.rs
-# (before the plan's CLI); both must go through the engine once that code is rewired. Listed here, not silent.
-LEGACY_OK='^crates/cli/src/main\.rs$'
 
 scan_file() {  # $1 = repo-relative path, $2 = absolute path; prints "path:line: leg: text"
-  UNLINK_OK="$UNLINK_OK" WORKTREE_OK="$WORKTREE_OK" LEGACY_OK="$LEGACY_OK" REL="$1" perl -0777 -ne '
+  UNLINK_OK="$UNLINK_OK" WORKTREE_OK="$WORKTREE_OK" REL="$1" perl -0777 -ne '
     my $rel = $ENV{REL};
-    my $unlink_ok = $rel =~ /$ENV{UNLINK_OK}/ || $rel =~ /$ENV{LEGACY_OK}/;
-    my $wt_ok = $rel =~ /$ENV{WORKTREE_OK}/ || $rel =~ /$ENV{LEGACY_OK}/;
+    my $unlink_ok = $rel =~ /$ENV{UNLINK_OK}/;
+    my $wt_ok = $rel =~ /$ENV{WORKTREE_OK}/;
     my @raw = split /\n/, $_, -1;
     my ($text, @marked) = ("");
     for my $i (0 .. $#raw) {
@@ -61,7 +59,7 @@ check() {
     [ -n "$out" ] && { echo "$out"; hits=$((hits+1)); }
   done < <(find "$root"/crates -type f \( -path '*/src/*.rs' -o -name build.rs \) -not -path '*/tests/*' -not -path '*/target/*' | sort)
   [ "$files" -gt 0 ] || { echo "check-no-stray-unlink: no .rs files under $root/crates" >&2; return 2; }
-  if [ "$hits" = 0 ]; then echo "ok: no stray unlink and no worktree-remove spelling outside the allowed files ($files files; legacy exemption: crates/cli/src/main.rs)"
+  if [ "$hits" = 0 ]; then echo "ok: no stray unlink and no worktree-remove spelling outside the allowed files ($files files)"
   else echo "FAIL: $hits file(s) name an unlink primitive or a worktree removal outside the allowed files"; fi
   [ "$hits" = 0 ]
 }
@@ -120,10 +118,11 @@ selftest() {
   done
   mkdir -p "$r/crates/cli/src"
   printf 'fn a() { let _ = std::fs::remove_dir_all("x"); }\n' > "$r/crates/cli/src/main.rs"
-  printf 'fn a() { let _ = std::fs::remove_dir_all("x"); let _ = &["worktree", "remove", "--force"]; }\n' > "$r/crates/cli/src/main.rs"
-  expect 0 "the legacy cli exemption passes" "^ok:" "$self" "$r"
+  expect 1 "the former legacy exemption is gone: a cli main.rs unlink fails" "main.rs:1: unlink" "$self" "$r"
+  printf 'fn a() { let _ = &["worktree", "remove", "--force"]; }\n' > "$r/crates/cli/src/main.rs"
+  expect 1 "and so is a worktree removal argv in it" "main.rs:1: worktree-remove" "$self" "$r"
   rm "$r/crates/cli/src/main.rs"; printf 'fn a() { let _ = std::fs::remove_dir_all("x"); }\n' > "$r/crates/cli/src/other.rs"
-  expect 1 "another cli file does not share the exemption" "other.rs:1:" "$self" "$r"
+  expect 1 "another cli file fails too" "other.rs:1:" "$self" "$r"
   rm "$r/crates/cli/src/other.rs"; printf 'fn main() { std::fs::remove_dir_all("x").ok(); }\n' > "$r/crates/core/build.rs"
   expect 1 "a build.rs is scanned" "build.rs:1:" "$self" "$r"
   rm -r "$r/crates"; mkdir -p "$r/crates/x/src"

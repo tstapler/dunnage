@@ -1,6 +1,7 @@
 //! Side-effecting adapters (filesystem, processes, config).
 
 pub mod audit;
+pub mod audit_verify;
 pub mod command;
 pub mod config;
 pub mod delete;
@@ -18,6 +19,7 @@ pub mod signals;
 pub mod snapshots;
 pub mod space_meter;
 pub mod state;
+pub mod status;
 pub mod statvfs;
 pub mod steam;
 #[cfg(feature = "test-support")]

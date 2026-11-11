@@ -170,16 +170,14 @@ fn root_resolution_should_exit_64_When_root_is_home_ancestor_symlink_to_home_or_
     );
     // A missing or unreadable root is exit 2 with the full line.
     let e = resolve(&fs, "/h", &["/h/does-not-exist"], None, "/h").unwrap_err();
-    assert_eq!(
-        e,
-        RootError::Unreadable {
-            path: "/h/does-not-exist".into()
-        }
-    );
+    assert!(matches!(
+        &e,
+        RootError::Unreadable { path, .. } if path == std::path::Path::new("/h/does-not-exist")
+    ));
     assert_eq!(e.exit_code(), 2);
     assert!(e
         .text()
-        .starts_with("error: root /h/does-not-exist does not exist or is unreadable."));
+        .starts_with("error: root /h/does-not-exist does not exist or is unreadable ("));
     assert!(e.text().contains("Nothing scanned."));
 }
 

@@ -168,6 +168,10 @@ pub struct Refused {
     pub notes: Vec<String>,
     pub text: String,
     pub refusal: Option<GateRefusal>,
+    /// The plan-id of the run, known once the plan was built (every refusal after step 4).
+    pub plan_id: Option<PlanId>,
+    /// The run-level error when that is what refused the run.
+    pub fatal: Option<FatalError>,
 }
 
 #[derive(Debug)]
@@ -279,12 +283,14 @@ fn tilde(p: &Path, home: &Path) -> String {
     }
 }
 
-fn refused_fatal(e: &FatalError, notes: &[String]) -> Box<Refused> {
+fn refused_fatal(e: &FatalError, notes: &[String], plan_id: PlanId) -> Box<Refused> {
     Box::new(Refused {
         exit: ExitClass::of_fatal(e),
         notes: notes.to_vec(),
         text: e.text(),
         refusal: None,
+        plan_id: Some(plan_id),
+        fatal: Some(e.clone()),
     })
 }
 
@@ -373,12 +379,21 @@ impl<'a> Executor<'a> {
                 text: avail.notes.join("\n"),
                 notes: avail.notes,
                 refusal: None,
+                plan_id: None,
+                fatal: None,
             }));
         }
 
         let mut candidates: Vec<Candidate> = Vec::new();
-        for t in self.active_targets(sel) {
-            if !avail.is_unavailable(t) {
+        for t in self.targets.iter().copied() {
+            let selected = t.selectors().iter().any(|s| sel.selects(*s));
+            let down = if selected {
+                avail.is_unavailable(t)
+            } else {
+                // An unselected kind is still listed (its items are `RISK` rows), unless it is down.
+                t.gate(env).is_unavailable()
+            };
+            if !down {
                 candidates.extend(t.discover(env, sel));
             }
         }
@@ -397,7 +412,7 @@ impl<'a> Executor<'a> {
         self.gate(sel, supplied, &plan, plan_id, &avail)?;
         let notes = avail.notes;
         if let Err(e) = env.guard.acquire() {
-            return Err(refused_fatal(&e, &notes));
+            return Err(refused_fatal(&e, &notes, plan_id));
         }
         let run_id = self.opts.meta.run_id.clone();
         let start = RunStart {
@@ -415,7 +430,7 @@ impl<'a> Executor<'a> {
         };
         if let Err(e) = env.audit.run_start(&start) {
             let fatal = audit_unwritable(env, e.raw_os_error().unwrap_or(5));
-            return Err(refused_fatal(&fatal, &notes));
+            return Err(refused_fatal(&fatal, &notes, plan_id));
         }
 
         let second = env.space.snapshot(self.meter_path());
@@ -580,6 +595,8 @@ impl<'a> Executor<'a> {
             notes: avail.notes.clone(),
             text: refusal.render(&ctx),
             refusal: Some(refusal),
+            plan_id: Some(plan_id),
+            fatal: None,
         }))
     }
 

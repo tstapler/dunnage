@@ -27,10 +27,15 @@ pub enum PreflightVerdict {
 }
 
 impl PreflightVerdict {
-    /// The run-level error for a refusal. `FatalError::Starved` has no fields until Task 1.1.1a is
-    /// reworked, so the measured figures travel in the verdict and the caller prints them.
+    /// The run-level error for a refusal, carrying the measured figures it prints.
     pub fn fatal(&self) -> Option<FatalError> {
-        matches!(self, PreflightVerdict::Refuse(_)).then_some(FatalError::Starved)
+        match self {
+            PreflightVerdict::Refuse(s) => Some(FatalError::Starved {
+                unallocated_mib: s.unallocated_mib,
+                metadata_headroom_mib: s.metadata_headroom_mib,
+            }),
+            _ => None,
+        }
     }
 }
 
