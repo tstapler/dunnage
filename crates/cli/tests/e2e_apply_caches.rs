@@ -523,3 +523,569 @@ fn the_plan_and_the_apply_should_open_no_inet_socket_When_traced_and_the_plan_sh
         assert!(text_of(&out).0.contains("DRY RUN"));
     }
 }
+
+// ------------------------------------------------------------------ apply-mode canary and subprocess confinement
+
+const SYSTEM_PREFIXES: [&str; 8] = [
+    "/usr",
+    "/lib",
+    "/lib64",
+    "/proc/self",
+    "/sys/fs/btrfs",
+    "/sys/fs/cgroup",
+    "/dev",
+    "/bin",
+];
+const SYSTEM_EXACT: [&str; 2] = ["/etc/ld.so.cache", "/etc/ld.so.preload"];
+
+/// `<fixture>/bin/go`: answers `go env GOCACHE` with a directory below the fixture HOME and empties it on
+/// `go clean -cache`, logging every call.
+fn go_shim(f: &Fixture) -> PathBuf {
+    let bin = f.root().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let shim = bin.join("go");
+    let script = format!(
+        "#!/bin/sh\necho \"$@\" >> '{log}'\n\
+         case \"$1 $2\" in\n\
+         'env GOCACHE') echo \"{cache}\" ;;\n\
+         'clean -cache') rm -rf \"{cache}\"/* ;;\n\
+         esac\n",
+        log = f.root().join("shim-go.log").display(),
+        cache = f.home().join(".cache/go-build").display(),
+    );
+    std::fs::write(&shim, script).unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&shim, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let cache = f.home().join(".cache/go-build/ab");
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join("obj"), vec![1u8; 30_000]).unwrap();
+    shim
+}
+
+fn fixture_path(f: &Fixture) -> std::ffi::OsString {
+    std::env::join_paths([
+        f.root().join("bin"),
+        PathBuf::from("/usr/bin"),
+        PathBuf::from("/bin"),
+    ])
+    .unwrap()
+}
+
+#[test]
+fn safety_fixture_home_canary() {
+    if !common::strace_available() {
+        assert!(
+            std::env::var_os("DC_REQUIRE_STRACE").is_none(),
+            "DC_REQUIRE_STRACE is set"
+        );
+        eprintln!("SKIP: strace is not installed (DC_REQUIRE_STRACE=1 makes the canary a failure)");
+        return;
+    }
+    let f = Fixture::new();
+    cold(&f);
+    let shim = go_shim(&f);
+    let log = f.root().join("apply.log");
+    let mut c = common::strace_cmd(&f, &log, env!("CARGO_BIN_EXE_disk-cleanup"));
+    c.args(["--apply", "--kinds", "caches"])
+        .env("PATH", fixture_path(&f))
+        .current_dir(f.home())
+        .stdin(std::process::Stdio::null());
+    let out = c.output().unwrap();
+    assert_eq!(out.status.code(), Some(0), "{}", text_of(&out).1);
+
+    // The run really removed the path caches and ran the shim (the trace is not of a no-op).
+    assert!(caches_gone(&f));
+    let calls = std::fs::read_to_string(f.root().join("shim-go.log")).unwrap();
+    assert!(
+        calls.contains("env GOCACHE") && calls.contains("clean -cache"),
+        "{calls}"
+    );
+
+    let paths = common::strace_own_paths(&std::fs::read_to_string(&log).unwrap());
+    assert!(
+        paths
+            .iter()
+            .any(|p| p.starts_with(f.root().to_str().unwrap())),
+        "vacuous trace: {} paths, none under the fixture",
+        paths.len()
+    );
+    let mut allowed: Vec<PathBuf> = SYSTEM_PREFIXES.iter().map(PathBuf::from).collect();
+    allowed.push(std::fs::canonicalize(f.root()).unwrap());
+    allowed.push(f.root().to_path_buf());
+    allowed.push(
+        Path::new(env!("CARGO_BIN_EXE_disk-cleanup"))
+            .parent()
+            .unwrap()
+            .to_path_buf(),
+    );
+    let ancestors: Vec<String> = std::fs::canonicalize(f.root())
+        .unwrap()
+        .ancestors()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+    let exact: Vec<&str> = SYSTEM_EXACT
+        .iter()
+        .copied()
+        .chain(ancestors.iter().map(String::as_str))
+        .collect();
+    // Snapshot detection lstats `<mount>/.snapshots` for each mount: a read-only probe, not a home access.
+    let bad: Vec<String> = common::canary_violations(&paths, &allowed, &exact)
+        .into_iter()
+        .filter(|p| !p.ends_with("/.snapshots") && p != "/timeshift-btrfs/snapshots")
+        .collect();
+    assert!(
+        bad.is_empty(),
+        "paths outside the fixture and the allowlist: {bad:#?}"
+    );
+
+    // The Go row ran the shim and no system `go`: the trace shows the execve of the shim by absolute path. The
+    // audit `intent` records the argv as `go clean -cache` (the program name, not the resolved path).
+    let trace = std::fs::read_to_string(&log).unwrap();
+    let execs: Vec<&str> = trace.lines().filter(|l| l.contains("execve(")).collect();
+    assert!(
+        execs
+            .iter()
+            .any(|l| l.contains(&format!("execve(\"{}\"", shim.display()))),
+        "no execve of the shim {}: {execs:#?}",
+        shim.display()
+    );
+    assert!(
+        !execs.iter().any(|l| l.contains("/usr/bin/go\"")
+            || l.contains("/bin/go\"") && !l.contains(f.root().to_str().unwrap())),
+        "a system go was executed: {execs:#?}"
+    );
+    let audit = std::fs::read_to_string(f.xdg("state").join("disk-cleanup/audit.jsonl")).unwrap();
+    let intents: Vec<serde_json::Value> = audit
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter(|v| v["type"] == "intent" && v["argv"].is_array())
+        .collect();
+    assert_eq!(intents.len(), 1, "{audit}");
+    assert_eq!(
+        intents[0]["argv"],
+        serde_json::json!(["go", "clean", "-cache"])
+    );
+}
+
+// ------------------------------------------------------------------ ENOSPC mid-run (UX-18), in process
+
+mod enospc {
+    use std::ffi::OsString;
+    use std::io::Write;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
+
+    use disk_cleanup_adapters::targets::cache::CacheTarget;
+    use disk_cleanup_adapters::testing::FaultDirOps;
+    use disk_cleanup_adapters::RealDirOps;
+    use disk_cleanup_cli::app::{ApplyMode, Ports};
+    use disk_cleanup_cli::terminal::Terminal;
+    use disk_cleanup_cli::wiring::audit::{GateExit, StampOutcome};
+    use disk_cleanup_cli::wiring::compose::{compose_apply, ApplyState, ApplyWiring, Sink, Trace};
+    use disk_cleanup_core::ports::Env;
+    use disk_cleanup_core::roots::RootSet;
+    use disk_cleanup_core::testing::{
+        FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe,
+        FakeRunGuard, FakeSpaceMeter,
+    };
+    use disk_cleanup_core::{
+        ApplyToken, AuditRecord, BuildInfo, Dirs, FatalError, Identity, RunRoots, Status,
+    };
+
+    use super::common::Fixture;
+
+    #[derive(Clone, Default)]
+    struct Shared(Arc<Mutex<Vec<u8>>>);
+
+    impl Write for Shared {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    struct NoState;
+
+    impl ApplyState for NoState {
+        fn unclean_notice(&self) -> Result<Option<String>, String> {
+            Ok(None)
+        }
+
+        fn ensure_reserves(&self) -> Result<Option<String>, FatalError> {
+            Ok(None)
+        }
+    }
+
+    #[allow(clippy::unnecessary_wraps)]
+    fn confined(_gate: char) -> Result<StampOutcome, GateExit> {
+        Ok(StampOutcome::Confined)
+    }
+
+    fn canon(p: &std::path::Path) -> std::io::Result<(PathBuf, Identity)> {
+        let c = p.canonicalize()?;
+        let m = std::fs::metadata(&c)?;
+        Ok((c.clone(), Identity::of(&m)))
+    }
+
+    /// Four caches of distinct sizes (so the plan order is known) under a fixture HOME; the `n`-th `unlinkat` of
+    /// the run fails with `ENOSPC`. Returns (exit code, stdout, stderr, audit results).
+    pub fn run(
+        f: &Fixture,
+        fail_on_unlink: usize,
+    ) -> (i32, String, String, Vec<(PathBuf, Status)>) {
+        let home = std::fs::canonicalize(f.home()).unwrap();
+        for (rel, kib) in [
+            (".npm/_cacache", 400),
+            (".cargo/registry/src", 300),
+            (".cache/ms-playwright", 200),
+            (".gradle/caches", 100),
+        ] {
+            let dir = home.join(rel);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("blob"), vec![4u8; kib * 1024]).unwrap();
+        }
+        std::fs::create_dir_all(home.join("code")).unwrap();
+        let dirs = Dirs {
+            home: home.clone(),
+            state: home.join(".local/state/disk-cleanup"),
+            cache: home.join(".cache/disk-cleanup"),
+            config: home.join(".config/disk-cleanup"),
+        };
+        let roots = RootSet::resolve(&dirs, &[home.join("code")], None, &home, &canon).unwrap();
+        let target = CacheTarget::new(
+            roots,
+            home.join("fsroot"),
+            FaultDirOps::wrap(RealDirOps::confined_to(&home))
+                .enospc_on_nth_unlinkat(fail_on_unlink)
+                .build(),
+        );
+        let runner = FakeCommandRunner::new();
+        runner.absent("go").absent("pip").absent("pip3");
+        let (fs, clock, probe) = (
+            FakeFs::new(),
+            FakeClock::at(1_800_000_000),
+            FakeProbe::new(),
+        );
+        let space = FakeSpaceMeter::new(
+            vec![FakeSpaceMeter::plain_snapshot("/", 500, 1000)],
+            FakeSpaceMeter::stable(),
+        );
+        let (audit, guard, plans) = (
+            FakeAuditSink::new(),
+            FakeRunGuard::new(),
+            FakePlanStore::new(),
+        );
+        let env = Env {
+            fs: &fs,
+            runner: &runner,
+            clock: &clock,
+            probe: &probe,
+            space: &space,
+            audit: &audit,
+            guard: &guard,
+            plans: &plans,
+            dirs,
+        };
+        let mint = ApplyToken::for_tests;
+        let outcome = |_m, _v, _f, _u| {};
+        let ports = Ports {
+            env: &env,
+            targets: vec![&target],
+            apply: ApplyMode::Granted(&mint),
+            apply_capable: None,
+            stamp: &confined,
+            build: BuildInfo {
+                bin_version: "0.1.0".into(),
+                git_commit: "abc".into(),
+                dirty: false,
+                metascope_rev: "none".into(),
+                patched: false,
+                metascope_dirty: false,
+            },
+            roots: RunRoots::default(),
+            scan_roots: 1,
+            exe: PathBuf::from("/usr/bin/disk-cleanup"),
+            term: Terminal::pipe(),
+            stdout_tty: false,
+            run_id: "run-1".into(),
+            via: None,
+            outcome: &outcome,
+            reserves_note: None,
+            config_roots: None,
+        };
+        let (out, err) = (Shared::default(), Shared::default());
+        let mut trace = Trace::default();
+        let argv: Vec<OsString> = ["--apply", "--kinds", "caches", "--jobs", "1"]
+            .iter()
+            .map(OsString::from)
+            .collect();
+        let code = compose_apply(
+            argv,
+            &ApplyWiring {
+                ports: &ports,
+                state: &NoState,
+                stderr_tty: false,
+            },
+            &Sink::new(out.clone()),
+            &Sink::new(err.clone()),
+            &mut trace,
+        );
+        let results = audit
+            .records()
+            .iter()
+            .filter_map(|r| match r {
+                AuditRecord::Result(i) => Some((i.0.path.clone().unwrap(), i.0.status.clone())),
+                _ => None,
+            })
+            .collect();
+        let text = |s: &Shared| String::from_utf8(s.0.lock().unwrap().clone()).unwrap();
+        (code, text(&out), text(&err), results)
+    }
+}
+
+#[test]
+fn an_enospc_while_removing_the_second_cache_should_leave_the_first_removed_the_rest_skipped_and_exit_2(
+) {
+    let f = Fixture::new();
+    // Each cache is one file plus the directory: the third `unlinkat` is the first one of the second cache.
+    let (code, stdout, stderr, results) = enospc::run(&f, 3);
+    assert_eq!(code, 2, "{stdout}\n{stderr}");
+    let home = std::fs::canonicalize(f.home()).unwrap();
+    // Plan order is the table's: npm first, gradle second, then cargo src and playwright.
+    assert!(
+        !home.join(".npm/_cacache").exists(),
+        "the first cache was not removed"
+    );
+    assert!(
+        home.join(".gradle/caches/blob").exists(),
+        "the failed cache lost its file"
+    );
+    assert!(home.join(".cargo/registry/src/blob").exists());
+    assert!(home.join(".cache/ms-playwright/blob").exists());
+    let status_of = |rel: &str| {
+        results
+            .iter()
+            .find(|(p, _)| p == &home.join(rel))
+            .map(|(_, s)| s.clone())
+    };
+    assert_eq!(
+        status_of(".npm/_cacache"),
+        Some(disk_cleanup_core::Status::Removed)
+    );
+    assert!(
+        matches!(status_of(".gradle/caches"), Some(disk_cleanup_core::Status::Error(m)) if m.contains("no space left on device")),
+        "{results:?}"
+    );
+    assert_eq!(
+        status_of(".cargo/registry/src"),
+        None,
+        "attempted after the abort"
+    );
+    assert_eq!(
+        status_of(".cache/ms-playwright"),
+        None,
+        "attempted after the abort"
+    );
+    assert!(
+        stdout.contains("INTERRUPTED: 2 items not attempted"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("btrfs metadata/unallocated is the limit")
+            && stdout.contains("disk-cleanup status"),
+        "no recovery hint:\n{stdout}"
+    );
+    assert!(stdout.ends_with("APPLY FINISHED - exit 2.\n"), "{stdout}");
+}
+
+// ------------------------------------------------------------------ full state directory (rehearsal script)
+
+mod full_disk {
+    use super::{cold, common, text_of, Fixture};
+    use std::process::{Command, Output};
+
+    /// The command prefix that runs the binary under the fixture environment inside the rehearsal shell,
+    /// where `XDG_STATE_HOME` is the full tmpfs.
+    pub fn fx(f: &Fixture) -> String {
+        format!(
+            "env -i PATH=/usr/bin:/bin HOME={} XDG_STATE_HOME=\"$XDG_STATE_HOME\" XDG_CACHE_HOME={} XDG_CONFIG_HOME={} DC_TEST_ROOT={} LANG=C {}",
+            f.home().display(),
+            f.xdg("cache").display(),
+            f.xdg("config").display(),
+            f.root().display(),
+            env!("CARGO_BIN_EXE_disk-cleanup"),
+        )
+    }
+
+    /// `scripts/rehearse-full-disk.sh <mode> -- sh -c <inner>`; `mode` is `--prime "<fx> status"` or
+    /// `--no-reserve`. `None` when `unshare -rm` does not work here.
+    pub fn rehearse(f: &Fixture, mode: &[&str], inner: &str) -> Option<Output> {
+        if !common::unshare_works() {
+            return None;
+        }
+        let script = common::repo_root().join("scripts/rehearse-full-disk.sh");
+        let out = Command::new(script)
+            .args(mode)
+            .args(["--", "sh", "-c", inner])
+            .stdin(std::process::Stdio::null())
+            .output()
+            .unwrap();
+        assert!(
+            text_of(&out).1.contains("is full"),
+            "the rehearsal did not fill the state dir: {}",
+            text_of(&out).1
+        );
+        let _ = f;
+        Some(out)
+    }
+
+    pub fn prime(f: &Fixture) -> String {
+        format!("{} status >/dev/null 2>&1", fx(f))
+    }
+
+    /// `key=value` lines the inner script echoed.
+    pub fn kv(out: &Output, key: &str) -> Option<String> {
+        text_of(out)
+            .0
+            .lines()
+            .find_map(|l| l.strip_prefix(&format!("{key}=")).map(str::to_string))
+    }
+
+    pub fn fixture_with_stale() -> Fixture {
+        let f = Fixture::new();
+        cold(&f);
+        f
+    }
+}
+
+#[test]
+fn a_full_state_dir_with_the_reserves_should_release_the_audit_reserve_and_still_delete_with_exit_0(
+) {
+    let f = full_disk::fixture_with_stale();
+    let inner = format!(
+        "{fx} --apply --kinds caches >\"{root}/apply.out\" 2>\"{root}/apply.err\"; echo rc=$?; \
+         echo audit_reserve=$(stat -c %s \"$XDG_STATE_HOME/disk-cleanup/audit.reserve\"); \
+         echo audit_lines=$(wc -l < \"$XDG_STATE_HOME/disk-cleanup/audit.jsonl\")",
+        fx = full_disk::fx(&f),
+        root = f.root().display()
+    );
+    let prime = full_disk::prime(&f);
+    let Some(out) = full_disk::rehearse(&f, &["--prime", &prime], &inner) else {
+        return;
+    };
+    let (stdout, stderr) = text_of(&out);
+    assert_eq!(
+        full_disk::kv(&out, "rc").as_deref(),
+        Some("0"),
+        "{stdout}\n{stderr}"
+    );
+    assert!(caches_gone(&f), "nothing was deleted\n{stdout}\n{stderr}");
+    assert_eq!(
+        full_disk::kv(&out, "audit_reserve").as_deref(),
+        Some("0"),
+        "the audit reserve was not released:\n{stdout}"
+    );
+    assert!(
+        full_disk::kv(&out, "audit_lines")
+            .unwrap()
+            .parse::<u32>()
+            .unwrap()
+            >= 4,
+        "{stdout}"
+    );
+}
+
+#[test]
+fn a_full_state_dir_without_the_reserves_should_exit_2_and_delete_nothing() {
+    let f = full_disk::fixture_with_stale();
+    let inner = format!(
+        "{fx} --apply --kinds caches >\"{root}/apply.out\" 2>\"{root}/apply.err\"; echo rc=$?",
+        fx = full_disk::fx(&f),
+        root = f.root().display()
+    );
+    let Some(out) = full_disk::rehearse(&f, &["--no-reserve"], &inner) else {
+        return;
+    };
+    let (stdout, stderr) = text_of(&out);
+    assert_eq!(
+        full_disk::kv(&out, "rc").as_deref(),
+        Some("2"),
+        "{stdout}\n{stderr}"
+    );
+    assert!(
+        !caches_gone(&f) && f.home().join(".npm/_cacache/sub/blob").exists(),
+        "a cache was deleted"
+    );
+}
+
+#[test]
+fn the_owner_flow_on_a_full_state_dir_should_save_the_id_and_apply_with_the_reserve_and_say_not_usable_without_it(
+) {
+    let dry_and_apply = |f: &Fixture| {
+        format!(
+            "{fx} --kinds caches,fixture-destructive >{root}/dry.out 2>{root}/dry.err; echo dry_rc=$?; \
+             id=$(grep -o -- '--plan-id [0-9a-f]*' {root}/dry.out | head -1 | cut -d' ' -f2); \
+             if [ -z \"$id\" ]; then id=$(sed -n 's/.*plan-id \\([0-9a-f]\\{{8\\}}\\).*/\\1/p' {root}/dry.out | head -1); fi; \
+             {fx} --apply --kinds caches,fixture-destructive --plan-id \"$id\" >{root}/apply.out 2>{root}/apply.err </dev/null; echo apply_rc=$?",
+            fx = full_disk::fx(f),
+            root = f.root().display()
+        )
+    };
+
+    // With the reserve: the id is saved, the printed line is accepted and applies.
+    let f = full_disk::fixture_with_stale();
+    let prime = full_disk::prime(&f);
+    let Some(out) = full_disk::rehearse(&f, &["--prime", &prime], &dry_and_apply(&f)) else {
+        return;
+    };
+    assert_eq!(
+        full_disk::kv(&out, "dry_rc").as_deref(),
+        Some("0"),
+        "{}",
+        text_of(&out).1
+    );
+    assert_eq!(
+        full_disk::kv(&out, "apply_rc").as_deref(),
+        Some("0"),
+        "{}\n{}",
+        text_of(&out).0,
+        std::fs::read_to_string(f.root().join("apply.err")).unwrap_or_default()
+    );
+    let dry = std::fs::read_to_string(f.root().join("dry.out")).unwrap();
+    assert!(
+        !dry.contains("NOT usable") && !dry.contains("NOT saved"),
+        "{dry}"
+    );
+    assert!(
+        !f.home().join("code/proj/stale-a").exists(),
+        "the destructive apply did not run"
+    );
+
+    // Without it: the report says the id is not usable, exits 0, and the destructive apply is refused.
+    let f = full_disk::fixture_with_stale();
+    let Some(out) = full_disk::rehearse(&f, &["--no-reserve"], &dry_and_apply(&f)) else {
+        return;
+    };
+    assert_eq!(full_disk::kv(&out, "dry_rc").as_deref(), Some("0"));
+    let dry = std::fs::read_to_string(f.root().join("dry.out")).unwrap();
+    assert!(dry.contains("plan-id NOT usable"), "{dry}");
+    let apply_rc = full_disk::kv(&out, "apply_rc").unwrap();
+    let err = std::fs::read_to_string(f.root().join("apply.err")).unwrap_or_default();
+    assert_ne!(
+        apply_rc, "0",
+        "a destructive apply ran with an unsaved id\n{err}"
+    );
+    assert_eq!(apply_rc, "64");
+    assert!(
+        err.contains("The state directory") && err.contains("free about 1 MiB there"),
+        "{err}"
+    );
+    assert!(
+        f.home().join("code/proj/stale-a").is_dir(),
+        "the stale directory was deleted"
+    );
+}
