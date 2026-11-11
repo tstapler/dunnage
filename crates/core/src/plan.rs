@@ -79,6 +79,10 @@ pub fn not_an_item_text(sel: &Selection, only: &Path) -> String {
     )
 }
 
+/// Printed after an `--apply ... --only` line that needs no plan-id (Safe tier, worktrees without
+/// `--worktree-ignored discard`): there `--only` is a filter and nothing more (UX-T6).
+pub const NO_PLAN_ID_ONLY_NOTE: &str = "This line needs no plan-id; --only limits it to what you marked. Without --only it would apply to every item of those kinds.";
+
 /// How a planner treats an `--only` value that is no longer an item: the CLI refuses (`Strict`), the
 /// explorer's preview and exit report plan the survivors (`Tolerant`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

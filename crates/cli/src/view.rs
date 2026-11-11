@@ -274,6 +274,8 @@ pub struct NextCmd {
     pub selection: Selection,
     /// A `--apply` line with no plan-id that applies the safe set.
     pub safe_apply: bool,
+    /// An `--apply` line with `--only` and no plan-id: `--only` is a filter there, and the next line says so.
+    pub only_filter_note: bool,
 }
 
 /// The `plan-id NOT usable` block of `design/ux.md` 1.4.
@@ -514,6 +516,7 @@ pub fn commands(input: &PlanInput) -> Vec<NextCmd> {
             plan_id: id,
             selection: sel.clone(),
             safe_apply: id.is_none(),
+            only_filter_note: id.is_none() && !sel.only.is_empty(),
         });
     }
 
@@ -531,12 +534,14 @@ pub fn commands(input: &PlanInput) -> Vec<NextCmd> {
         ids.dedup();
         let s = selection_over(sel, &ids);
         let id = with_id(&s);
+        let note = id.is_none() && !s.only.is_empty();
         out.push(NextCmd {
             command: line(&s, true, id, false),
             explain: format!("adds the {} RISK rows", add_rows.len()),
             plan_id: id,
             selection: s,
             safe_apply: false,
+            only_filter_note: note,
         });
     }
 
@@ -558,6 +563,7 @@ pub fn commands(input: &PlanInput) -> Vec<NextCmd> {
             plan_id: None,
             selection: s,
             safe_apply: false,
+            only_filter_note: false,
         });
     }
 
@@ -584,6 +590,7 @@ pub fn commands(input: &PlanInput) -> Vec<NextCmd> {
             plan_id: None,
             selection: sel_s,
             safe_apply: false,
+            only_filter_note: false,
         });
     }
     out

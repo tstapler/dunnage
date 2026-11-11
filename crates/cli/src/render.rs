@@ -367,6 +367,9 @@ fn next_block(out: &mut Out, view: &PlanView) {
     for c in &view.next {
         out.raw(format!("  {}", c.command));
         out.indented("      ", &c.explain);
+        if c.only_filter_note {
+            out.indented("      ", disk_cleanup_core::plan::NO_PLAN_ID_ONLY_NOTE);
+        }
     }
     if let Some(n) = &view.not_usable {
         not_usable_block(out, n);

@@ -9,6 +9,7 @@ pub mod apply;
 pub mod args;
 pub mod audit_cmd;
 pub mod escape;
+pub mod explore;
 pub mod kinds;
 pub mod layout;
 pub mod progress;
