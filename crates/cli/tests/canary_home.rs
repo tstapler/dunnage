@@ -11,14 +11,16 @@ use common::{
 };
 
 /// Paths a plan run may open that are neither the fixture nor its root: the loader and libc, `/proc/self`,
-/// the cgroup quota files Rust's `available_parallelism` reads, the btrfs sysfs tree, devices.
-const SYSTEM_PREFIXES: [&str; 8] = [
+/// the cgroup quota files Rust's `available_parallelism` reads, the CPU list glibc's malloc reads when a second
+/// thread first allocates (discovery runs kinds on threads), the btrfs sysfs tree, devices.
+const SYSTEM_PREFIXES: [&str; 9] = [
     "/usr",
     "/lib",
     "/lib64",
     "/proc/self",
     "/sys/fs/btrfs",
     "/sys/fs/cgroup",
+    "/sys/devices/system/cpu",
     "/dev",
     "/bin",
 ];

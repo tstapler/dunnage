@@ -277,6 +277,27 @@ fn age_secs(mtime: i64) -> u64 {
 }
 
 /// Pure classification pass over the walk's per-directory map.
+/// Index of the group at `gpath` in `slots`, created on first use.
+fn slot_for(
+    slots: &mut Vec<Group>,
+    slot_of: &mut HashMap<PathBuf, usize>,
+    gpath: PathBuf,
+    kind: GroupKind,
+    repo: PathBuf,
+) -> usize {
+    *slot_of.entry(gpath.clone()).or_insert_with(|| {
+        slots.push(Group {
+            path: gpath,
+            kind,
+            repo,
+            stats: CategoryStats::default(),
+            inodes: 0,
+            metadata_est_bytes: 0,
+        });
+        slots.len() - 1
+    })
+}
+
 /// Sorts by `Path` order (component-wise) without the slow component iterator: with `/` mapped to NUL the
 /// bytes of a normalized absolute path compare exactly as its components do (`a/b` before `a-b`).
 fn sort_component_order(dirs: &mut [(PathBuf, DirInfo)]) {
@@ -364,25 +385,6 @@ fn build_report(
     // the same answer as `group_of` without hashing every ancestor of every directory.
     let mut slots: Vec<Group> = Vec::new();
     let mut slot_of: HashMap<PathBuf, usize> = HashMap::new();
-    fn slot_for(
-        slots: &mut Vec<Group>,
-        slot_of: &mut HashMap<PathBuf, usize>,
-        gpath: PathBuf,
-        kind: GroupKind,
-        repo: PathBuf,
-    ) -> usize {
-        *slot_of.entry(gpath.clone()).or_insert_with(|| {
-            slots.push(Group {
-                path: gpath,
-                kind,
-                repo,
-                stats: CategoryStats::default(),
-                inodes: 0,
-                metadata_est_bytes: 0,
-            });
-            slots.len() - 1
-        })
-    }
     let mut git_keys: Vec<&PathBuf> = git_roots.keys().collect();
     git_keys.sort();
     let mut git_keys = git_keys.into_iter().peekable();
@@ -612,7 +614,7 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn sort_component_order_should_match_path_order_When_names_share_a_prefix_with_dash_dot_and_slash(
+    fn sort_component_order_should_match_path_order_when_names_share_a_prefix_with_dash_dot_and_slash(
     ) {
         let names = [
             "/r/a/b", "/r/a-b", "/r/a.b/c", "/r/a", "/r/a/b/c", "/r/a b", "/r/ab", "/r", "/r/a_b",

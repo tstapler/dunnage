@@ -43,11 +43,10 @@ where
         .collect()
 }
 
-/// Worker count for CPU-and-process bound work: the available parallelism, capped at [`MAX_WORKERS`].
+/// Worker count for process-and-I/O bound work. A constant, not `available_parallelism`: that reads
+/// `/sys/devices/system/cpu/online`, which the plan-run canary (no access outside HOME and an allowlist) forbids.
 pub fn default_workers() -> usize {
-    std::thread::available_parallelism()
-        .map_or(2, usize::from)
-        .min(MAX_WORKERS)
+    MAX_WORKERS
 }
 
 #[cfg(test)]
