@@ -20,6 +20,10 @@ WITNESS_TYPES='ApplyToken|Allowed|WorktreeRemoval'
 UNSAFE_OK='^crates/adapters/src/(dirops|space_meter|lock|signals|fiemap)\.rs:|^crates/adapters/src/probe/|^crates/scan/src/btrfs_tree\.rs:'
 # the scan crate is a leaf that cannot name a witness type (check-scan-deps.sh); its one ioctl module builds the
 # BTRFS_IOC_TREE_SEARCH_V2 request header with slice::from_raw_parts, and only that identifier in that file is exempt
+# the one test file that installs a seccomp filter (statx -> ENOSYS) in a child process: its `unsafe` is allowed only
+# while every `libc::` name in it is on SECCOMP_LIBC_OK and it holds no transmute, asm! or pointer cast
+SECCOMP_TEST=crates/adapters/tests/delete_aa_mutants.rs
+SECCOMP_LIBC_OK='^(prctl|PR_SET_NO_NEW_PRIVS|PR_SET_SECCOMP|SECCOMP_MODE_FILTER|sock_filter|sock_fprog|SYS_statx|E[A-Z0-9]+)$'
 FORGE_OK='^crates/scan/src/btrfs_tree\.rs:[0-9]+:from_raw_parts$'
 
 SELF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")
@@ -475,6 +479,15 @@ rule:
 EOF
 }
 
+seccomp_content_ok() {  # $1 = file; true when it names only the seccomp libc items and forges nothing
+  local f=$1 n
+  grep -Ev '^\s*//' "$f" | grep -Eq 'transmute|asm!|\bas\s*\*|\*(const|mut)\s' && return 1
+  while IFS= read -r n; do
+    [[ $n =~ $SECCOMP_LIBC_OK ]] || return 1
+  done < <(grep -Ev '^\s*//' "$f" | grep -oE 'libc::[A-Za-z_0-9]+' | sed 's/^libc:://' | sort -u)
+  return 0
+}
+
 main() {
   local expect="" root="."
   while [ $# -gt 0 ]; do
@@ -540,7 +553,9 @@ main() {
   flag "impl ApplyToken has a constructor other than grant/for_tests" <<< "$H_ctorfn"
   flag "memory-forging primitive" < <(printf '%s\n%s\n%s\n%s\n' "$(printf '%s\n' "$H_ident" | awk -F: '$3 !~ /^(grant|unconfined|for_tests)$/')" "$H_ptrread" "$H_useptr" "$H_union" | grep -Ev -- "$FORGE_OK" | grep . || true)
   flag "pointer type or unsafe block names a witness type (a ZST can be forged from any pointer)" < <(printf '%s\n%s\n' "$H_ptrtype" "$H_unsafewitness" | grep . || true)
-  flag "unsafe outside the adapters files that need it (dirops, space_meter, lock, signals, probe/; scan: btrfs_tree.rs only)" < <(not_in "$H_unsafe" "$UNSAFE_OK")
+  local unsafe_scope="$UNSAFE_OK"
+  if [ -f "$SECCOMP_TEST" ] && seccomp_content_ok "$SECCOMP_TEST"; then unsafe_scope="$UNSAFE_OK|^$SECCOMP_TEST:"; fi
+  flag "unsafe outside the adapters files that need it (dirops, space_meter, lock, signals, probe/; scan: btrfs_tree.rs only; seccomp test with prctl only)" < <(not_in "$H_unsafe" "$unsafe_scope")
   if [ -f "$FIEMAP" ]; then
     need python3
     write_fiemap_scan "$tmp/fiemap_scan.py"
@@ -772,6 +787,14 @@ fn i(fd: i32) { let _ = unsafe { libc::ioctl(fd, 0, 0) }; }'
   if [ -f "$real" ]; then
     if out=$(python3 -I "$t/fiemap_scan.py" "$real" 2>&1); then echo "ok: the real $FIEMAP passes the content rule"; else echo "SELFTEST BAD: the real $FIEMAP fails: $out"; rc=1; fi
   fi
+  # seccomp test file (delete_aa_mutants.rs): prctl-only unsafe passes; a syscall, transmute or pointer cast does not
+  seccomp_ok='fn f() { unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) }; let _ = libc::SYS_statx; let _ = libc::ENOSYS; }'
+  cp -r "$t/pos4" "$t/pos5"; mkdir -p "$t/pos5/crates/adapters/tests"; printf '%s\n' "$seccomp_ok" > "$t/pos5/crates/adapters/tests/delete_aa_mutants.rs"
+  if out=$("$SELF" --expect-sites 1 "$t/pos5" 2>&1); then echo "ok: prctl-only unsafe in the seccomp test file passes"; else echo "SELFTEST BAD: seccomp test false positive: $out"; rc=1; fi
+  for v in 'unsafe { libc::syscall(libc::SYS_statx, 0) }' 'unsafe { libc::write(1, p, 1) }' 'unsafe { std::mem::transmute::<u8, u8>(1) }' 'unsafe { let _ = &x as *const u8; }'; do
+    d="$t/n-seccomp-$RANDOM"; cp -r "$t/pos5" "$d"; printf 'fn g() { %s; }\n' "$v" >> "$d/crates/adapters/tests/delete_aa_mutants.rs"
+    if "$SELF" --expect-sites 1 "$d" >/dev/null 2>&1; then echo "SELFTEST BAD: seccomp test file accepted: $v"; rc=1; else echo "ok: seccomp test file rejects: $v"; fi
+  done
   # fail-closed on a blind scan: a tree where the definition files are missing
   mkdir -p "$t/blind/crates/cli/src"; echo 'fn main() {}' > "$t/blind/crates/cli/src/main.rs"
   if out=$("$SELF" --expect-sites 0 "$t/blind" 2>&1); then echo "SELFTEST BAD: blind tree passed"; rc=1; else echo "ok: a tree without the definition sites fails (scan cannot be vacuous)"; fi
