@@ -4,13 +4,12 @@
 
 use std::collections::BTreeSet;
 use std::ffi::OsStr;
-use std::fmt::Write as _;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use crate::candidate::{Candidate, Locator};
 use crate::kind::SelectorId;
 use crate::outcome::SkipReason;
+use crate::shell_quote::shell_quote;
 
 /// A build directory is never removed below this age, whatever `--min-age` says (Story 3.2.1).
 pub const BUILD_DIR_FLOOR_SECS: u64 = 60 * 60;
@@ -379,7 +378,7 @@ impl Selection {
             v.sort();
             v.dedup();
             for p in v {
-                out.push(format!("{flag} {}", quote(p.as_os_str())));
+                out.push(format!("{flag} {}", shell_quote(p.as_os_str(), false)));
             }
         };
         paths("--root", &self.roots);
@@ -401,7 +400,7 @@ impl Selection {
         vols.sort();
         vols.dedup();
         for v in vols {
-            out.push(format!("--volume {}", quote(OsStr::new(v))));
+            out.push(format!("--volume {}", shell_quote(OsStr::new(v), false)));
         }
         if self.steam_saves.is_some() {
             out.push("--steam-saves discard".into());
@@ -413,7 +412,7 @@ impl Selection {
         only.sort();
         only.dedup();
         for p in only {
-            out.push(format!("--only {}", quote(p.as_os_str())));
+            out.push(format!("--only {}", shell_quote(p.as_os_str(), false)));
         }
         out.join(" ")
     }
@@ -456,34 +455,4 @@ pub fn format_size(bytes: u64) -> String {
         }
     }
     format!("{bytes}B")
-}
-
-/// Shell quoting of one printed argument (bare, single-quoted, or `$'...'` for control and invalid UTF-8).
-/// Stands in for `core::shell_quote::shell_quote` until Task 6.2.3d lands it; that task deletes this.
-fn quote(s: &OsStr) -> String {
-    let bytes = s.as_bytes();
-    let bare = |b: u8| b.is_ascii_alphanumeric() || b"_/.+:,@".contains(&b);
-    if !bytes.is_empty()
-        && (bare(bytes[0]) && bytes[0] != b'-')
-        && bytes.iter().all(|&b| bare(b) || b == b'-')
-    {
-        return String::from_utf8_lossy(bytes).into_owned();
-    }
-    match std::str::from_utf8(bytes) {
-        Ok(t) if !t.chars().any(char::is_control) => format!("'{}'", t.replace('\'', "'\\''")),
-        _ => {
-            let mut o = String::from("$'");
-            for &b in bytes {
-                if b == b'\\' {
-                    o.push_str("\\\\");
-                } else if (0x20..0x7f).contains(&b) && b != b'\'' && b != b'!' {
-                    o.push(char::from(b));
-                } else {
-                    let _ = write!(o, "\\x{b:02x}");
-                }
-            }
-            o.push('\'');
-            o
-        }
-    }
 }
