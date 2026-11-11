@@ -6,6 +6,7 @@ pub mod cache;
 pub mod cache_cmd;
 pub mod docker_common;
 pub mod docker_images;
+pub mod docker_unused_images;
 pub mod fixture_kind;
 pub mod symlink_note;
 pub mod worktree;
