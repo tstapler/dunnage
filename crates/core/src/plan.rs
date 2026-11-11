@@ -339,13 +339,13 @@ impl PlanId {
     /// (a cleaner plan over the same paths) gives another id; the order the marks were made in does not.
     pub fn for_explorer<'a>(
         items: impl IntoIterator<Item = (&'a Path, ItemIdentity)>,
-        roots: &[PathBuf],
+        roots: &[crate::roots::RootIdentity],
     ) -> PlanId {
         use std::os::unix::ffi::OsStrExt;
         let mut items: Vec<(&Path, ItemIdentity)> = items.into_iter().collect();
         items.sort_by(|a, b| a.0.as_os_str().cmp(b.0.as_os_str()));
-        let mut roots: Vec<&Path> = roots.iter().map(PathBuf::as_path).collect();
-        roots.sort_by(|a, b| a.as_os_str().cmp(b.as_os_str()));
+        let mut roots: Vec<&crate::roots::RootIdentity> = roots.iter().collect();
+        roots.sort_by(|a, b| a.path.as_os_str().cmp(b.path.as_os_str()));
         let mut h = Fnv::new();
         h.field(crate::kind::Kind::ExplorerSelection.id().as_bytes());
         for (path, id) in &items {
@@ -356,7 +356,9 @@ impl PlanId {
         }
         h.feed(&[0xff]);
         for r in roots {
-            h.field(r.as_os_str().as_bytes());
+            h.field(r.path.as_os_str().as_bytes());
+            h.feed(&r.ident.dev.to_le_bytes());
+            h.feed(&r.ident.ino.to_le_bytes());
         }
         h.id()
     }
@@ -473,7 +475,11 @@ fn recent_of(saved: Option<&SavedPlan>, now: i64, except: Option<&str>) -> Vec<R
         .map(|s| s.entries.iter())
         .into_iter()
         .flatten()
-        .filter(|e| now - e.saved_at <= SAVED_TTL_SECS && Some(e.plan_id.as_str()) != except)
+        .filter(|e| {
+            (0..=SAVED_TTL_SECS).contains(&(now - e.saved_at))
+                && Some(e.plan_id.as_str()) != except
+                && !e.kinds.contains(crate::kind::Kind::ExplorerSelection.id())
+        })
         .collect();
     v.sort_by_key(|e| std::cmp::Reverse(e.saved_at));
     v.into_iter()
@@ -525,7 +531,8 @@ pub fn destructive_gate(
         });
     };
     let age = now - entry.saved_at;
-    if age > SAVED_TTL_SECS {
+    // A `saved_at` in the future (a clock stepped back) would never age out: treat it as stale (review C10).
+    if age > SAVED_TTL_SECS || age < 0 {
         return Err(GateRefusal::Stale {
             supplied: id,
             age_secs: age,

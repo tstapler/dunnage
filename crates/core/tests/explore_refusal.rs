@@ -142,6 +142,7 @@ fn every_text_should_state_what_happened_and_end_with_a_next_action_or_a_period(
         MarkRefusal::OwnState,
         MarkRefusal::InsideMarked(PathBuf::from("/h/code")),
         MarkRefusal::ContainsMarked(1),
+        MarkRefusal::NotADirectory,
         MarkRefusal::Engine(SkipReason::ProtectedPath),
     ];
     for r in all {
@@ -183,6 +184,7 @@ fn paths_in_texts_should_be_escaped() {
         MarkRefusal::OwnState,
         MarkRefusal::InsideMarked(hostile.clone()),
         MarkRefusal::ContainsMarked(2),
+        MarkRefusal::NotADirectory,
         MarkRefusal::Engine(SkipReason::OutsideRoot),
     ] {
         let t = text(

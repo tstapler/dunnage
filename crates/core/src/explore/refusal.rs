@@ -121,6 +121,9 @@ impl MarkRefusal {
                 if *n == 1 { "item" } else { "items" },
                 if *n == 1 { "it" } else { "them" }
             ),
+            MarkRefusal::NotADirectory => format!(
+                "{path} is not a folder; the explorer deletes folders only. Mark the folder that holds it instead."
+            ),
             MarkRefusal::Engine(reason) => {
                 format!("{path}: {}. {}", reason.reason_text(), reason.next_action())
             }

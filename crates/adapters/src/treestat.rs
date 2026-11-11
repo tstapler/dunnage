@@ -54,6 +54,8 @@ pub struct TreeStats {
     pub skipped: Vec<Skipped>,
     pub skipped_total: u64,
     pub stopped_early: bool,
+    /// Entries named `.git` (a repository, or a worktree's link file) found below the measured directory.
+    pub git_repos: u64,
 }
 
 fn to_system_time(secs: i64, nsec: u32) -> SystemTime {
@@ -132,6 +134,7 @@ pub fn measure<D: DirOps>(
             skipped: Vec::new(),
             skipped_total: 0,
             stopped_early: false,
+            git_repos: 0,
         },
         seen: HashSet::new(),
         newer_than: opts.stop_if_newer_than,
@@ -213,6 +216,9 @@ pub fn measure<D: DirOps>(
             // Never followed, but the link itself is a name and an inode, as `delete_tree` counts it.
             let rel = rel_of(&stack, &entry.name);
             w.skip(rel, SkipWhy::Symlink);
+        }
+        if entry.name == ".git" && matches!(st.kind, FileKind::Dir | FileKind::File) {
+            w.stats.git_repos += 1;
         }
         if st.kind == FileKind::Dir {
             if !st.ident.on_dev(root_dev) {

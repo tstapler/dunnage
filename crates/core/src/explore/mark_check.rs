@@ -2,8 +2,10 @@
 //! marked. It reads no file and holds no `Fs`; the facts a rule needs arrive through [`MarkFacts`], the mount
 //! table and [`OwnState`]. The rules are the engine's own, not copies: M1 calls [`strictly_below`] (the
 //! function [`RootSet::admits`] is built on), M2 calls [`floor_protected`] (the function behind
-//! `DeletePolicy::validate`) and the `.git` test is [`has_git_component`] (shared with `decide_path_common`),
-//! so the explorer cannot admit a path the engine's floor refuses.
+//! `DeletePolicy::validate`) and the scan-root and `.git` refusals are `guard::protected_position` (the one
+//! function `decide_path_common` calls too), so the explorer cannot admit a path the engine's floor refuses.
+//! The device is compared with the ROOT's, as `decide_path_common` does (`Facts.root_dev`). Marks are
+//! directories only (review C3).
 //!
 //! The first rule that applies wins, in the order M1, M2, M3, M4, M5, M6, M7, M8.
 
@@ -14,7 +16,7 @@ use super::msg::MarkRefusal;
 use crate::dirs::Dirs;
 use crate::escape::escape_os;
 use crate::floor_rule::floor_protected;
-use crate::guard::has_git_component;
+use crate::guard::protected_position;
 use crate::outcome::SkipReason;
 use crate::roots::{lexically_clean, strictly_below};
 use crate::selector::{KindSelector, Selection, ONLY_QUOTED_MAX_BYTES};
@@ -100,6 +102,8 @@ pub trait MarkFacts {
     fn symlink_in(&self, path: &Path) -> Option<SymlinkFact>;
     /// `st_dev` from `lstat`, `None` when it could not be read.
     fn dev_of(&self, path: &Path) -> Option<u64>;
+    /// `lstat` says directory (`Some(true)`), anything else (`Some(false)`), or could not be read (`None`).
+    fn is_dir(&self, path: &Path) -> Option<bool>;
     /// The row is the boundary row of another filesystem (an `x` row).
     fn is_boundary(&self, path: &Path) -> bool;
     /// The path or something below it is still being scanned.
@@ -141,13 +145,18 @@ pub fn mark_check(path: &Path, ctx: &MarkCtx<'_>) -> Result<MarkOk, MarkRefusal>
         return Err(MarkRefusal::OutsideRoot);
     }
     // M2: rule F, and the `.git` refusal of `decide_path_common`.
-    if floor_protected(path, env.home, env.roots) || has_git_component(path) {
+    if floor_protected(path, env.home, env.roots) || protected_position(path, env.roots) {
         return Err(MarkRefusal::Engine(SkipReason::ProtectedPath));
     }
     // M3, M4, M5.
     let note = mount_rule(path, env)?;
     if env.facts.symlink_in(path).is_some() {
         return Err(MarkRefusal::SymlinkRow);
+    }
+    match env.facts.is_dir(path) {
+        Some(true) => {}
+        Some(false) => return Err(MarkRefusal::NotADirectory),
+        None => return Err(MarkRefusal::Engine(SkipReason::Gone)),
     }
     if env.own_state.covers(path) {
         return Err(MarkRefusal::OwnState);
@@ -165,10 +174,18 @@ pub fn mark_check(path: &Path, ctx: &MarkCtx<'_>) -> Result<MarkOk, MarkRefusal>
 fn mount_rule(path: &Path, env: &MarkEnv<'_>) -> Result<Option<String>, MarkRefusal> {
     let facts = env.facts;
     let dev = facts.dev_of(path);
-    let parent_dev = path.parent().and_then(|p| facts.dev_of(p));
-    let crosses = matches!((dev, parent_dev), (Some(a), Some(b)) if a != b);
-    if facts.is_boundary(path) || env.mounts.at(path).is_some() || crosses {
+    // The device of the longest scan root that holds the path: what the engine compares with (`root_dev`).
+    let root_dev = env
+        .roots
+        .iter()
+        .filter(|r| strictly_below(r, path))
+        .max_by_key(|r| r.components().count())
+        .and_then(|r| facts.dev_of(r));
+    if facts.is_boundary(path) || env.mounts.at(path).is_some() {
         return Err(MarkRefusal::MountPoint);
+    }
+    if matches!((dev, root_dev), (Some(a), Some(b)) if a != b) {
+        return Err(MarkRefusal::Engine(SkipReason::CrossDevice));
     }
     let mut other_devices: Vec<&str> = Vec::new();
     for m in env.mounts.below(path) {

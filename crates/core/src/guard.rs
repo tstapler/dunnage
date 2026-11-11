@@ -32,6 +32,12 @@ pub(crate) fn has_git_component(path: &std::path::Path) -> bool {
     path.components().any(|c| c.as_os_str() == ".git")
 }
 
+/// A scan root itself or a path with a `.git` component: refused by every kind, and by the explorer's rule M2
+/// through this same function, so the screen and the engine cannot disagree on it.
+pub(crate) fn protected_position(path: &std::path::Path, scan_roots: &[PathBuf]) -> bool {
+    scan_roots.iter().any(|r| r == path) || has_git_component(path)
+}
+
 /// The checks every path-based kind shares. A returned `Allow` is the only way to obtain an [`Allowed`].
 /// The lexical test runs first: `starts_with(root)` is meaningless on an unclean string (`/h/code/../.ssh`).
 pub fn decide_path_common(facts: &Facts, roots: &RootSet) -> GuardDecision {
@@ -43,7 +49,7 @@ pub fn decide_path_common(facts: &Facts, roots: &RootSet) -> GuardDecision {
     if facts.is_symlink {
         return Skip(SkipReason::Symlink);
     }
-    if roots.is_scan_root(path) || has_git_component(path) {
+    if protected_position(path, roots.scan_roots()) {
         return Skip(SkipReason::ProtectedPath);
     }
     if !facts.ident.on_dev(facts.root_dev) {

@@ -241,6 +241,10 @@ impl MarkFacts for RealMarkFacts<'_> {
         std::fs::symlink_metadata(path).ok().map(|m| m.dev())
     }
 
+    fn is_dir(&self, path: &Path) -> Option<bool> {
+        std::fs::symlink_metadata(path).ok().map(|m| m.is_dir())
+    }
+
     fn is_boundary(&self, path: &Path) -> bool {
         self.boundary && path == self.row_path
     }

@@ -32,6 +32,7 @@ pub struct XFs {
     next_ino: Mutex<u64>,
     pub lstats: Mutex<Vec<PathBuf>>,
     faults: Mutex<HashMap<PathBuf, i32>>,
+    git: Mutex<HashMap<PathBuf, u64>>,
 }
 
 impl XFs {
@@ -111,6 +112,16 @@ impl XFs {
         self.put(p, old.kind, old.dev, old.bytes);
     }
 
+    /// Pretends `n` `.git` entries live below `p` (what `treestat` would count).
+    pub fn set_git_below(&self, p: &str, n: u64) -> &XFs {
+        self.git.lock().unwrap().insert(p.into(), n);
+        self
+    }
+
+    pub fn git_below(&self, p: &Path) -> u64 {
+        self.git.lock().unwrap().get(p).copied().unwrap_or(0)
+    }
+
     pub fn ino(&self, p: &str) -> u64 {
         self.nodes.lock().unwrap().get(Path::new(p)).unwrap().ino
     }
@@ -158,6 +169,7 @@ impl TreeSizer for XSizer<'_> {
         n.map(|n| TreeSize {
             allocated: AllocatedBytes(n.bytes),
             newest_mtime: Some(NOW - 10),
+            git_repos: self.0.git_below(path),
         })
         .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))
     }

@@ -99,10 +99,19 @@ impl CacheTool {
     }
 }
 
+/// A resolved scan root and the `(dev, ino)` of the directory behind it when it was resolved. The explorer's
+/// plan-id hashes these, and the apply re-resolves the roots and compares (review C8).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RootIdentity {
+    pub path: PathBuf,
+    pub ident: Identity,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RootSet {
     home: PathBuf,
     scan_roots: Vec<PathBuf>,
+    root_idents: Vec<RootIdentity>,
     cache_paths: Vec<PathBuf>,
     steam_libraries: Vec<SteamLibraryRoot>,
 }
@@ -193,8 +202,13 @@ impl RootSet {
             Some(flag_roots.to_vec())
         };
         let mut scan_roots: Vec<PathBuf> = Vec::new();
-        let mut push = |p: PathBuf| {
+        let mut root_idents: Vec<RootIdentity> = Vec::new();
+        let mut push = |p: PathBuf, id: Identity| {
             if !scan_roots.contains(&p) {
+                root_idents.push(RootIdentity {
+                    path: p.clone(),
+                    ident: id,
+                });
                 scan_roots.push(p);
             }
         };
@@ -208,13 +222,13 @@ impl RootSet {
                 if is_forbidden(&path, id) {
                     return Err(RootError::HomeOrAncestor { path: wanted });
                 }
-                push(path);
+                push(path, id);
             }
         } else {
             for name in DEFAULT_SCAN_ROOTS {
                 if let Ok((path, id)) = canon(&home.join(name)) {
                     if !is_forbidden(&path, id) {
-                        push(path);
+                        push(path, id);
                     }
                 }
             }
@@ -223,6 +237,7 @@ impl RootSet {
         Ok(RootSet {
             home,
             scan_roots,
+            root_idents,
             cache_paths,
             steam_libraries: Vec::new(),
         })
@@ -263,6 +278,20 @@ impl RootSet {
     /// The canonical scan roots, in resolution order.
     pub fn scan_roots(&self) -> &[PathBuf] {
         &self.scan_roots
+    }
+
+    /// The scan roots with the identity of the directory behind each, as resolved.
+    pub fn root_identities(&self) -> &[RootIdentity] {
+        &self.root_idents
+    }
+
+    /// The scan root that holds `path`: the longest prefix, so nested roots do not depend on list order.
+    pub fn root_of(&self, path: &Path) -> Option<&Path> {
+        self.scan_roots
+            .iter()
+            .filter(|r| path.starts_with(r))
+            .max_by_key(|r| r.components().count())
+            .map(PathBuf::as_path)
     }
 
     pub fn is_scan_root(&self, p: &Path) -> bool {
