@@ -31,7 +31,10 @@ pub fn first_line_capped(raw: &str) -> String;   // first non-empty line, contro
 impl AbortFlag { pub fn new() -> AbortFlag; pub fn set(&self); pub fn is_set(&self) -> bool }  // + Debug, Default, Send + Sync
 // ApplyToken derives nothing; Allowed and WorktreeRemoval derive Debug only (check-token-sites.sh enforces both).
 // Explorer deletes (ADR-006, review C1/C2): `AllowedTarget::BelowScanRoot(ExplorerScope)`; an ExplorerScope is made only from an `Allowed`
-// of kind ExplorerSelection, and `DeletePolicy::for_allowed(&Allowed, ..)` (root_mnt is a plain u64, not an Option) is the one constructor of that policy.
+// of kind ExplorerSelection, and `DeletePolicy::for_allowed_roots(&Allowed, RootDev, u64, &RootSet, ItemIdentity)` (root_mnt is a plain u64, not an Option;
+// home, home_id and the scan roots come from the RootSet; the planned ItemIdentity must equal the witness's) is the constructor of that policy.
+// `delete_tree` refuses a BelowScanRoot policy whose scope identity differs from `expect` (IdentityMismatch). `DeletePolicy::for_allowed` is the earlier,
+// looser constructor, kept only until the pinned suites move to `for_allowed_roots`.
 
 // adapters::dirops
 pub const DELETE_BATCH: usize = 1024;   // max subdirectory names a delete_tree level buffers; non-directories are unlinked as they stream
@@ -189,9 +192,17 @@ pub fn is_set(&self) -> bool {
 ## crates/core/src/delete_types.rs /^pub (const CMD_MSG_MAX|fn first_line_capped)/
 pub const CMD_MSG_MAX: usize = 200;
 pub fn first_line_capped(raw: &str) -> String {
-## crates/core/src/floor_rule.rs /^    pub fn (validate|for_allowed)[(]/
+## crates/core/src/floor_rule.rs /^    pub fn (validate|witness_matches|for_allowed|for_allowed_roots)[(]/
+pub fn witness_matches(&self, expect: Identity) -> bool {
 #[allow(unused_variables)]
 pub fn validate(&self, name: &OsStr) -> Result<(), DeleteError> {
+pub fn for_allowed_roots(
+allowed: &Allowed,
+root_dev: RootDev,
+root_mnt: u64,
+roots: &RootSet,
+planned: ItemIdentity,
+) -> Result<DeletePolicy, ForAllowedError> {
 pub fn for_allowed(
 allowed: &Allowed,
 root_dev: RootDev,

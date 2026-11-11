@@ -5,8 +5,11 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Component, Path, PathBuf};
 
 use crate::allowed::{Allowed, ExplorerScope, ExplorerScopeWrongKind};
+use crate::delete_types::FileKind;
 use crate::delete_types::{AllowedTarget, DeleteError, DeletePolicy, NamePattern};
 use crate::ids::{Identity, RootDev};
+use crate::plan::ItemIdentity;
+use crate::roots::RootSet;
 
 /// Absolute, and re-joining its normal components gives back exactly the input: no `..`, `.`, empty
 /// component or trailing `/`.
@@ -61,6 +64,16 @@ fn matches_pattern(pattern: NamePattern, base: &OsStr) -> bool {
 }
 
 impl DeletePolicy {
+    /// False when this policy was made from a witness (an explorer delete) that saw another identity than
+    /// `expect`: `delete_tree` refuses then, so a fresh identity cannot stand in for the planned one (review 2,
+    /// N4). Other policies are not bound to a witness identity.
+    pub fn witness_matches(&self, expect: Identity) -> bool {
+        match &self.allowed {
+            AllowedTarget::BelowScanRoot(scope) => scope.ident() == expect,
+            AllowedTarget::Exact(_) | AllowedTarget::Within { .. } => true,
+        }
+    }
+
     /// Requires `target`, `home`, every scan root and the allowed root to be absolute and lexically clean,
     /// then applies the floor rule (ADR-003 decision 2, Story 2.1.2): `name` is `target`'s basename; `target`
     /// is not `/`, `$HOME`, an ancestor of `$HOME` or a scan root; it satisfies `allowed`; and below `$HOME`
@@ -139,11 +152,72 @@ impl DeletePolicy {
     }
 }
 
+/// Why [`DeletePolicy::for_allowed_roots`] refused to build a policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForAllowedError {
+    /// The witness is not of kind `explorer-selection`.
+    WrongKind,
+    /// The plan recorded something other than a directory for this path.
+    NotADirectory,
+    /// The identity the guard just saw is not the identity the plan recorded: the path changed since the
+    /// plan (a new inode, another device). Printed as `SKIP changed since the plan`.
+    ChangedSincePlan,
+    /// The witness names `$HOME` or an ancestor of it by identity.
+    ProtectedPath,
+}
+
+impl From<ExplorerScopeWrongKind> for ForAllowedError {
+    fn from(_: ExplorerScopeWrongKind) -> ForAllowedError {
+        ForAllowedError::WrongKind
+    }
+}
+
 impl DeletePolicy {
-    /// The only way to build the policy of an explorer delete: from the [`Allowed`] witness that
-    /// `decide_path_common` minted for kind `explorer-selection`. `root_mnt` is not optional: a root whose
-    /// mount id could not be read cannot be deleted below (review C9). No sibling marker is required (the
-    /// owner may mark any directory); depth and `.git` are checked by [`DeletePolicy::validate`].
+    /// The way to build the policy of an explorer delete (Task 6.6.3f, review 2 N4): from the [`Allowed`]
+    /// witness that `decide_path_common` minted for kind `explorer-selection`, with `home`, `home_id` and the
+    /// scan roots read from the [`RootSet`] (a caller cannot pass `scan_roots = ["/"]` with a made-up home),
+    /// and tied to the plan: `planned` is the [`ItemIdentity`] stored when the owner reviewed the plan, and
+    /// the policy exists only if it equals what the guard saw just now. `delete_tree` then compares its
+    /// `expect` with the same witness, so a fresh identity cannot stand in for the planned one.
+    ///
+    /// `root_mnt` is not optional: a root whose mount id could not be read cannot be deleted below (review
+    /// C9). No sibling marker is required (the owner may mark any directory); depth and `.git` are checked
+    /// by [`DeletePolicy::validate`]. `$HOME` and its ancestors by identity are refused here too.
+    pub fn for_allowed_roots(
+        allowed: &Allowed,
+        root_dev: RootDev,
+        root_mnt: u64,
+        roots: &RootSet,
+        planned: ItemIdentity,
+    ) -> Result<DeletePolicy, ForAllowedError> {
+        let scope = ExplorerScope::from_allowed(allowed)?;
+        if planned.kind != FileKind::Dir {
+            return Err(ForAllowedError::NotADirectory);
+        }
+        let seen = scope.ident();
+        if (planned.dev, planned.ino) != (seen.dev, seen.ino) {
+            return Err(ForAllowedError::ChangedSincePlan);
+        }
+        if roots.in_home_chain(seen) {
+            return Err(ForAllowedError::ProtectedPath);
+        }
+        Ok(DeletePolicy {
+            root_dev,
+            root_mnt: Some(root_mnt),
+            home: roots.home().to_path_buf(),
+            home_id: roots.home_id(),
+            scan_roots: roots.scan_roots().to_vec(),
+            target: scope.path().to_path_buf(),
+            allowed: AllowedTarget::BelowScanRoot(scope),
+            require_sibling_any: Vec::new(),
+            max_depth: 256,
+            restore_owner_write: true,
+        })
+    }
+
+    /// The earlier constructor, kept working until the independent test author moves the pinned suites to
+    /// [`DeletePolicy::for_allowed_roots`] (ADR-003 process requirement 2). It trusts the loose `home`,
+    /// `home_id` and `scan_roots` and ties nothing to a plan: production code must call `for_allowed_roots`.
     pub fn for_allowed(
         allowed: &Allowed,
         root_dev: RootDev,

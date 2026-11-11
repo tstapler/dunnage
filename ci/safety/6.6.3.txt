@@ -2,3 +2,10 @@
 safety_confirm_should_refuse_every_near_miss_and_keep_everything_When_the_count_is_not_typed_exactly   # 6.6.3a
 safety_confirm_should_not_accept_a_larger_or_smaller_number_When_it_is_not_the_count   # 6.6.3a
 safety_confirm_should_bind_the_typed_count_to_the_plan_it_consumed   # 6.6.3a
+# Task 6.6.3f: for_allowed_roots ties the policy to the RootSet and the planned identity; the home chain is kept by identity.
+safety_for_allowed_roots_should_refuse_a_target_outside_the_real_roots_When_the_witness_came_from_a_wider_grant   # 6.6.3f
+safety_for_allowed_roots_should_refuse_When_the_planned_inode_differs_from_the_witness   # 6.6.3f
+safety_for_allowed_roots_should_refuse_When_the_planned_device_differs_from_the_witness   # 6.6.3f
+safety_for_allowed_roots_should_refuse_a_witness_whose_identity_is_home_or_an_ancestor   # 6.6.3f
+safety_decide_path_common_should_refuse_an_ancestor_of_home_by_identity_When_it_is_reached_under_another_spelling   # 6.6.3f
+safety_delete_tree_should_refuse_and_keep_the_tree_When_expect_is_the_fresh_identity_but_the_plan_saw_another   # 6.6.3f

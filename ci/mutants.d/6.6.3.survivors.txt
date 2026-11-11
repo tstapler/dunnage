@@ -1,0 +1,14 @@
+# Tasks 6.6.3a and 6.6.3f. No survivor is accepted.
+#
+# 6.6.3a: cargo mutants --no-shuffle -j 3 -f crates/core/src/explore/confirm.rs
+#   Run 1: 44 mutants, 30 caught, 12 unviable, 2 missed: Confirm::bytes -> 0 and -> 1.
+#   Run 2 (with confirm_should_report_the_count_and_the_bytes_of_the_plan_it_consumed): 44 mutants, 32 caught, 12 unviable, 0 missed.
+#
+# 6.6.3f: cargo mutants --no-shuffle -j 3 --in-diff <git diff of crates/core/src and crates/adapters/src>
+#   16 mutants, 10 caught, 6 unviable, 0 missed (DeletePolicy::witness_matches, for_allowed_roots, RootSet::in_home_chain,
+#   RootSet::home_chain, and the `!policy.witness_matches` arm of delete_tree).
+#   cargo-mutants has no operator for an `if` condition, so these were done by hand (the check removed, then the named test fails):
+#     guard.rs `if roots.in_home_chain(facts.ident)` removed       -> safety_decide_path_common_should_refuse_an_ancestor_of_home_by_identity_When_it_is_reached_under_another_spelling
+#     for_allowed_roots `if roots.in_home_chain(seen)` removed     -> safety_for_allowed_roots_should_refuse_a_witness_whose_identity_is_home_or_an_ancestor
+#     for_allowed_roots `planned.kind != Dir` check removed        -> for_allowed_roots_should_refuse_When_the_plan_recorded_something_other_than_a_directory
+#     for_allowed_roots compares the inode only (device dropped)   -> safety_for_allowed_roots_should_refuse_When_the_planned_device_differs_from_the_witness

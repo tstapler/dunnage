@@ -33,7 +33,10 @@
 //! impl AbortFlag { pub fn new() -> AbortFlag; pub fn set(&self); pub fn is_set(&self) -> bool }  // + Debug, Default, Send + Sync
 //! // ApplyToken derives nothing; Allowed and WorktreeRemoval derive Debug only (check-token-sites.sh enforces both).
 //! // Explorer deletes (ADR-006, review C1/C2): `AllowedTarget::BelowScanRoot(ExplorerScope)`; an ExplorerScope is made only from an `Allowed`
-//! // of kind ExplorerSelection, and `DeletePolicy::for_allowed(&Allowed, ..)` (root_mnt is a plain u64, not an Option) is the one constructor of that policy.
+//! // of kind ExplorerSelection, and `DeletePolicy::for_allowed_roots(&Allowed, RootDev, u64, &RootSet, ItemIdentity)` (root_mnt is a plain u64, not an Option;
+//! // home, home_id and the scan roots come from the RootSet; the planned ItemIdentity must equal the witness's) is the constructor of that policy.
+//! // `delete_tree` refuses a BelowScanRoot policy whose scope identity differs from `expect` (IdentityMismatch). `DeletePolicy::for_allowed` is the earlier,
+//! // looser constructor, kept only until the pinned suites move to `for_allowed_roots`.
 //!
 //! // adapters::dirops
 //! pub const DELETE_BATCH: usize = 1024;   // max subdirectory names a delete_tree level buffers; non-directories are unlinked as they stream
@@ -207,6 +210,11 @@ pub fn delete_tree<D: DirOps>(
         return Err(failure(DeleteError::Symlink, none));
     }
     if target.ident != expect {
+        return Err(failure(DeleteError::IdentityMismatch, none));
+    }
+    // An explorer delete: `expect` must be the identity the witness was minted for (review 2, N4), so a fresh
+    // guard identity cannot stand in for the planned one.
+    if !policy.witness_matches(expect) {
         return Err(failure(DeleteError::IdentityMismatch, none));
     }
     if target.ident == policy.home_id {
