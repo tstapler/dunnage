@@ -188,3 +188,83 @@ pub fn tree_manifest(dir: &Path) -> BTreeMap<PathBuf, String> {
     walk(dir, dir, &mut out);
     out
 }
+
+/// `strace` is installed; the canary is a named skip without it unless `DC_REQUIRE_STRACE=1`.
+pub fn strace_available() -> bool {
+    Command::new("strace")
+        .arg("-V")
+        .output()
+        .is_ok_and(|o| o.status.success())
+}
+
+/// `strace -f -e trace=file -o <log>` around `program`, under the fixture environment.
+pub fn strace_cmd(fx: &Fixture, log: &Path, program: impl AsRef<std::ffi::OsStr>) -> Command {
+    // An absolute path, so a test may give the traced program a different `PATH` than strace itself needs.
+    let strace = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|d| d.join("strace"))
+        .find(|p| p.is_file())
+        .unwrap_or_else(|| PathBuf::from("strace"));
+    let mut c = fx.command_for(strace);
+    c.args(["-f", "-e", "trace=file", "-o"]).arg(log);
+    c.arg(program);
+    c
+}
+
+/// The paths a `strace -f` log shows the traced program itself touching: the first quoted absolute path of
+/// every file syscall, from the root process and its threads. A process that calls `execve` of another program
+/// is a subprocess (a tool the binary runs through `CommandRunner`, which has its own rules) and is left out.
+pub fn strace_own_paths(log: &str) -> Vec<String> {
+    let parsed: Vec<(&str, &str)> = log
+        .lines()
+        .filter_map(|l| l.split_once(' '))
+        .map(|(pid, rest)| (pid, rest.trim_start()))
+        .collect();
+    let Some(&(root_pid, _)) = parsed.first() else {
+        return Vec::new();
+    };
+    let subprocess: std::collections::BTreeSet<&str> = parsed
+        .iter()
+        .filter(|(pid, rest)| *pid != root_pid && rest.starts_with("execve("))
+        .map(|(pid, _)| *pid)
+        .collect();
+    let mut out = Vec::new();
+    for (pid, rest) in parsed {
+        if subprocess.contains(pid) {
+            continue;
+        }
+        let Some((call, args)) = rest.split_once('(') else {
+            continue;
+        };
+        if call.starts_with('<') || call.starts_with('+') || call.starts_with('-') {
+            continue;
+        }
+        // openat(AT_FDCWD, "/p", ...), stat("/p", ...), readlink("/p", ...): the first quoted string
+        let Some(start) = args.find('"') else {
+            continue;
+        };
+        let tail = &args[start + 1..];
+        let Some(end) = tail.find('"') else { continue };
+        if tail[..end].starts_with('/') {
+            out.push(tail[..end].to_string());
+        }
+    }
+    out
+}
+
+/// Paths of `paths` that are neither under one of `allowed` prefixes nor an exact entry of `exact`, plus
+/// `/etc/passwd` and `/etc/nsswitch.conf` always (a `getpwuid` regression reads them).
+pub fn canary_violations(paths: &[String], allowed: &[PathBuf], exact: &[&str]) -> Vec<String> {
+    let mut bad: Vec<String> = paths
+        .iter()
+        .filter(|p| {
+            let path = Path::new(p.as_str());
+            *p == "/etc/passwd"
+                || *p == "/etc/nsswitch.conf"
+                || !(allowed.iter().any(|a| path.starts_with(a)) || exact.contains(&p.as_str()))
+        })
+        .cloned()
+        .collect();
+    bad.sort();
+    bad.dedup();
+    bad
+}
