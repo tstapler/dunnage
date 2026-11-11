@@ -1,0 +1,2 @@
+# <first-gate> <last-gate|-> <command>   (Story 6.3.2: the explorer's shared-bytes estimate extends the allow table of the one `unsafe` file; 32 selftest controls)
+A - scripts/check-token-sites.sh --selftest

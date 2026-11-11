@@ -4,10 +4,11 @@
 //! Regular files only, opened `O_RDONLY | O_NOFOLLOW | O_NONBLOCK`; walking a directory is the caller's job.
 
 use std::path::Path;
+use std::time::Duration;
 
 #[cfg(not(target_os = "linux"))]
 use disk_cleanup_core::ports::Unavailable;
-use disk_cleanup_core::ports::{ExtentAttribution, ExtentProbe};
+use disk_cleanup_core::ports::{ExtentAttribution, ExtentProbe, SharedEstimate};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct FiemapProbe;
@@ -23,16 +24,33 @@ impl ExtentProbe for FiemapProbe {
         let _ = (items, budget);
         ExtentAttribution::Unavailable(Unavailable::UnsupportedOnThisOS)
     }
+
+    #[cfg(target_os = "linux")]
+    fn shared_bytes(&self, dir: &Path, top_n: usize, budget: Duration) -> SharedEstimate {
+        linux::shared_bytes(dir, top_n, budget)
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn shared_bytes(&self, dir: &Path, top_n: usize, budget: Duration) -> SharedEstimate {
+        let _ = (dir, top_n, budget);
+        SharedEstimate::Unavailable(Unavailable::UnsupportedOnThisOS)
+    }
 }
 
 #[cfg(target_os = "linux")]
 mod linux {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
     use std::io;
     use std::os::fd::AsRawFd;
     use std::os::fd::OwnedFd;
-    use std::path::Path;
+    use std::os::unix::fs::MetadataExt;
+    use std::path::{Path, PathBuf};
+    use std::time::{Duration, Instant};
 
-    use disk_cleanup_core::ports::{ExtentAttribution, ItemExtents, SharedExtent, Unavailable};
+    use disk_cleanup_core::ports::{
+        ExtentAttribution, ItemExtents, SharedEstimate, SharedExtent, Unavailable,
+    };
     use libc::{c_int, c_ulong, c_void};
     use rustix::fs::{lstat, open, statfs, FileType, Mode, OFlags};
 
@@ -93,6 +111,95 @@ mod linux {
             }
         }
         ExtentAttribution::Measured(out)
+    }
+
+    /// `st_blocks` is always in 512-byte units.
+    const BLOCK: u64 = 512;
+
+    /// What one regular file contributed to an estimate.
+    enum FileShared {
+        Bytes(u64),
+        /// Not a regular file, or gone since it was listed.
+        Skipped,
+        Unreadable,
+        /// `ENOTTY` or `EOPNOTSUPP`: the filesystem cannot answer.
+        NoIoctl,
+    }
+
+    fn file_shared(path: &Path) -> FileShared {
+        let Ok(st) = lstat(path) else {
+            return FileShared::Skipped;
+        };
+        if FileType::from_raw_mode(st.st_mode) != FileType::RegularFile {
+            return FileShared::Skipped;
+        }
+        let flags = OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC;
+        let Ok(fd) = open(path, flags, Mode::empty()) else {
+            return FileShared::Unreadable;
+        };
+        match shared_extents(&fd) {
+            Ok(shared) => FileShared::Bytes(shared.iter().map(|e| e.length).sum()),
+            Err(Some(_)) => FileShared::NoIoctl,
+            Err(None) => FileShared::Skipped,
+        }
+    }
+
+    /// The `top_n` largest regular files directly under `dir`, by allocated bytes, within `budget`.
+    pub fn shared_bytes(dir: &Path, top_n: usize, budget: Duration) -> SharedEstimate {
+        let deadline = Instant::now() + budget;
+        // Before opening anything: another filesystem has no `SHARED` flag to read.
+        if !is_btrfs(dir) {
+            return SharedEstimate::Unavailable(Unavailable::NotBtrfs);
+        }
+        let mut heap: BinaryHeap<Reverse<(u64, PathBuf)>> = BinaryHeap::new();
+        let mut dir_usage = 0_u64;
+        let mut partial = false;
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                if Instant::now() >= deadline {
+                    partial = true;
+                    break;
+                }
+                let Ok(md) = entry.metadata() else { continue };
+                if !md.is_file() {
+                    continue;
+                }
+                let size = md.blocks().saturating_mul(BLOCK);
+                dir_usage = dir_usage.saturating_add(size);
+                heap.push(Reverse((size, entry.path())));
+                if heap.len() > top_n {
+                    heap.pop();
+                }
+            }
+        }
+        let mut largest: Vec<(u64, PathBuf)> = heap.into_iter().map(|Reverse(x)| x).collect();
+        largest.sort_unstable_by_key(|a| Reverse(a.0));
+        let (mut bytes, mut files_probed, mut unreadable, mut probed_usage) =
+            (0_u64, 0_u64, 0_u64, 0_u64);
+        for (size, path) in largest {
+            if Instant::now() >= deadline {
+                partial = true;
+                break;
+            }
+            match file_shared(&path) {
+                FileShared::Bytes(b) => {
+                    bytes += b;
+                    files_probed += 1;
+                    probed_usage += size;
+                }
+                FileShared::Skipped => {}
+                FileShared::Unreadable => unreadable += 1,
+                FileShared::NoIoctl => return SharedEstimate::Unavailable(Unavailable::NotBtrfs),
+            }
+        }
+        SharedEstimate::Estimated {
+            bytes,
+            files_probed,
+            unreadable,
+            probed_usage,
+            dir_usage,
+            partial,
+        }
     }
 
     fn is_btrfs(path: &Path) -> bool {

@@ -336,9 +336,10 @@ pub trait ExtentProbe: Send + Sync {
     fn attribute(&self, items: &[&Path], budget: usize) -> ExtentAttribution;
 
     /// The explorer's info-pane estimate: bytes of `SHARED` extents among the `top_n` largest files of
-    /// `dir`, opening at most `budget` files. An estimate, labelled so everywhere it is shown. The default
-    /// is `Unavailable(UnsupportedOnThisOS)` so existing probes keep compiling.
-    fn shared_bytes(&self, _dir: &Path, _top_n: usize, _budget: usize) -> SharedEstimate {
+    /// `dir`, stopping when `budget` of wall time is spent. An estimate, labelled so everywhere it is shown
+    /// (compressed extents count uncompressed; a snapshot counts as sharing). The default is
+    /// `Unavailable(UnsupportedOnThisOS)` so existing probes keep compiling.
+    fn shared_bytes(&self, _dir: &Path, _top_n: usize, _budget: Duration) -> SharedEstimate {
         SharedEstimate::Unavailable(Unavailable::UnsupportedOnThisOS)
     }
 }
@@ -346,11 +347,70 @@ pub trait ExtentProbe: Send + Sync {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SharedEstimate {
     Unavailable(Unavailable),
-    /// `files` of the largest files were probed and `bytes` of their extents are shared.
     Estimated {
+        /// Bytes of the probed files' extents that carry `FIEMAP_EXTENT_SHARED`.
         bytes: u64,
-        files: u64,
+        /// Files whose extents were read (`<= top_n`).
+        files_probed: u64,
+        /// Files that were selected but could not be opened.
+        unreadable: u64,
+        /// Allocated bytes of the probed files.
+        probed_usage: u64,
+        /// Allocated bytes of every regular file the listing reached before the budget ran out.
+        dir_usage: u64,
+        /// The time budget ended the listing or the probing early.
+        partial: bool,
     },
+}
+
+impl SharedEstimate {
+    /// The info-pane line, always worded as an estimate; `None` when the probe was unavailable.
+    #[must_use]
+    pub fn pane_text(&self) -> Option<String> {
+        let Self::Estimated {
+            bytes,
+            files_probed,
+            probed_usage,
+            dir_usage,
+            partial,
+            ..
+        } = *self
+        else {
+            return None;
+        };
+        let share = probed_usage
+            .saturating_mul(100)
+            .checked_div(dir_usage)
+            .unwrap_or(0);
+        let scope = if files_probed == 1 {
+            "the largest file".to_string()
+        } else {
+            format!("the {files_probed} largest files")
+        };
+        let cut = if partial {
+            " (stopped at the time budget)"
+        } else {
+            ""
+        };
+        Some(format!(
+            "est. {} of {scope} ({share}% of usage) also referenced elsewhere; a delete may free less{cut}",
+            human_bytes(bytes)
+        ))
+    }
+}
+
+fn human_bytes(n: u64) -> String {
+    const UNITS: [&str; 4] = ["KiB", "MiB", "GiB", "TiB"];
+    if n < 1024 {
+        return format!("{n} B");
+    }
+    let mut v = n as f64 / 1024.0;
+    let mut u = 0;
+    while v >= 1024.0 && u + 1 < UNITS.len() {
+        v /= 1024.0;
+        u += 1;
+    }
+    format!("{v:.1} {}", UNITS[u])
 }
 
 pub trait SpaceMeter: Send + Sync {
@@ -498,4 +558,48 @@ pub fn render_argv(program: &OsStr, args: &[OsString]) -> String {
         .map(|a| a.to_string_lossy().into_owned())
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod shared_estimate_text {
+    use super::{SharedEstimate, Unavailable};
+
+    const GIB: u64 = 1 << 30;
+
+    #[test]
+    fn pane_text_should_say_estimate_the_scope_the_share_and_that_a_delete_may_free_less() {
+        let e = SharedEstimate::Estimated {
+            bytes: GIB + GIB / 5,
+            files_probed: 10,
+            unreadable: 0,
+            probed_usage: 38,
+            dir_usage: 100,
+            partial: false,
+        };
+        assert_eq!(
+            e.pane_text().unwrap(),
+            "est. 1.2 GiB of the 10 largest files (38% of usage) also referenced elsewhere; a delete may free less"
+        );
+    }
+
+    #[test]
+    fn pane_text_should_flag_a_partial_run_and_be_none_when_unavailable() {
+        let e = SharedEstimate::Estimated {
+            bytes: 0,
+            files_probed: 1,
+            unreadable: 0,
+            probed_usage: 0,
+            dir_usage: 0,
+            partial: true,
+        };
+        assert!(e
+            .pane_text()
+            .unwrap()
+            .ends_with("(stopped at the time budget)"));
+        assert_eq!(
+            SharedEstimate::Unavailable(Unavailable::NotBtrfs).pane_text(),
+            None
+        );
+    }
 }

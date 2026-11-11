@@ -102,7 +102,11 @@ fn ports_should_be_shared_across_scoped_threads_and_the_fakes_should_script_batc
             assert!(matches!(h.rx.recv().unwrap(), ScanMsg::Preview(_)));
         });
         sc.spawn(|| {
-            let _ = probe.shared_bytes(std::path::Path::new("/x"), 1, 1);
+            let _ = probe.shared_bytes(
+                std::path::Path::new("/x"),
+                1,
+                std::time::Duration::from_millis(1),
+            );
         });
     });
 }

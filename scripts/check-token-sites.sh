@@ -55,6 +55,10 @@ ALLOWED_PATHS = {  # every external path the file may spell, as a `use` leaf or 
     "disk_cleanup_core::ports::ExtentProbe", "disk_cleanup_core::ports::ExtentAttribution",
     "disk_cleanup_core::ports::Unavailable", "disk_cleanup_core::ports::ItemExtents",
     "disk_cleanup_core::ports::SharedExtent", "disk_cleanup_core::explore::SharedEstimate",
+    # Story 6.3.2: the explorer's shared-bytes estimate lists one directory (read-only) and keeps the top N.
+    # The plan names the port type `explore::SharedEstimate`; it lives in `ports` (plan defect, see findings).
+    "disk_cleanup_core::ports::SharedEstimate", "std::fs::read_dir", "std::path::PathBuf",
+    "std::collections::BinaryHeap", "std::cmp::Reverse", "std::os::unix::fs::MetadataExt",
 }
 ALLOWED_MEMBERS = {  # Type::member of a name imported from rustix or libc
     "OFlags::RDONLY", "OFlags::NOFOLLOW", "OFlags::NONBLOCK", "OFlags::CLOEXEC", "Mode::empty",
@@ -264,7 +268,16 @@ use libc::{c_int, c_ulong};
 use core::mem::size_of;
 use std::os::fd::AsRawFd;
 use std::time::{Duration, Instant};
-use disk_cleanup_core::ports::{ExtentAttribution, ExtentProbe, Unavailable};
+use std::collections::BinaryHeap;
+use std::cmp::Reverse;
+use std::os::unix::fs::MetadataExt;
+use std::path::PathBuf;
+use disk_cleanup_core::ports::{ExtentAttribution, ExtentProbe, SharedEstimate, Unavailable};
+fn list(d: &std::path::Path) -> u64 {
+    let mut h: BinaryHeap<Reverse<(u64, PathBuf)>> = BinaryHeap::new();
+    for e in std::fs::read_dir(d).unwrap().flatten() { let m = e.metadata().unwrap(); h.push(Reverse((m.blocks(), e.path()))); }
+    h.len() as u64
+}
 const FS_IOC_FIEMAP: c_ulong = 0xC020_660B;
 const FIEMAP_EXTENT_SHARED: u32 = 0x0000_2000;
 #[repr(C)] struct Fiemap { fm_start: u64, fm_length: u64, fm_flags: u32, fm_extent_count: u32 }
@@ -306,6 +319,13 @@ EVASIONS = {
     "23_oflags_create": 'use rustix::fs::OFlags; fn f(){ let _ = OFlags::CREATE; }',
     "24_flags_nonzero": 'fn f(){ let fm = Fiemap { fm_flags: 1 }; }',
     "25_write_all_method": 'fn f(){ file.write_all(b"x"); }',
+    "26_file_create": 'fn f(){ std::fs::File::create(p); }',
+    "27_openoptions": 'fn f(){ std::fs::OpenOptions::new(); }',
+    "28_set_permissions": 'fn f(){ std::fs::set_permissions(p, q); }',
+    "29_permissions_ext": 'use std::os::unix::fs::PermissionsExt; fn f(){ }',
+    "30_fs_copy": 'fn f(){ std::fs::copy(a, b); }',
+    "31_fs_rename": 'use std::fs::rename; fn f(){ }',
+    "32_hashmap_unlisted": 'use std::collections::HashMap; fn f(){ }',
 }
 
 
