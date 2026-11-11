@@ -615,3 +615,21 @@ fn kind_lines_should_follow_the_plan_wording() {
         Badge::Possible
     );
 }
+
+#[test]
+fn a_tree_root_named_like_a_build_dir_should_be_shape_because_its_marker_files_are_unknown() {
+    let t = tree("/h/code/app/node_modules", &[("x", false, false)]);
+    let r = roots_code();
+    let root = t.roots().next().unwrap();
+    assert_eq!(
+        hint_of_node(&t, root, &r, &ClassifyFacts::default()),
+        shape(SelectorId::BuildDirs, Tier::Destructive)
+    );
+    // a root that is not build-dir shaped stays a plain path
+    let t = tree("/h/code/app", &[]);
+    let root = t.roots().next().unwrap();
+    assert_eq!(
+        hint_of_node(&t, root, &r, &ClassifyFacts::default()),
+        Hint::No(NoReason::NotShape)
+    );
+}

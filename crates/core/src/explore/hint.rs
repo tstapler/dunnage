@@ -209,25 +209,38 @@ pub fn kind_hint(
 }
 
 /// The hint of one tree node: the parent's marker flags and the ancestor context come from the tree.
+///
+/// A tree root has no parent in the tree, so its marker files are unknown: a root named like a build
+/// directory is `Shape` (the engine may list it), never `No(NotShape)` and never `Yes`.
 pub fn hint_of_node(
     tree: &ExploreTree,
     id: NodeId,
     roots: &RootSet,
     facts: &ClassifyFacts,
 ) -> Hint {
-    let parent = tree
-        .parent(id)
-        .map_or_else(ParentFacts::default, |p| ParentFacts {
-            has_package_json: tree.has_package_json(p),
-            has_cargo_toml: tree.has_cargo_toml(p),
-        });
-    kind_hint(
-        &tree.path_of(id),
-        parent,
-        tree.inside_special(id),
-        roots,
-        facts,
-    )
+    let path = tree.path_of(id);
+    let inside = tree.inside_special(id);
+    let Some(p) = tree.parent(id) else {
+        let assumed = ParentFacts {
+            has_package_json: true,
+            has_cargo_toml: true,
+        };
+        return match kind_hint(&path, assumed, inside, roots, facts) {
+            Hint::Yes {
+                selector: SelectorId::BuildDirs,
+                tier,
+            } => Hint::Shape {
+                selector: SelectorId::BuildDirs,
+                tier,
+            },
+            other => other,
+        };
+    };
+    let parent = ParentFacts {
+        has_package_json: tree.has_package_json(p),
+        has_cargo_toml: tree.has_cargo_toml(p),
+    };
+    kind_hint(&path, parent, inside, roots, facts)
 }
 
 fn tier_words(t: Tier) -> &'static str {
