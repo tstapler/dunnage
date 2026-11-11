@@ -174,13 +174,13 @@ pub fn mark_check(path: &Path, ctx: &MarkCtx<'_>) -> Result<MarkOk, MarkRefusal>
     if env.facts.symlink_in(path).is_some() {
         return Err(MarkRefusal::SymlinkRow);
     }
+    if env.own_state.covers(path) {
+        return Err(MarkRefusal::OwnState);
+    }
     match env.facts.is_dir(path) {
         Some(true) => {}
         Some(false) => return Err(MarkRefusal::NotADirectory),
         None => return Err(MarkRefusal::Engine(SkipReason::Gone)),
-    }
-    if env.own_state.covers(path) {
-        return Err(MarkRefusal::OwnState);
     }
     // M6 to M8.
     marks_rule(path, ctx.marks)?;

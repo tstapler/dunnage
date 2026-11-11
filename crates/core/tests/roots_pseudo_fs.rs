@@ -55,11 +55,22 @@ fn safety_explorer_roots_on_pseudo_filesystems_are_refused() {
 }
 
 #[test]
-fn resolve_on_should_refuse_a_root_at_or_below_dev_as_devtmpfs() {
+fn resolve_on_should_refuse_a_tmpfs_root_at_or_below_dev_as_devtmpfs_and_not_one_elsewhere() {
     let list = vec![PathBuf::from("/dev/shm")];
-    let err = RootSet::resolve_on(&dirs(), &[], Some(&list), Path::new("/"), &canon, &|_| None)
-        .unwrap_err();
+    let tmpfs = |_: &Path| Some(0x0102_1994_u64);
+    let err =
+        RootSet::resolve_on(&dirs(), &[], Some(&list), Path::new("/"), &canon, &tmpfs).unwrap_err();
     assert!(err.text().contains("devtmpfs"), "{}", err.text());
+    let elsewhere = vec![PathBuf::from("/tmp/x")];
+    RootSet::resolve_on(
+        &dirs(),
+        &[],
+        Some(&elsewhere),
+        Path::new("/"),
+        &canon,
+        &tmpfs,
+    )
+    .unwrap();
 }
 
 #[test]

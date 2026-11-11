@@ -64,8 +64,10 @@ const PSEUDO_FS: [(u64, &str); 9] = [
     (0x6e73_6673, "nsfs"),
 ];
 
+const TMPFS_MAGIC: u64 = 0x0102_1994;
+
 /// The pseudo filesystem type name for an `f_type`, if it is one. `devtmpfs` reports the `tmpfs` magic, so
-/// `resolve_on` also refuses any root at or below `/dev`.
+/// `resolve_on` also refuses a tmpfs root at or below `/dev`.
 pub fn pseudo_fs_name(f_type: u64) -> Option<&'static str> {
     PSEUDO_FS
         .iter()
@@ -286,9 +288,11 @@ impl RootSet {
                 if is_forbidden(&path, id) {
                     return Err(RootError::HomeOrAncestor { path: wanted });
                 }
-                let pseudo = fs_type(&path)
-                    .and_then(pseudo_fs_name)
-                    .or_else(|| path.starts_with("/dev").then_some("devtmpfs"));
+                // `devtmpfs` reports the tmpfs magic, so a tmpfs root at or below `/dev` counts as one.
+                let magic = fs_type(&path);
+                let pseudo = magic.and_then(pseudo_fs_name).or_else(|| {
+                    (magic == Some(TMPFS_MAGIC) && path.starts_with("/dev")).then_some("devtmpfs")
+                });
                 if let Some(fs) = pseudo {
                     return Err(RootError::PseudoFs {
                         path,
