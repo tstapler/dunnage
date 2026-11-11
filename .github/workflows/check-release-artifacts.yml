@@ -1,0 +1,29 @@
+# Called from the generated release.yml (dist-workspace.toml: local-artifacts-jobs). release.yml's `host` job needs
+# this job, so a failure here stops the GitHub Release. dist has no hook between its build and its upload, and a
+# custom job runs beside the build, not after it: so this rebuilds exactly what dist builds (`-p disk-cleanup`,
+# profile dist; the package name lives in scripts/check-release-features.sh) and checks that build. The check
+# against the shipped archives themselves is `scripts/check-release-features.sh --artifact <bin>` (RELEASE.md).
+name: Check release features
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        description: dist plan JSON (dist passes it to every custom job; unused here)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  no-test-support:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - name: selftest
+        run: scripts/check-release-features.sh --selftest
+      - name: release and dist builds carry no test-support
+        run: scripts/check-release-features.sh
