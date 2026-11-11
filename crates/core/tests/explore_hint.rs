@@ -219,7 +219,8 @@ fn caches_should_be_yes_only_for_an_exact_path_of_the_facts() {
 fn exact(t: &disk_cleanup_core::AllowedTarget) -> Option<PathBuf> {
     match t {
         disk_cleanup_core::AllowedTarget::Exact(p) => Some(p.clone()),
-        disk_cleanup_core::AllowedTarget::Within { .. } => None,
+        disk_cleanup_core::AllowedTarget::Within { .. }
+        | disk_cleanup_core::AllowedTarget::BelowScanRoot(_) => None,
     }
 }
 

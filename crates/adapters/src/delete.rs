@@ -32,6 +32,8 @@
 //! pub fn first_line_capped(raw: &str) -> String;   // first non-empty line, control chars -> ' ', cut on a char boundary, ends with "..." when cut
 //! impl AbortFlag { pub fn new() -> AbortFlag; pub fn set(&self); pub fn is_set(&self) -> bool }  // + Debug, Default, Send + Sync
 //! // ApplyToken derives nothing; Allowed and WorktreeRemoval derive Debug only (check-token-sites.sh enforces both).
+//! // Explorer deletes (ADR-006, review C1/C2): `AllowedTarget::BelowScanRoot(ExplorerScope)`; an ExplorerScope is made only from an `Allowed`
+//! // of kind ExplorerSelection, and `DeletePolicy::for_allowed(&Allowed, ..)` (root_mnt is a plain u64, not an Option) is the one constructor of that policy.
 //!
 //! // adapters::dirops
 //! pub const DELETE_BATCH: usize = 1024;   // max subdirectory names a delete_tree level buffers; non-directories are unlinked as they stream

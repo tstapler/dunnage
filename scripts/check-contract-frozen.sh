@@ -14,7 +14,8 @@ S|crates/core/src/ids.rs|^    pub fn (of|on_dev)[(]
 B|crates/core/src/delete_types.rs|^pub (struct|enum) (Freed|DeleteError|DeleteFailure|DeletePolicy|AllowedTarget|NamePattern|StatInfo|FileKind|DirEntryInfo|AbortFlag)([^A-Za-z_]|$)
 S|crates/core/src/delete_types.rs|^    pub fn (new|set|is_set)[(]
 S|crates/core/src/delete_types.rs|^pub (const CMD_MSG_MAX|fn first_line_capped)
-S|crates/core/src/floor_rule.rs|^    pub fn validate[(]
+S|crates/core/src/floor_rule.rs|^    pub fn (validate|for_allowed)[(]
+B|crates/core/src/allowed.rs|^pub struct ExplorerScope([^A-Za-z_]|$)
 B|crates/core/src/apply_token.rs|^pub struct ApplyToken
 S|crates/core/src/apply_token.rs|^    pub fn (grant|for_tests)[(]
 S|crates/adapters/src/dirops.rs|^    pub fn (confined_to|unconfined)[(]

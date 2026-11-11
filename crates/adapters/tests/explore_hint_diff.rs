@@ -398,7 +398,8 @@ fn world(site: &Site, with_steam: bool, explore: &[PathBuf]) -> World {
         .into_iter()
         .filter_map(|t| match t {
             disk_cleanup_core::AllowedTarget::Exact(p) => Some(p),
-            disk_cleanup_core::AllowedTarget::Within { .. } => None,
+            disk_cleanup_core::AllowedTarget::Within { .. }
+            | disk_cleanup_core::AllowedTarget::BelowScanRoot(_) => None,
         })
         .collect();
 

@@ -4,7 +4,9 @@ use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Component, Path, PathBuf};
 
+use crate::allowed::{Allowed, ExplorerScope, ExplorerScopeWrongKind};
 use crate::delete_types::{AllowedTarget, DeleteError, DeletePolicy, NamePattern};
+use crate::ids::{Identity, RootDev};
 
 /// Absolute, and re-joining its normal components gives back exactly the input: no `..`, `.`, empty
 /// component or trailing `/`.
@@ -77,6 +79,7 @@ impl DeletePolicy {
         let allowed_clean = match &self.allowed {
             AllowedTarget::Exact(p) => is_clean_abs(p),
             AllowedTarget::Within { root, .. } => is_clean_abs(root),
+            AllowedTarget::BelowScanRoot(scope) => is_clean_abs(scope.path()),
         };
         if !(allowed_clean
             && is_clean_abs(&self.target)
@@ -96,6 +99,14 @@ impl DeletePolicy {
 
         let permitted = match &self.allowed {
             AllowedTarget::Exact(p) => target == p,
+            AllowedTarget::BelowScanRoot(scope) => {
+                target == scope.path()
+                    && self
+                        .scan_roots
+                        .iter()
+                        .any(|r| components_below(target, r).is_some_and(|d| d >= 1))
+                    && !target.components().any(|c| c.as_os_str() == ".git")
+            }
             AllowedTarget::Within {
                 root,
                 name: pattern,
@@ -119,5 +130,145 @@ impl DeletePolicy {
             return Err(DeleteError::ProtectedPath);
         }
         Ok(())
+    }
+}
+
+impl DeletePolicy {
+    /// The only way to build the policy of an explorer delete: from the [`Allowed`] witness that
+    /// `decide_path_common` minted for kind `explorer-selection`. `root_mnt` is not optional: a root whose
+    /// mount id could not be read cannot be deleted below (review C9). No sibling marker is required (the
+    /// owner may mark any directory); depth and `.git` are checked by [`DeletePolicy::validate`].
+    pub fn for_allowed(
+        allowed: &Allowed,
+        root_dev: RootDev,
+        root_mnt: u64,
+        home: PathBuf,
+        home_id: Identity,
+        scan_roots: Vec<PathBuf>,
+    ) -> Result<DeletePolicy, ExplorerScopeWrongKind> {
+        let scope = ExplorerScope::from_allowed(allowed)?;
+        Ok(DeletePolicy {
+            root_dev,
+            root_mnt: Some(root_mnt),
+            home,
+            home_id,
+            scan_roots,
+            target: scope.path().to_path_buf(),
+            allowed: AllowedTarget::BelowScanRoot(scope),
+            require_sibling_any: Vec::new(),
+            max_depth: 256,
+            restore_owner_write: true,
+        })
+    }
+
+    /// Unit tests build the policy from a bare scope (a `.git` path has no `Allowed`).
+    #[cfg(test)]
+    fn for_scope_tests(scope: ExplorerScope, roots: Vec<PathBuf>) -> DeletePolicy {
+        DeletePolicy {
+            root_dev: RootDev(1),
+            root_mnt: Some(7),
+            home: "/home/u".into(),
+            home_id: Identity { dev: 1, ino: 2 },
+            scan_roots: roots,
+            target: scope.path().to_path_buf(),
+            allowed: AllowedTarget::BelowScanRoot(scope),
+            require_sibling_any: Vec::new(),
+            max_depth: 256,
+            restore_owner_write: true,
+        }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, non_snake_case)]
+mod explorer_tests {
+    use super::*;
+
+    fn policy(target: &str, scope: &str) -> DeletePolicy {
+        let mut p = DeletePolicy::for_scope_tests(
+            ExplorerScope::for_tests(scope),
+            vec!["/home/u/code".into()],
+        );
+        p.target = target.into();
+        p
+    }
+
+    fn check(target: &str) -> Result<(), DeleteError> {
+        let p = policy(target, target);
+        p.validate(Path::new(target).file_name().unwrap_or_default())
+    }
+
+    #[test]
+    fn validate_should_accept_a_directory_two_levels_below_a_scan_root_When_the_scope_is_for_it() {
+        assert_eq!(check("/home/u/code/app"), Ok(()));
+        assert_eq!(check("/home/u/code/a/b/c"), Ok(()));
+    }
+
+    #[test]
+    fn validate_should_refuse_a_dot_git_component_anywhere_in_the_path() {
+        assert_eq!(
+            check("/home/u/code/app/.git"),
+            Err(DeleteError::OutsideScope)
+        );
+        assert_eq!(
+            check("/home/u/code/.git/hooks"),
+            Err(DeleteError::OutsideScope)
+        );
+        assert_eq!(check("/home/u/code/.gitx"), Ok(()));
+    }
+
+    #[test]
+    fn validate_should_refuse_the_scan_root_home_an_ancestor_and_slash() {
+        assert_eq!(check("/home/u/code"), Err(DeleteError::ProtectedPath));
+        assert_eq!(check("/home/u"), Err(DeleteError::ProtectedPath));
+        assert_eq!(check("/home"), Err(DeleteError::ProtectedPath));
+        assert_eq!(check("/"), Err(DeleteError::ProtectedPath));
+    }
+
+    #[test]
+    fn validate_should_refuse_a_path_outside_every_scan_root() {
+        assert_eq!(check("/home/u/other/app"), Err(DeleteError::OutsideScope));
+        assert_eq!(check("/home/u/codex/app"), Err(DeleteError::OutsideScope));
+        assert_eq!(check("/etc/app"), Err(DeleteError::OutsideScope));
+    }
+
+    #[test]
+    fn validate_should_refuse_a_target_the_witness_was_not_made_for() {
+        let p = policy("/home/u/code/other", "/home/u/code/app");
+        assert_eq!(p.validate("other".as_ref()), Err(DeleteError::OutsideScope));
+        let p = policy("/home/u/code/app/.git", "/home/u/code/app");
+        assert_eq!(p.validate(".git".as_ref()), Err(DeleteError::OutsideScope));
+    }
+
+    #[test]
+    fn validate_should_refuse_an_unclean_witness_or_target() {
+        for t in [
+            "/home/u/code/../.ssh",
+            "/home/u/code//app",
+            "/home/u/code/app/",
+            "code/app",
+        ] {
+            let p = policy(t, t);
+            let name = Path::new(t.trim_end_matches('/')).file_name().unwrap();
+            assert_eq!(p.validate(name), Err(DeleteError::OutsideScope), "{t}");
+        }
+    }
+
+    #[test]
+    fn validate_should_apply_the_two_components_below_home_floor_to_a_root_outside_home() {
+        let mut p = DeletePolicy::for_scope_tests(
+            ExplorerScope::for_tests("/home/u/code/app"),
+            vec!["/home/u".into()],
+        );
+        p.target = "/home/u/app".into();
+        p.allowed = AllowedTarget::BelowScanRoot(ExplorerScope::for_tests("/home/u/app"));
+        assert_eq!(p.validate("app".as_ref()), Err(DeleteError::ProtectedPath));
+    }
+
+    #[test]
+    fn for_explorer_should_carry_the_mount_id_and_no_sibling_requirement() {
+        let p = policy("/home/u/code/app", "/home/u/code/app");
+        assert_eq!(p.root_mnt, Some(7));
+        assert!(p.require_sibling_any.is_empty());
     }
 }

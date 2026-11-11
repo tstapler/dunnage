@@ -329,6 +329,7 @@ impl RootSet {
         }
         self.allowed(kind).iter().any(|t| match t {
             AllowedTarget::Exact(p) => p == path,
+            AllowedTarget::BelowScanRoot(scope) => scope.path() == path,
             AllowedTarget::Within { root, name } => {
                 strictly_below(root, path)
                     && path

@@ -30,6 +30,8 @@ pub const CMD_MSG_MAX: usize = 200;
 pub fn first_line_capped(raw: &str) -> String;   // first non-empty line, control chars -> ' ', cut on a char boundary, ends with "..." when cut
 impl AbortFlag { pub fn new() -> AbortFlag; pub fn set(&self); pub fn is_set(&self) -> bool }  // + Debug, Default, Send + Sync
 // ApplyToken derives nothing; Allowed and WorktreeRemoval derive Debug only (check-token-sites.sh enforces both).
+// Explorer deletes (ADR-006, review C1/C2): `AllowedTarget::BelowScanRoot(ExplorerScope)`; an ExplorerScope is made only from an `Allowed`
+// of kind ExplorerSelection, and `DeletePolicy::for_allowed(&Allowed, ..)` (root_mnt is a plain u64, not an Option) is the one constructor of that policy.
 
 // adapters::dirops
 pub const DELETE_BATCH: usize = 1024;   // max subdirectory names a delete_tree level buffers; non-directories are unlinked as they stream
@@ -153,7 +155,11 @@ pub struct AbortFlag(AtomicBool);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AllowedTarget {
     Exact(PathBuf),
-    Within { root: PathBuf, name: NamePattern },
+    Within {
+        root: PathBuf,
+        name: NamePattern,
+    },
+    BelowScanRoot(ExplorerScope),
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NamePattern {
@@ -183,9 +189,22 @@ pub fn is_set(&self) -> bool {
 ## crates/core/src/delete_types.rs /^pub (const CMD_MSG_MAX|fn first_line_capped)/
 pub const CMD_MSG_MAX: usize = 200;
 pub fn first_line_capped(raw: &str) -> String {
-## crates/core/src/floor_rule.rs /^    pub fn validate[(]/
+## crates/core/src/floor_rule.rs /^    pub fn (validate|for_allowed)[(]/
 #[allow(unused_variables)]
 pub fn validate(&self, name: &OsStr) -> Result<(), DeleteError> {
+pub fn for_allowed(
+allowed: &Allowed,
+root_dev: RootDev,
+root_mnt: u64,
+home: PathBuf,
+home_id: Identity,
+scan_roots: Vec<PathBuf>,
+) -> Result<DeletePolicy, ExplorerScopeWrongKind> {
+## crates/core/src/allowed.rs /^pub struct ExplorerScope([^A-Za-z_]|$)/
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExplorerScope {
+    path: PathBuf,
+}
 ## crates/core/src/apply_token.rs /^pub struct ApplyToken/
 pub struct ApplyToken(());
 ## crates/core/src/apply_token.rs /^    pub fn (grant|for_tests)[(]/

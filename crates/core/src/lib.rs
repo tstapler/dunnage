@@ -42,7 +42,7 @@ pub mod targets;
 #[cfg(feature = "test-support")]
 pub mod testing;
 
-pub use allowed::{Allowed, WorktreeRemoval, WrongKind};
+pub use allowed::{Allowed, ExplorerScope, ExplorerScopeWrongKind, WorktreeRemoval, WrongKind};
 pub use apply_token::ApplyToken;
 pub use audit_types::{
     AuditRecord, BreakGlass, Intent, ItemResult, RunEnd, RunRoots, RunStart, AUDIT_SCHEMA,
