@@ -790,8 +790,7 @@ fn safety_steam_remnant_names_outside_scope_refused() {
 // ------------------------------------------------------------------ execute-time re-check
 
 #[test]
-fn safety_steam_running_at_execute_removes_nothing(
-) {
+fn safety_steam_running_at_execute_removes_nothing() {
     let s = remnant_fixture();
     let orphan = entry(&s.libs[0], "compatdata", "99999", 100, 90);
     let t = target(&s);

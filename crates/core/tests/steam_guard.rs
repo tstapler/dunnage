@@ -15,7 +15,7 @@ use disk_cleanup_core::{Dirs, Identity, Kind, RootDev, SkipReason};
 
 const NOW: i64 = 10_000_000;
 const DAY: i64 = 86_400;
-const MIN_AGE: Duration = Duration::from_secs(30 * 86_400);
+const MIN_AGE: Duration = Duration::from_hours(720);
 
 fn roots() -> RootSet {
     let dirs = Dirs {
