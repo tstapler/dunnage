@@ -66,7 +66,7 @@ impl Fs for RealFs {
             size: m.size(),
             mtime_secs: m.mtime(),
             mtime_nsec: u32::try_from(m.mtime_nsec()).unwrap_or(0),
-            mnt_id: None,
+            mnt_id: disk_cleanup_adapters::mount_id_of(path),
         })
     }
 
@@ -85,6 +85,10 @@ impl Fs for RealFs {
 
     fn read_to_string(&self, path: &Path) -> io::Result<String> {
         std::fs::read_to_string(path)
+    }
+
+    fn fs_type(&self, path: &Path) -> Option<u64> {
+        disk_cleanup_adapters::fs_type_of(path)
     }
 }
 

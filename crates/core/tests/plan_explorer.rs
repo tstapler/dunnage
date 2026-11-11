@@ -99,14 +99,17 @@ fn explorer_plan_should_make_one_item_per_mark_and_run_the_guards_on_fresh_data_
             .find(|r| r.path == Path::new(name))
             .unwrap_or_else(|| panic!("no row for {name}"))
     };
-    for ok in [
-        "/home/u/code/app/node_modules",
-        "/home/u/code/plain",
-        "/home/u/code/notes.txt",
-    ] {
+    for ok in ["/home/u/code/app/node_modules", "/home/u/code/plain"] {
         assert_eq!(row(ok).planned, Planned::Will, "{ok}");
         assert!(row(ok).identity.is_some());
     }
+    // Marks are folders only (review C3): a file in a forged list is a SKIP row, never `error: Symlink`.
+    let file = row("/home/u/code/notes.txt");
+    assert_eq!(file.planned, will_not(SkipReason::ProtectedPath));
+    assert_eq!(
+        file.note.as_deref(),
+        Some("not a folder: the explorer deletes folders only")
+    );
     assert_eq!(row("/home/u/code/gone").planned, will_not(SkipReason::Gone));
     assert!(row("/home/u/code/gone").identity.is_none());
     // The directory that holds another filesystem stays FREE, with the M3 note.
@@ -118,8 +121,8 @@ fn explorer_plan_should_make_one_item_per_mark_and_run_the_guards_on_fresh_data_
     );
     // sizes come from the tree walk, and the total counts the rows that would be removed.
     assert_eq!(row("/home/u/code/plain").attributed_bytes, 1 << 20);
-    assert_eq!(plan.total_bytes(), (3 << 20) + (1 << 20) + 4096 + (2 << 20));
-    assert_eq!(plan.will_count(), 4);
+    assert_eq!(plan.total_bytes(), (3 << 20) + (1 << 20) + (2 << 20));
+    assert_eq!(plan.will_count(), 3);
     // The engine's plan holds one item per mark that exists, none for the vanished one, all of the new kind.
     assert_eq!(plan.plan.items.len(), 4);
     assert!(plan
@@ -158,8 +161,15 @@ fn explorer_plan_should_refuse_each_rule_m1_to_m5_as_a_skip_row_When_the_mark_br
     // through the link).
     w.fs.file("/home/u/code/linked-parent/child", 1)
         .symlink("/home/u/code/linked-parent");
+    // The scan root itself is planned on its own: a mark that holds the others would be an overlap.
+    let root_plan = with_ctx(&w, &none(), |ctx| {
+        explorer_plan(&[p("/home/u/code")], OnlyMode::Explorer, ctx).unwrap()
+    });
+    assert_eq!(
+        root_plan.rows[0].planned,
+        will_not(SkipReason::ProtectedPath)
+    );
     let marks: Vec<PathBuf> = [
-        "/home/u/code",
         "/home/u/Documents/x",
         "/home/u/code/app/.git/objects",
         "/home/u/code/link",
@@ -181,7 +191,6 @@ fn explorer_plan_should_refuse_each_rule_m1_to_m5_as_a_skip_row_When_the_mark_br
             .unwrap()
             .planned
     };
-    assert_eq!(status("/home/u/code"), will_not(SkipReason::ProtectedPath));
     assert_eq!(
         status("/home/u/Documents/x"),
         will_not(SkipReason::OutsideRoot)
@@ -413,4 +422,55 @@ fn explorer_plan_should_call_a_replaced_parent_gone_and_keep_an_unreadable_mark_
         .map(disk_cleanup_core::ItemKey::as_str)
         .collect();
     assert_eq!(keys, ["explorer-selection:/home/u/code/c"]);
+}
+
+// ---------------------------------------------------------------- review C14: M6 over the whole set, nested .git
+
+#[test]
+fn explorer_plan_should_refuse_a_forged_list_holding_a_mark_and_one_inside_it_C14() {
+    let w = World::new();
+    w.fs.dir("/home/u/code/a", 10).dir("/home/u/code/a/b", 10);
+    let err = with_ctx(&w, &none(), |ctx| {
+        explorer_plan(
+            &[p("/home/u/code/a"), p("/home/u/code/a/b")],
+            OnlyMode::Explorer,
+            ctx,
+        )
+    })
+    .unwrap_err();
+    assert!(
+        err.text()
+            .contains("is inside /home/u/code/a, which is also marked"),
+        "{}",
+        err.text()
+    );
+}
+
+#[test]
+fn explorer_plan_should_count_nested_git_repositories_in_the_risk_row_C14() {
+    let w = World::new();
+    w.fs.dir("/home/u/code/many", 10)
+        .dir("/home/u/code/none", 10);
+    w.fs.set_git_below("/home/u/code/many", 100);
+    let plan = with_ctx(&w, &none(), |ctx| {
+        explorer_plan(
+            &[p("/home/u/code/many"), p("/home/u/code/none")],
+            OnlyMode::Explorer,
+            ctx,
+        )
+        .unwrap()
+    });
+    let risk = |name: &str| {
+        plan.rows
+            .iter()
+            .find(|r| r.path == Path::new(name))
+            .unwrap()
+            .risk
+            .clone()
+    };
+    assert_eq!(
+        risk("/home/u/code/many").as_deref(),
+        Some("contains 100 git repositories: unpushed work is lost")
+    );
+    assert_eq!(risk("/home/u/code/none"), None);
 }

@@ -42,6 +42,45 @@ impl Allowed {
     }
 }
 
+/// An [`Allowed`] was offered for a kind that cannot make this value.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ExplorerScopeWrongKind;
+
+/// The engine-level witness that `path` passed `decide_path_common` as an `explorer-selection` item (ADR-006).
+/// `AllowedTarget::BelowScanRoot` carries one and `DeletePolicy::validate` accepts only the path it was made
+/// for, so a policy for an explorer delete cannot be spelled without going through the guard. Private field,
+/// one constructor; no `Default`, no `Deserialize`.
+///
+/// ```compile_fail
+/// use disk_cleanup_core::ExplorerScope;
+/// let _ = ExplorerScope { path: "/x".into() };
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExplorerScope {
+    path: PathBuf,
+}
+
+impl ExplorerScope {
+    pub fn from_allowed(allowed: &Allowed) -> Result<ExplorerScope, ExplorerScopeWrongKind> {
+        if allowed.kind != Kind::ExplorerSelection {
+            return Err(ExplorerScopeWrongKind);
+        }
+        Ok(ExplorerScope {
+            path: allowed.path.clone(),
+        })
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Unit tests of `floor_rule` need a scope for a path the guard would never allow (a `.git` component).
+    #[cfg(test)]
+    pub(crate) fn test_scope(path: &str) -> ExplorerScope {
+        ExplorerScope { path: path.into() }
+    }
+}
+
 /// `WorktreeRemoval::new` was given an `Allowed` that is not a worktree.
 #[derive(Debug, PartialEq, Eq)]
 pub struct WrongKind;

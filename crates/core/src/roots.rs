@@ -35,14 +35,50 @@ pub type Canon<'a> = &'a dyn Fn(&Path) -> io::Result<(PathBuf, Identity)>;
 /// run-level `FatalError::RootsUnreadable` (exit 2).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RootError {
-    HomeOrAncestor { path: PathBuf },
-    Unreadable { path: PathBuf, errno: i32 },
+    HomeOrAncestor {
+        path: PathBuf,
+    },
+    Unreadable {
+        path: PathBuf,
+        errno: i32,
+    },
+    /// The root lies on a kernel pseudo filesystem (`proc`, `sysfs`, `cgroup`, ...): deleting there changes
+    /// the running system, not files.
+    PseudoFs {
+        path: PathBuf,
+        fs: &'static str,
+        roots_in_use: Vec<PathBuf>,
+    },
+}
+
+/// `statfs` `f_type` values of filesystems no root may sit on, with the name shown to the owner.
+const PSEUDO_FS: [(u64, &str); 9] = [
+    (0x9fa0, "proc"),
+    (0x6265_6572, "sysfs"),
+    (0x0027_e0eb, "cgroup"),
+    (0x6367_7270, "cgroup2"),
+    (0x7363_6673, "securityfs"),
+    (0x6462_6720, "debugfs"),
+    (0x7472_6163, "tracefs"),
+    (0x1cd1, "devpts"),
+    (0x6e73_6673, "nsfs"),
+];
+
+const TMPFS_MAGIC: u64 = 0x0102_1994;
+
+/// The pseudo filesystem type name for an `f_type`, if it is one. `devtmpfs` reports the `tmpfs` magic, so
+/// `resolve_on` also refuses a tmpfs root at or below `/dev`.
+pub fn pseudo_fs_name(f_type: u64) -> Option<&'static str> {
+    PSEUDO_FS
+        .iter()
+        .find(|(m, _)| *m == f_type)
+        .map(|(_, n)| *n)
 }
 
 impl RootError {
     pub fn exit_code(&self) -> i32 {
         match self {
-            RootError::HomeOrAncestor { .. } => 64,
+            RootError::HomeOrAncestor { .. } | RootError::PseudoFs { .. } => 64,
             RootError::Unreadable { path, errno } => FatalError::RootsUnreadable {
                 path: path.clone(),
                 errno: *errno,
@@ -57,6 +93,21 @@ impl RootError {
                 "error: root is HOME or an ancestor of HOME: {}. Nothing scanned. Pass a directory below your home, for example --root ~/code.",
                 path.display()
             ),
+            RootError::PseudoFs {
+                path,
+                fs,
+                roots_in_use,
+            } => {
+                let used: Vec<String> = roots_in_use
+                    .iter()
+                    .map(|r| r.display().to_string())
+                    .collect();
+                format!(
+                    "error: root {} is on a {fs} filesystem, which is not made of files. Nothing scanned. Use a directory on a disk filesystem (roots in use: {}).",
+                    path.display(),
+                    if used.is_empty() { "none".to_string() } else { used.join(", ") }
+                )
+            }
             RootError::Unreadable { path, errno } => FatalError::RootsUnreadable {
                 path: path.clone(),
                 errno: *errno,
@@ -99,10 +150,19 @@ impl CacheTool {
     }
 }
 
+/// A resolved scan root and the `(dev, ino)` of the directory behind it when it was resolved. The explorer's
+/// plan-id hashes these, and the apply re-resolves the roots and compares (review C8).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RootIdentity {
+    pub path: PathBuf,
+    pub ident: Identity,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RootSet {
     home: PathBuf,
     scan_roots: Vec<PathBuf>,
+    root_idents: Vec<RootIdentity>,
     cache_paths: Vec<PathBuf>,
     steam_libraries: Vec<SteamLibraryRoot>,
 }
@@ -169,6 +229,20 @@ impl RootSet {
         cwd: &Path,
         canon: Canon<'_>,
     ) -> Result<RootSet, RootError> {
+        RootSet::resolve_on(dirs, flag_roots, config_roots, cwd, canon, &|_| None)
+    }
+
+    /// [`RootSet::resolve`] that also refuses an explicit root on a pseudo filesystem: `fs_type` answers the
+    /// `statfs` `f_type` of a canonical path (`Fs::fs_type`). A default root is skipped like any other
+    /// unusable default.
+    pub fn resolve_on(
+        dirs: &Dirs,
+        flag_roots: &[PathBuf],
+        config_roots: Option<&[PathBuf]>,
+        cwd: &Path,
+        canon: Canon<'_>,
+        fs_type: &dyn Fn(&Path) -> Option<u64>,
+    ) -> Result<RootSet, RootError> {
         let (home, home_id) = canon(&dirs.home).map_err(|e| RootError::Unreadable {
             path: dirs.home.clone(),
             errno: e.raw_os_error().unwrap_or(5),
@@ -193,12 +267,18 @@ impl RootSet {
             Some(flag_roots.to_vec())
         };
         let mut scan_roots: Vec<PathBuf> = Vec::new();
-        let mut push = |p: PathBuf| {
+        let mut root_idents: Vec<RootIdentity> = Vec::new();
+        let mut push = |p: PathBuf, id: Identity| {
             if !scan_roots.contains(&p) {
+                root_idents.push(RootIdentity {
+                    path: p.clone(),
+                    ident: id,
+                });
                 scan_roots.push(p);
             }
         };
         if let Some(roots) = explicit {
+            let mut accepted: Vec<PathBuf> = Vec::new();
             for raw in roots {
                 let wanted = expand(&raw, &home, cwd);
                 let (path, id) = canon(&wanted).map_err(|e| RootError::Unreadable {
@@ -208,13 +288,26 @@ impl RootSet {
                 if is_forbidden(&path, id) {
                     return Err(RootError::HomeOrAncestor { path: wanted });
                 }
-                push(path);
+                // `devtmpfs` reports the tmpfs magic, so a tmpfs root at or below `/dev` counts as one.
+                let magic = fs_type(&path);
+                let pseudo = magic.and_then(pseudo_fs_name).or_else(|| {
+                    (magic == Some(TMPFS_MAGIC) && path.starts_with("/dev")).then_some("devtmpfs")
+                });
+                if let Some(fs) = pseudo {
+                    return Err(RootError::PseudoFs {
+                        path,
+                        fs,
+                        roots_in_use: accepted,
+                    });
+                }
+                accepted.push(path.clone());
+                push(path, id);
             }
         } else {
             for name in DEFAULT_SCAN_ROOTS {
                 if let Ok((path, id)) = canon(&home.join(name)) {
                     if !is_forbidden(&path, id) {
-                        push(path);
+                        push(path, id);
                     }
                 }
             }
@@ -223,6 +316,7 @@ impl RootSet {
         Ok(RootSet {
             home,
             scan_roots,
+            root_idents,
             cache_paths,
             steam_libraries: Vec::new(),
         })
@@ -263,6 +357,20 @@ impl RootSet {
     /// The canonical scan roots, in resolution order.
     pub fn scan_roots(&self) -> &[PathBuf] {
         &self.scan_roots
+    }
+
+    /// The scan roots with the identity of the directory behind each, as resolved.
+    pub fn root_identities(&self) -> &[RootIdentity] {
+        &self.root_idents
+    }
+
+    /// The scan root that holds `path`: the longest prefix, so nested roots do not depend on list order.
+    pub fn root_of(&self, path: &Path) -> Option<&Path> {
+        self.scan_roots
+            .iter()
+            .filter(|r| path.starts_with(r))
+            .max_by_key(|r| r.components().count())
+            .map(PathBuf::as_path)
     }
 
     pub fn is_scan_root(&self, p: &Path) -> bool {
@@ -329,6 +437,7 @@ impl RootSet {
         }
         self.allowed(kind).iter().any(|t| match t {
             AllowedTarget::Exact(p) => p == path,
+            AllowedTarget::BelowScanRoot(scope) => scope.path() == path,
             AllowedTarget::Within { root, name } => {
                 strictly_below(root, path)
                     && path

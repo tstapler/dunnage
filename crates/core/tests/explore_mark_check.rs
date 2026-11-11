@@ -28,6 +28,7 @@ struct Fake {
     devs: HashMap<PathBuf, u64>,
     boundary: HashSet<PathBuf>,
     scanning: HashSet<PathBuf>,
+    files: HashSet<PathBuf>,
 }
 
 impl Fake {
@@ -52,6 +53,9 @@ impl MarkFacts for Fake {
     }
     fn dev_of(&self, path: &Path) -> Option<u64> {
         Some(self.devs.get(path).copied().unwrap_or(1))
+    }
+    fn is_dir(&self, path: &Path) -> Option<bool> {
+        Some(!self.files.contains(path))
     }
     fn is_boundary(&self, path: &Path) -> bool {
         self.boundary.contains(path)
@@ -286,10 +290,47 @@ fn m3_should_refuse_an_x_boundary_row() {
 }
 
 #[test]
-fn m3_should_refuse_a_path_whose_st_dev_differs_from_its_parents_even_when_the_table_misses_it() {
+fn m3_should_refuse_a_path_whose_st_dev_differs_from_the_roots_even_when_the_table_misses_it() {
     let mut w = world("/home/u", &["/data/x"]);
     w.facts = Fake::default().dev("/data/x/sub", 9);
-    assert_eq!(w.refusal("/data/x/sub"), Some(MarkRefusal::MountPoint));
+    assert_eq!(
+        w.refusal("/data/x/sub"),
+        Some(MarkRefusal::Engine(SkipReason::CrossDevice))
+    );
+}
+
+#[test]
+fn m3_should_refuse_a_path_below_a_mount_of_another_device_as_the_engine_does_C14() {
+    // The review's C14: the parent is on the other device and so is the child; comparing with the parent
+    // said "same device, markable", the engine (root device) says CrossDevice.
+    let mut w = world("/home/u", &["/data/x"]);
+    w.facts = Fake::default()
+        .dev("/data/x/mnt", 9)
+        .dev("/data/x/mnt/deep", 9);
+    assert_eq!(
+        w.refusal("/data/x/mnt/deep"),
+        Some(MarkRefusal::Engine(SkipReason::CrossDevice))
+    );
+}
+
+#[test]
+fn m3_should_compare_with_the_longest_containing_root_When_roots_are_nested() {
+    let mut w = world("/home/u", &["/data/x", "/data/x/inner"]);
+    w.facts = Fake::default()
+        .dev("/data/x/inner", 9)
+        .dev("/data/x/inner/a", 9);
+    assert_eq!(w.refusal("/data/x/inner/a"), None);
+}
+
+#[test]
+fn safety_explorer_cannot_mark_a_file_only_folders_When_space_is_pressed() {
+    let mut w = world("/home/u", &["/data/x"]);
+    w.facts.files.insert("/data/x/notes.txt".into());
+    assert_eq!(
+        w.refusal("/data/x/notes.txt"),
+        Some(MarkRefusal::NotADirectory)
+    );
+    assert_eq!(w.refusal("/data/x/dir"), None);
 }
 
 #[test]
@@ -515,7 +556,7 @@ fn the_first_rule_that_applies_should_win_in_the_order_m1_to_m8() {
 #[test]
 fn mark_check_should_call_the_engines_own_functions_not_copies() {
     let src = include_str!("../src/explore/mark_check.rs");
-    for call in ["floor_protected(", "strictly_below(", "has_git_component("] {
+    for call in ["floor_protected(", "strictly_below(", "protected_position("] {
         assert!(src.contains(call), "mark_check.rs must call {call}");
     }
     // ... and the engine side uses the same functions.
@@ -527,7 +568,7 @@ fn mark_check_should_call_the_engines_own_functions_not_copies() {
     let roots = include_str!("../src/roots.rs");
     assert!(roots.contains("strictly_below(root, path)"));
     let guard = include_str!("../src/guard.rs");
-    assert!(guard.contains("has_git_component(path)"));
+    assert!(guard.contains("protected_position(path, roots.scan_roots())"));
 }
 
 fn comp() -> impl Strategy<Value = &'static str> {
@@ -561,6 +602,54 @@ fn identity_canon(p: &Path) -> io::Result<(PathBuf, Identity)> {
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(600))]
+
+    /// Task 6.6.5i: `mark_check` and the engine agree. A path the screen accepts is allowed by
+    /// `decide_path_common`, and `DeletePolicy::for_allowed(..).validate` accepts it; a path
+    /// `decide_path_common` skips is refused on the screen.
+    #[test]
+    fn mark_check_should_agree_with_decide_path_common_and_the_below_scan_root_target(
+        path in abs_path(7), home in abs_path(5), r1 in abs_path(4), r2 in abs_path(4),
+    ) {
+        use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
+        prop_assume!(path != Path::new("/") && home != Path::new("/"));
+        let dirs = Dirs {
+            home: home.clone(),
+            state: home.join(".local/state"),
+            cache: home.join(".cache"),
+            config: home.join(".config"),
+        };
+        let Ok(rs) = disk_cleanup_core::roots::RootSet::resolve(
+            &dirs, &[], Some(&[r1, r2]), Path::new("/"), &identity_canon,
+        ) else {
+            return Ok(());
+        };
+        let mut w = world(home.to_str().unwrap(), &[]);
+        w.roots = rs.scan_roots().to_vec();
+        let screen = w.check(path.to_str().unwrap());
+        let decision = decide_path_common(
+            &Facts {
+                kind: Kind::ExplorerSelection,
+                path: path.clone(),
+                ident: Identity { dev: 1, ino: 5 },
+                is_symlink: false,
+                root_dev: RootDev(1),
+                is_mount_point: false,
+            },
+            &rs,
+        );
+        match decision {
+            GuardDecision::Skip(_) => prop_assert!(screen.is_err(), "{path:?}"),
+            GuardDecision::Allow(a) => {
+                if screen.is_ok() {
+                    let policy = DeletePolicy::for_allowed(
+                        &a, RootDev(1), 1, home.clone(), Identity { dev: 1, ino: 1 },
+                        rs.scan_roots().to_vec(),
+                    ).unwrap();
+                    prop_assert_eq!(policy.validate(path.file_name().unwrap()), Ok(()), "{:?}", path);
+                }
+            }
+        }
+    }
 
     /// M2 and the engine's rule F give equal answers: for a path M1 admits, the explorer refuses it with
     /// `ProtectedPath` exactly when `DeletePolicy::validate` does (for an allowed target equal to the path).

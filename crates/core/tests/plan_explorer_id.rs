@@ -10,6 +10,7 @@ use disk_cleanup_core::explorer_plan::{explorer_plan, ExplorerPlan};
 use disk_cleanup_core::plan::{
     check_plan_id, ExplorerGateRefusal, ItemIdentity, OnlyMode, Plan, PlanId,
 };
+use disk_cleanup_core::roots::RootIdentity;
 use disk_cleanup_core::selector::{KindSelector, Selection};
 use disk_cleanup_core::target::Guarded;
 use disk_cleanup_core::{
@@ -80,8 +81,12 @@ fn plan_id_should_change_with_each_identity_field_the_root_list_and_the_kind_Whe
         kind: FileKind::Dir,
     };
     let path = Path::new("/home/u/code/a");
-    let roots = vec![PathBuf::from("/home/u/code")];
-    let id = |i: ItemIdentity, r: &[PathBuf]| PlanId::for_explorer([(path, i)], r);
+    let root = |p: &str, ino: u64| RootIdentity {
+        path: PathBuf::from(p),
+        ident: Identity { dev: 1, ino },
+    };
+    let roots = vec![root("/home/u/code", 5)];
+    let id = |i: ItemIdentity, r: &[RootIdentity]| PlanId::for_explorer([(path, i)], r);
     let reference = id(base, &roots);
     for changed in [
         ItemIdentity { dev: 2, ..base },
@@ -93,11 +98,13 @@ fn plan_id_should_change_with_each_identity_field_the_root_list_and_the_kind_Whe
     ] {
         assert_ne!(reference, id(changed, &roots), "{changed:?}");
     }
-    assert_ne!(reference, id(base, &[PathBuf::from("/home/u/dotfiles")]));
+    assert_ne!(reference, id(base, &[root("/home/u/dotfiles", 5)]));
     assert_ne!(
         reference,
-        id(base, &[PathBuf::from("/home/u/code"), PathBuf::from("/x")])
+        id(base, &[root("/home/u/code", 5), root("/x", 9)])
     );
+    // Review C8: the same root path with another directory behind it (swapped during the session).
+    assert_ne!(reference, id(base, &[root("/home/u/code", 6)]));
     // Not the cleaner's id over the same path: the kind is in the hash.
     let cleaner = Candidate::new(
         Locator::Path(path.into()),
@@ -276,4 +283,30 @@ fn check_plan_id_should_be_the_one_destructive_gate_called_from_one_definition()
     let plan_rs = std::fs::read_to_string(root.join("core/src/plan.rs")).unwrap();
     let body = &plan_rs[plan_rs.find("pub fn check_plan_id(").unwrap()..];
     assert!(body.contains("destructive_gate(sel, Some(supplied)"));
+}
+
+#[test]
+fn check_plan_id_should_treat_a_future_saved_at_as_stale_When_the_clock_stepped_back_C10() {
+    let (w, marks) = two_marks();
+    let plan = plan_of(&w, &marks);
+    let id = plan.plan_id();
+    let sp = saved(&plan, 1000, NOW + 3600);
+    let r = check_plan_id(
+        &plan.selection,
+        id,
+        SaveOutcome::Saved,
+        Some(&sp),
+        1000,
+        id,
+        NOW,
+    );
+    assert_eq!(r, Err(ExplorerGateRefusal::Stale { age_secs: -3600 }));
+}
+
+#[test]
+fn safety_explorer_plan_id_binds_the_identity_of_each_scan_root() {
+    let (w, marks) = two_marks();
+    let before = plan_of(&w, &marks).plan_id();
+    w.fs.replace("/home/u/code");
+    assert_ne!(before, plan_of(&w, &marks).plan_id());
 }

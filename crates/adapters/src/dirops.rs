@@ -291,6 +291,39 @@ fn stat_info(fd: &OwnedFd, name: &OsStr, flags: AtFlags) -> io::Result<StatInfo>
     }
 }
 
+/// The mount id of the entry at `path` (`statx` `STATX_MNT_ID`, `AT_SYMLINK_NOFOLLOW`), `None` where the
+/// kernel does not report one or the path cannot be read. It lets the explorer's read-only `Fs::lstat` carry
+/// the same `mnt_id` the engine compares (review C9).
+#[cfg(target_os = "linux")]
+pub fn mount_id_of(path: &Path) -> Option<u64> {
+    use rustix::fs::StatxFlags;
+    let sx = rustix::fs::statx(
+        rustix::fs::CWD,
+        path,
+        AtFlags::SYMLINK_NOFOLLOW,
+        StatxFlags::MNT_ID,
+    )
+    .ok()?;
+    (sx.stx_mask & StatxFlags::MNT_ID.bits() != 0).then_some(sx.stx_mnt_id)
+}
+
+/// The `statfs` filesystem type (`f_type`) at `path`, `None` when it cannot be read.
+#[cfg(target_os = "linux")]
+#[allow(clippy::unnecessary_cast, clippy::cast_sign_loss)]
+pub fn fs_type_of(path: &Path) -> Option<u64> {
+    rustix::fs::statfs(path).ok().map(|s| s.f_type as u64)
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn fs_type_of(_path: &Path) -> Option<u64> {
+    None
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn mount_id_of(_path: &Path) -> Option<u64> {
+    None
+}
+
 #[cfg(not(target_os = "linux"))]
 fn stat_info(fd: &OwnedFd, name: &OsStr, flags: AtFlags) -> io::Result<StatInfo> {
     plain_stat(fd, name, flags)

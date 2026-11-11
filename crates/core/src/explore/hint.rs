@@ -102,6 +102,7 @@ fn under_allowed_root(roots: &RootSet, kind: Kind, path: &Path) -> bool {
     }
     roots.allowed(kind).iter().any(|t| match t {
         AllowedTarget::Exact(p) => p == path,
+        AllowedTarget::BelowScanRoot(scope) => scope.path() == path,
         AllowedTarget::Within { root, .. } => path.strip_prefix(root).is_ok_and(|rel| {
             let depth = rel.components().count();
             match kind {

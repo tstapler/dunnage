@@ -74,7 +74,7 @@ impl ClassifyFactsLoader {
             .into_iter()
             .filter_map(|t| match t {
                 AllowedTarget::Exact(p) => Some(p),
-                AllowedTarget::Within { .. } => None,
+                AllowedTarget::Within { .. } | AllowedTarget::BelowScanRoot(_) => None,
             })
             .collect()
     }

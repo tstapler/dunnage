@@ -318,6 +318,11 @@ pub trait Fs: Send + Sync {
     fn lstat(&self, path: &Path) -> io::Result<StatInfo>;
     fn read_dir(&self, path: &Path) -> io::Result<Vec<DirEntryInfo>>;
     fn read_to_string(&self, path: &Path) -> io::Result<String>;
+    /// The `statfs` filesystem type (`f_type`) at `path`, `None` where it cannot be read. `RootSet::resolve_on`
+    /// refuses roots on pseudo filesystems with it (ADR-006 A10); a double that does not model it says `None`.
+    fn fs_type(&self, _path: &Path) -> Option<u64> {
+        None
+    }
 }
 
 pub trait Clock: Send + Sync {

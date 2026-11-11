@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use crate::candidate::{Candidate, ExplorerFacts, KindFacts, Locator};
 use crate::delete_types::FileKind;
+use crate::escape::escape_os;
 use crate::explore::mark_check::{
     mark_check, MarkCtx, MarkEnv, MarkFacts, MarkMount, MountTable, OwnState, SymlinkFact,
 };
@@ -20,7 +21,7 @@ use crate::outcome::SkipReason;
 use crate::plan::{not_an_item_text, ItemIdentity, OnlyMode, Plan, PlanId, Planned};
 use crate::plan_state::{ItemKey, SavedSelection};
 use crate::ports::{Clock, ExtentAttribution, ExtentProbe, Fs, SystemProbe};
-use crate::roots::RootSet;
+use crate::roots::{strictly_below, RootIdentity, RootSet};
 use crate::selector::Selection;
 use crate::target::Guarded;
 
@@ -32,6 +33,8 @@ pub const EXTENT_BUDGET: usize = 4096;
 pub struct TreeSize {
     pub allocated: AllocatedBytes,
     pub newest_mtime: Option<i64>,
+    /// Entries named `.git` below the measured path (`treestat` counts them on the walk it does anyway).
+    pub git_repos: u64,
 }
 
 /// `treestat` as a port, so `core` does not depend on the adapters.
@@ -91,12 +94,19 @@ pub enum ExplorerPlanError {
     PathTooLong(String),
     /// `OnlyMode::Strict` and a mark is not there any more.
     NotAnItem(String),
+    /// Rule M6 over the whole set: one mark lies inside another.
+    Overlap(String),
+    /// A scan root could not be read: its identity cannot be bound into the plan-id.
+    RootUnreadable(String),
 }
 
 impl ExplorerPlanError {
     pub fn text(&self) -> &str {
         match self {
-            ExplorerPlanError::PathTooLong(t) | ExplorerPlanError::NotAnItem(t) => t,
+            ExplorerPlanError::PathTooLong(t)
+            | ExplorerPlanError::NotAnItem(t)
+            | ExplorerPlanError::Overlap(t)
+            | ExplorerPlanError::RootUnreadable(t) => t,
         }
     }
 }
@@ -109,8 +119,9 @@ pub struct ExplorerPlan {
     /// The selection the plan was built with: its flags are `--only <every mark, quoted>`.
     pub selection: Selection,
     pub rows: Vec<ExplorerRow>,
-    /// The scan roots the plan was made against (bound into the id).
-    pub roots: Vec<PathBuf>,
+    /// The scan roots the plan was made against with the identity of each, read by `lstat` at plan time
+    /// (bound into the id; the apply re-resolves the roots and compares).
+    pub roots: Vec<RootIdentity>,
 }
 
 impl ExplorerPlan {
@@ -187,6 +198,10 @@ impl MarkFacts for FsMarkFacts<'_> {
         self.fs.lstat(path).ok().map(|st| st.ident.dev)
     }
 
+    fn is_dir(&self, path: &Path) -> Option<bool> {
+        self.fs.lstat(path).ok().map(|st| st.kind == FileKind::Dir)
+    }
+
     fn is_boundary(&self, _path: &Path) -> bool {
         false
     }
@@ -223,9 +238,7 @@ fn judge(
 ) -> Judged {
     let root_dev = ctx
         .roots
-        .scan_roots()
-        .iter()
-        .find(|r| path.starts_with(r))
+        .root_of(path)
         .and_then(|r| ctx.fs.lstat(r).ok())
         .map_or(RootDev(st.ident.dev), |s| RootDev(s.ident.dev));
     let facts = Facts {
@@ -265,7 +278,8 @@ fn judge(
         },
         Err(r) => Judged {
             guard: Guarded::Skip(skip_of(&r)),
-            note: None,
+            note: (r == MarkRefusal::NotADirectory)
+                .then(|| "not a folder: the explorer deletes folders only".to_string()),
         },
     }
 }
@@ -351,12 +365,19 @@ fn plan_one(
         ));
     }
     let is_dir = st.kind == FileKind::Dir;
-    if is_dir && ctx.fs.lstat(&path.join(".git")).is_ok() {
-        row.risk = Some("git repository: unpushed work is lost".into());
-    }
-    let (allocated, mtime) = match ctx.sizer.measure(path) {
-        Ok(t) => (t.allocated, t.newest_mtime),
-        Err(_) => (AllocatedBytes(st.blocks.saturating_mul(512)), None),
+    let top_git = is_dir && ctx.fs.lstat(&path.join(".git")).is_ok();
+    let (allocated, mtime, nested_git) = match ctx.sizer.measure(path) {
+        Ok(t) => (t.allocated, t.newest_mtime, t.git_repos),
+        Err(_) => (AllocatedBytes(st.blocks.saturating_mul(512)), None, 0),
+    };
+    // `treestat` counts every `.git` below, the top one included.
+    let repos = nested_git.max(u64::from(top_git));
+    row.risk = match repos {
+        0 => None,
+        1 if top_git => Some("git repository: unpushed work is lost".into()),
+        n => Some(format!(
+            "contains {n} git repositories: unpushed work is lost"
+        )),
     };
     row.shared_bytes = ctx.extents.and_then(|e| shared_of(e, path));
     row.attributed_bytes = allocated.0.saturating_sub(row.shared_bytes.unwrap_or(0));
@@ -386,6 +407,30 @@ pub fn explorer_plan(
     selection
         .validate_only()
         .map_err(|e| ExplorerPlanError::PathTooLong(e.0))?;
+    // M6 over the whole set: a forged or stale list with A and A/b would plan both and overstate the count.
+    let sorted = selection.only_sorted();
+    for inner in &sorted {
+        if let Some(outer) = sorted.iter().find(|o| strictly_below(o, inner)) {
+            return Err(ExplorerPlanError::Overlap(format!(
+                "error: {} is inside {}, which is also marked. Unmark one of them. Nothing was deleted.",
+                escape_os(inner.as_os_str(), false),
+                escape_os(outer.as_os_str(), false)
+            )));
+        }
+    }
+    let mut root_stamps: Vec<RootIdentity> = Vec::new();
+    for r in ctx.roots.scan_roots() {
+        let ident = ctx.fs.lstat(r).map(|st| st.ident).map_err(|_| {
+            ExplorerPlanError::RootUnreadable(format!(
+                "error: the scan root {} cannot be read now. Nothing was deleted.",
+                escape_os(r.as_os_str(), false)
+            ))
+        })?;
+        root_stamps.push(RootIdentity {
+            path: r.clone(),
+            ident,
+        });
+    }
     let mounts = mount_facts(ctx.probe);
     let mut rows: Vec<ExplorerRow> = Vec::new();
     let mut candidates: Vec<Candidate> = Vec::new();
@@ -423,6 +468,6 @@ pub fn explorer_plan(
         plan,
         selection,
         rows,
-        roots: ctx.roots.scan_roots().to_vec(),
+        roots: root_stamps,
     })
 }

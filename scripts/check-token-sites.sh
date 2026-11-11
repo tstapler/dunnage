@@ -14,6 +14,8 @@ DEF_TOKEN=crates/core/src/apply_token.rs     # defines ApplyToken, grant, for_te
 DEF_DIROPS=crates/adapters/src/dirops.rs     # defines RealDirOps::unconfined
 SITE_GRANT=crates/cli/src/wiring/token.rs    # the one place that may call grant
 SITE_UNCONF=crates/cli/src/wiring/confine.rs # the one place that may call unconfined
+DEF_APPLY=crates/cli/src/wiring/token.rs     # defines grant_apply (the mint wrapper)
+SITE_APPLY=crates/cli/src/wiring/compose.rs  # the one place that may call grant_apply (run_apply; the explorer's apply goes through it)
 GUARD=crates/core/src/guard.rs               # the one place that may call Allowed::new
 WITNESS_TYPES='ApplyToken|Allowed|WorktreeRemoval'
 # the only adapters files that may contain `unsafe` (fiemap.rs also answers to the content rule below) (a ZST such as ApplyToken can be forged by any unsafe pointer cast)
@@ -367,7 +369,7 @@ id: ident
 language: rust
 rule:
   any: [ { kind: identifier }, { kind: field_identifier } ]
-  regex: '^(r#)?(grant|unconfined|for_tests|transmute|transmute_copy|zeroed|MaybeUninit|assume_init|assume_init_read|uninit|uninitialized|dangling|dangling_mut|NonNull|ManuallyDrop|read_unaligned|read_volatile|from_raw|from_raw_parts)$'
+  regex: '^(r#)?(grant|grant_apply|BelowScanRoot|unconfined|for_tests|transmute|transmute_copy|zeroed|MaybeUninit|assume_init|assume_init_read|uninit|uninitialized|dangling|dangling_mut|NonNull|ManuallyDrop|read_unaligned|read_volatile|from_raw|from_raw_parts)$'
 EOF
   cat > "$d/ptrread.yml" <<'EOF'
 id: ptrread
@@ -550,6 +552,23 @@ main() {
   g=$(printf '%s\n' "$H_ident" | awk -F: '$3 == "grant"' || true)
   u=$(printf '%s\n' "$H_ident" | awk -F: '$3 == "unconfined"' || true)
   t=$(printf '%s\n' "$H_ident" | awk -F: '$3 == "for_tests"' || true)
+  # grant_apply (Task 6.6.5d, review C5): one definition in $DEF_APPLY, exactly $expect non-`use` identifiers in
+  # $SITE_APPLY (the `use` line that imports it is not a call), nowhere else, so a second mint in
+  # cli/src/explore/, a macro, an alias or a fn pointer trips the check.
+  local ga ga_calls
+  ga=$(printf '%s\n' "$H_ident" | awk -F: '$3 == "grant_apply"' || true)
+  ga_calls=$(printf '%s\n' "$ga" | while IFS=: read -r f l _; do
+    [ -n "$f" ] || continue
+    sed -n "${l}p" "$f" | grep -Eq '^[[:space:]]*(pub(\([a-z]+\))? )?use[[:space:]]' && continue
+    printf '%s:%s:grant_apply\n' "$f" "$l"
+  done)
+  [ "$(count "$(in_file "$ga" "$DEF_APPLY")")" -eq "$expect" ] || bad "$DEF_APPLY must contain exactly $expect 'grant_apply' identifier(s) (its definition), found $(count "$(in_file "$ga" "$DEF_APPLY")")"
+  [ "$(count "$(in_file "$ga_calls" "$SITE_APPLY")")" -eq "$expect" ] || bad "$SITE_APPLY must contain exactly $expect 'grant_apply' call(s) outside 'use' lines, found $(count "$(in_file "$ga_calls" "$SITE_APPLY")")"
+  # AllowedTarget::BelowScanRoot (Task 6.6.5a): the explorer's target is named only where the engine and the
+  # oracles match on it, and in tests; a delete site in adapters/cli cannot build one except through
+  # DeletePolicy::for_allowed.
+  flag "'BelowScanRoot' outside core's floor_rule/delete_types/roots/hint, the explorer facts and tests" < <(not_in "$(printf '%s\n' "$H_ident" | awk -F: '$3 == "BelowScanRoot"')" "^(crates/core/src/(floor_rule|delete_types|roots|explore/hint)\.rs:|crates/adapters/src/explore/facts\.rs:|crates/[^/]+/tests/)")
+  flag "'grant_apply' outside its definition, its call site and the import in compose.rs" < <(not_in "$ga" "^($DEF_APPLY|$SITE_APPLY):")
   [ "$(count "$(in_file "$g" "$DEF_TOKEN")")" -eq 1 ] || bad "$DEF_TOKEN must contain exactly one 'grant' identifier (its definition; a Self::grant() wrapper or second use is a second site), found $(count "$(in_file "$g" "$DEF_TOKEN")") (0 also means the scan is blind)"
   [ "$(count "$(in_file "$g" "$SITE_GRANT")")" -eq "$expect" ] || bad "$SITE_GRANT must contain exactly $expect 'grant' identifier(s) (the call site), found $(count "$(in_file "$g" "$SITE_GRANT")")"
   flag "'grant' outside its definition and call site" < <(not_in "$g" "^($DEF_TOKEN|$SITE_GRANT):")
@@ -571,7 +590,7 @@ main() {
   # a literal is allowed only inside grant/for_tests of the definition file; elsewhere `Self(..)` is some other type
   flag "ApplyToken tuple or struct literal outside grant/for_tests of apply_token.rs" < <(printf '%s\n' "$H_literal" | awk -F: -v def="$DEF_TOKEN" '$1 == def || $3 !~ /^Self/' | grep . || true)
   flag "impl ApplyToken has a constructor other than grant/for_tests" <<< "$H_ctorfn"
-  flag "memory-forging primitive" < <(printf '%s\n%s\n%s\n%s\n' "$(printf '%s\n' "$H_ident" | awk -F: '$3 !~ /^(grant|unconfined|for_tests)$/')" "$H_ptrread" "$H_useptr" "$H_union" | grep -Ev -- "$FORGE_OK" | grep . || true)
+  flag "memory-forging primitive" < <(printf '%s\n%s\n%s\n%s\n' "$(printf '%s\n' "$H_ident" | awk -F: '$3 !~ /^(grant|grant_apply|BelowScanRoot|unconfined|for_tests)$/')" "$H_ptrread" "$H_useptr" "$H_union" | grep -Ev -- "$FORGE_OK" | grep . || true)
   flag "pointer type or unsafe block names a witness type (a ZST can be forged from any pointer)" < <(printf '%s\n%s\n' "$H_ptrtype" "$H_unsafewitness" | grep . || true)
   local unsafe_scope="$UNSAFE_OK"
   if [ -f "$SECCOMP_TEST" ] && seccomp_content_ok "$SECCOMP_TEST"; then unsafe_scope="$UNSAFE_OK|^$SECCOMP_TEST:"; fi
@@ -621,6 +640,7 @@ EOF
   printf '#![forbid(unsafe_code)]\nmod wiring;\nfn main() {}\n' > "$d/crates/cli/src/main.rs"
   printf 'pub fn grant_apply() -> ApplyToken { ApplyToken::grant() }\n' > "$d/crates/cli/src/wiring/token.rs"
   printf 'pub fn ops(t: &ApplyToken) -> RealDirOps { RealDirOps::unconfined(t) }\n' > "$d/crates/cli/src/wiring/confine.rs"
+  printf 'use crate::wiring::token::grant_apply;\nfn run() { let _t = grant_apply(); }\n' > "$d/crates/cli/src/wiring/compose.rs"
   printf 'fn main() {}\n' > "$d/xtask/src/main.rs"
 }
 
@@ -630,7 +650,7 @@ selftest() {
   fixture "$t/clean"
   if out=$("$SELF" --expect-sites 1 "$t/clean" 2>&1); then echo "ok: clean tree passes (expect-sites 1): $out"; else echo "SELFTEST BAD: clean tree failed: $out"; rc=1; fi
   # early stage: no call sites yet
-  cp -r "$t/clean" "$t/early"; rm "$t/early/crates/cli/src/wiring/token.rs" "$t/early/crates/cli/src/wiring/confine.rs"
+  cp -r "$t/clean" "$t/early"; rm "$t/early/crates/cli/src/wiring/token.rs" "$t/early/crates/cli/src/wiring/confine.rs" "$t/early/crates/cli/src/wiring/compose.rs"
   if out=$("$SELF" --expect-sites 0 "$t/early" 2>&1); then echo "ok: early tree (no call sites) passes with --expect-sites 0"; else echo "SELFTEST BAD: early tree failed: $out"; rc=1; fi
   if out=$("$SELF" --expect-sites 1 "$t/early" 2>&1); then echo "SELFTEST BAD: early tree passed with --expect-sites 1"; rc=1; else echo "ok: early tree fails with --expect-sites 1 (found 0): $(printf '%s' "$out" | head -1)"; fi
   if out=$("$SELF" --expect-sites 0 "$t/clean" 2>&1); then echo "SELFTEST BAD: tree with call sites passed with --expect-sites 0"; rc=1; else echo "ok: tree with call sites fails with --expect-sites 0"; fi
@@ -655,6 +675,12 @@ selftest() {
     [second-grant-adapters]="'grant' outside"
     [grant-in-core-tests]="'grant' outside"
     [grant-renamed]="must contain exactly 1 'grant'"
+    [second-grant-apply-compose]="exactly 1 'grant_apply' call"
+    [grant-apply-explore]="'grant_apply' outside"
+    [grant-apply-macro]="'grant_apply' outside"
+    [grant-apply-alias]="'grant_apply' outside"
+    [grant-apply-fnptr]="exactly 1 'grant_apply' call"
+    [below-scan-root-in-target]="'BelowScanRoot' outside"
     [second-unconfined]="'unconfined' outside"
     [unconfined-alias]="'use ... as' renames|'unconfined' outside"
     [impl-default]="trait impl on"
@@ -724,6 +750,12 @@ fn a() { let _ = <T>::grant(); }'
   neg second-grant-adapters crates/adapters/src/x.rs 'fn a() { let _ = ApplyToken::grant(); }'
   neg grant-in-core-tests crates/core/tests/x.rs 'fn a() { let _ = ApplyToken::grant(); }'
   neg grant-renamed crates/cli/src/wiring/token.rs 'pub fn grant_apply() -> ApplyToken { ApplyToken::new() }' replace
+  neg second-grant-apply-compose crates/cli/src/wiring/compose.rs 'fn run2() { let _u = grant_apply(); }'
+  neg grant-apply-explore crates/cli/src/explore/apply.rs 'fn go() { let _t = crate::wiring::token::grant_apply(); }'
+  neg grant-apply-macro crates/cli/src/explore/apply.rs 'macro_rules! m { () => { crate::wiring::token::grant_apply() } }'
+  neg grant-apply-alias crates/cli/src/explore/apply.rs 'use crate::wiring::token::grant_apply as g;'
+  neg grant-apply-fnptr crates/cli/src/wiring/compose.rs 'fn run3() { let f = grant_apply; let _ = f; }'
+  neg below-scan-root-in-target crates/adapters/src/targets/x.rs 'fn a() { let _ = AllowedTarget::BelowScanRoot(s); }'
   neg second-unconfined crates/adapters/src/x.rs 'fn a(t: &ApplyToken) { let _ = RealDirOps::unconfined(t); }'
   neg unconfined-alias crates/cli/src/x.rs 'use adapters::RealDirOps as R;
 fn a(t: &ApplyToken) { let f = R::unconfined; }'

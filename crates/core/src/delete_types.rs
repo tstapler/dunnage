@@ -4,6 +4,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use crate::allowed::ExplorerScope;
 use crate::ids::{AllocatedBytes, ApparentBytes, Identity, RootDev};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,7 +128,13 @@ impl AbortFlag {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AllowedTarget {
     Exact(PathBuf),
-    Within { root: PathBuf, name: NamePattern },
+    Within {
+        root: PathBuf,
+        name: NamePattern,
+    },
+    /// The explorer's marked path: strictly below a scan root, no `.git` component, never a root, `$HOME`
+    /// or an ancestor, and exactly the path the witness was made for (ADR-006, review C1/C2).
+    BelowScanRoot(ExplorerScope),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

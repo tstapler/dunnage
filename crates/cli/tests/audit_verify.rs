@@ -261,3 +261,86 @@ fn audit_cmd_should_exit_0_2_and_74_and_leave_the_state_directory_untouched() {
         .unwrap();
     assert_eq!(out.status.code(), Some(74));
 }
+
+// ---- Task 6.6.5g (review C13): partial results, intents, unparsable lines and skipped schemas ---------------
+
+fn partial(run: &str, kind: &str, path: &str) -> String {
+    json!({"type":"result","schema":1,"run_id":run,"ts":2,"kind":kind,
+        "status":{"error":"directory not empty"},"path":path,"measured_bytes":4096})
+    .to_string()
+}
+
+fn intent(run: &str, kind: &str, path: &str) -> String {
+    json!({"type":"intent","schema":1,"run_id":run,"ts":2,"kind":kind,"locator":{"path":path}})
+        .to_string()
+}
+
+#[test]
+fn safety_audit_verify_flags_a_partial_result_outside_the_table_and_names_the_path() {
+    let log = vec![
+        start("r1", &["/home/u/code"], &[]),
+        partial("r1", "node-modules", "/home/u/Documents/x/node_modules"),
+        end("r1"),
+    ];
+    let r = verify(&log, None);
+    assert_eq!(r.exit_code(), 2);
+    assert_eq!(r.violations.len(), 1);
+    assert!(r.violations[0].path.ends_with("Documents/x/node_modules"));
+    assert!(r.violations[0]
+        .reason
+        .starts_with("partial or failed delete"));
+    assert_eq!(r.deletions, 0, "a partial result is not a counted deletion");
+}
+
+#[test]
+fn safety_audit_verify_flags_an_intent_outside_the_table_even_without_a_result() {
+    let log = vec![
+        start("r1", &["/home/u/code"], &[]),
+        intent("r1", "node-modules", "/home/u/Documents/x/node_modules"),
+    ];
+    let r = verify(&log, None);
+    assert_eq!(r.exit_code(), 2);
+    assert!(r.violations[0].reason.starts_with("intent"));
+    let ok = vec![
+        start("r1", &["/home/u/code"], &[]),
+        intent("r1", "node-modules", "/home/u/code/app/node_modules"),
+        end("r1"),
+    ];
+    assert_eq!(verify(&ok, None).exit_code(), 0);
+}
+
+#[test]
+fn verify_should_warn_about_an_unparsable_line_and_a_schema_2_line_with_a_nonzero_exit() {
+    let mut log = clean_log();
+    log.insert(2, "{\"type\":\"result\",\"sch".to_string());
+    log.insert(
+        3,
+        json!({"type":"result","schema":2,"run_id":"r1"}).to_string(),
+    );
+    let r = verify(&log, None);
+    assert_eq!(r.exit_code(), 1);
+    assert_eq!(r.warnings.len(), 2);
+    assert!(
+        r.warnings[0].starts_with("line 3: not valid JSON"),
+        "{:?}",
+        r.warnings
+    );
+    assert!(
+        r.warnings[1].starts_with("line 4: schema 2"),
+        "{:?}",
+        r.warnings
+    );
+    assert!(r.violations.is_empty());
+}
+
+#[test]
+fn a_skipped_result_should_not_be_judged() {
+    let log = vec![
+        start("r1", &["/home/u/code"], &[]),
+        json!({"type":"result","schema":1,"run_id":"r1","ts":2,"kind":"node-modules",
+            "status":{"skipped":"too-recent"},"path":"/home/u/Documents/x/node_modules"})
+        .to_string(),
+        end("r1"),
+    ];
+    assert_eq!(verify(&log, None).exit_code(), 0);
+}

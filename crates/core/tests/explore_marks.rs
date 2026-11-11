@@ -537,6 +537,9 @@ mod real_check {
         fn dev_of(&self, p: &Path) -> Option<u64> {
             Some(if p == Path::new("/r/c02/x") { 7 } else { 1 })
         }
+        fn is_dir(&self, _: &Path) -> Option<bool> {
+            Some(true)
+        }
         fn is_boundary(&self, _: &Path) -> bool {
             false
         }

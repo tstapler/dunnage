@@ -222,6 +222,8 @@ pub enum MarkRefusal {
     InsideMarked(PathBuf),
     /// M6: the path holds this many marked items.
     ContainsMarked(u32),
+    /// Marks are folders only: `delete_tree` removes directories (review C3).
+    NotADirectory,
     Engine(SkipReason),
 }
 
