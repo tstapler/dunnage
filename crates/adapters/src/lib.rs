@@ -22,6 +22,7 @@ pub mod state;
 pub mod status;
 pub mod statvfs;
 pub mod steam;
+pub mod targets;
 #[cfg(feature = "test-support")]
 pub mod testing;
 pub mod treestat;
