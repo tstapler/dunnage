@@ -1163,3 +1163,31 @@ fn unlinkat_ENOENT_on_the_only_entry_should_count_as_touched_and_trigger_the_con
         "a vanished entry is a change: scan again before removing the directory"
     );
 }
+
+fn dir_unlink_fails_with(errno_value: i32) -> (DeleteFailure, bool) {
+    let fx = Fx::new();
+    fx.files(2);
+    let mut spy = fx.spy();
+    spy.unlink = Box::new(move |n, dir, _| {
+        if dir && n == OsStr::new("node_modules") {
+            UnlinkAct::Err(errno_value)
+        } else {
+            UnlinkAct::Real
+        }
+    });
+    let f = err_of(fx.run(&spy, &fx.policy()));
+    (f, spy.abort.is_set())
+}
+
+#[test]
+fn finish_should_abort_on_ENOSPC_EDQUOT_EIO_and_only_on_those_When_removing_the_directory_fails() {
+    for e in [libc::ENOSPC, libc::EDQUOT, libc::EIO] {
+        let (f, aborted) = dir_unlink_fails_with(e);
+        assert_eq!(f.error, DeleteError::NoSpace, "errno {e}");
+        assert!(aborted, "errno {e} sets the abort flag");
+        assert_eq!(f.freed.entries_removed, 2, "the two files were counted");
+    }
+    let (f, aborted) = dir_unlink_fails_with(libc::EACCES);
+    assert_eq!(f.error, DeleteError::Io(libc::EACCES));
+    assert!(!aborted, "a per-directory error is not an abort");
+}
