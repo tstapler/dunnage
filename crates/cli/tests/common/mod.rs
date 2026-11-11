@@ -78,8 +78,16 @@ impl Fixture {
     pub fn env(&self) -> Vec<(&'static str, OsString)> {
         // A `docker` whose daemon is down comes first, so no fixture run reaches the machine's real daemon
         // when a build registers the Docker kinds (gate-d). A test that sets its own `PATH` adds its own shim.
-        let shim_dir = self.root().join("docker-down");
-        docker_down_shim(&shim_dir);
+        // It lives outside the fixture root so the tree manifests of the safety tests do not see it.
+        static SHIM_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+        let shim_dir = SHIM_DIR
+            .get_or_init(|| {
+                let dir =
+                    std::env::temp_dir().join(format!("dc-docker-down-{}", std::process::id()));
+                docker_down_shim(&dir);
+                dir
+            })
+            .clone();
         let path = std::env::join_paths(std::iter::once(shim_dir).chain(std::env::split_paths(
             &std::env::var_os("PATH").unwrap_or_default(),
         )))
