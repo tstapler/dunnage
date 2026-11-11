@@ -56,11 +56,14 @@ impl MountTable {
 
 /// The tool's own state (rule M5): the state, cache and config directories and the running binary. A path is
 /// refused when it is inside one of the directories, is one of them or is above one (their ancestors), or is
-/// the binary.
+/// the binary or one of its ancestors (deleting the binary's `target/` directory also breaks the stamp check).
+///
+/// Marked paths are canonical (M4 refuses symlink components), so the comparison must be too: build it with
+/// [`OwnState::canonical`] in production; [`OwnState::new`] compares the spellings it was given.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OwnState {
     dirs: Vec<PathBuf>,
-    binary: PathBuf,
+    binaries: Vec<PathBuf>,
 }
 
 /// The name of the directory each XDG base gets.
@@ -68,19 +71,37 @@ const APP_DIR: &str = "disk-cleanup";
 
 impl OwnState {
     /// `dirs` comes from the same resolution as the run (so `XDG_STATE_HOME` and `sudo` are honoured);
-    /// `binary` is the running executable.
+    /// `binary` is the running executable. Lexical: see [`OwnState::canonical`].
     pub fn new(dirs: &Dirs, binary: PathBuf) -> OwnState {
         OwnState {
             dirs: [&dirs.state, &dirs.cache, &dirs.config]
                 .into_iter()
                 .map(|d| d.join(APP_DIR))
                 .collect(),
-            binary,
+            binaries: vec![binary],
         }
     }
 
+    /// As [`OwnState::new`], plus the spelling `canon` gives each directory and the binary (symlinked XDG
+    /// directories, a binary reached through a link). `canon` must resolve links and tolerate a path that
+    /// does not exist yet (it is given `<base>/disk-cleanup` before the state directory is created).
+    #[must_use]
+    pub fn canonical(dirs: &Dirs, binary: PathBuf, canon: &dyn Fn(&Path) -> PathBuf) -> OwnState {
+        let mut own = OwnState::new(dirs, binary);
+        for d in [&dirs.state, &dirs.cache, &dirs.config] {
+            own.dirs.push(canon(d).join(APP_DIR));
+        }
+        let canon_binary = canon(&own.binaries[0]);
+        own.binaries.push(canon_binary);
+        own.dirs.sort();
+        own.dirs.dedup();
+        own.binaries.sort();
+        own.binaries.dedup();
+        own
+    }
+
     pub fn covers(&self, path: &Path) -> bool {
-        path == self.binary
+        self.binaries.iter().any(|b| b.starts_with(path))
             || self
                 .dirs
                 .iter()

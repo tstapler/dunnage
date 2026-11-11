@@ -254,6 +254,24 @@ impl MarkFacts for RealMarkFacts<'_> {
     }
 }
 
+/// `canonicalize` of the deepest ancestor that exists, with the missing tail appended unchanged.
+pub fn canonical_lenient(path: &Path) -> PathBuf {
+    let mut missing: Vec<&std::ffi::OsStr> = Vec::new();
+    let mut at = path;
+    loop {
+        if let Ok(real) = std::fs::canonicalize(at) {
+            return missing.iter().rev().fold(real, |p, c| p.join(c));
+        }
+        match (at.parent(), at.file_name()) {
+            (Some(parent), Some(name)) => {
+                missing.push(name);
+                at = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
+}
+
 fn mount_table() -> MountTable {
     MountTable::new(
         mount_sources()
@@ -269,7 +287,7 @@ pub fn mark_check_fn(base: &Dirs, roots: &RootSet, exe: PathBuf, tty: bool) -> A
     let scan_roots = roots.scan_roots().to_vec();
     let home = std::fs::canonicalize(&base.home).unwrap_or_else(|_| base.home.clone());
     let mounts = mount_table();
-    let own_state = OwnState::new(base, exe);
+    let own_state = OwnState::canonical(base, exe, &canonical_lenient);
     Arc::new(move |q: &MarkQuery<'_>| {
         let facts = RealMarkFacts {
             row_path: q.path,

@@ -603,6 +603,54 @@ fn identity_canon(p: &Path) -> io::Result<(PathBuf, Identity)> {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(600))]
 
+    /// Task 6.6.5i: `mark_check` and the engine agree. A path the screen accepts is allowed by
+    /// `decide_path_common`, and `DeletePolicy::for_allowed(..).validate` accepts it; a path
+    /// `decide_path_common` skips is refused on the screen.
+    #[test]
+    fn mark_check_should_agree_with_decide_path_common_and_the_below_scan_root_target(
+        path in abs_path(7), home in abs_path(5), r1 in abs_path(4), r2 in abs_path(4),
+    ) {
+        use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
+        prop_assume!(path != Path::new("/") && home != Path::new("/"));
+        let dirs = Dirs {
+            home: home.clone(),
+            state: home.join(".local/state"),
+            cache: home.join(".cache"),
+            config: home.join(".config"),
+        };
+        let Ok(rs) = disk_cleanup_core::roots::RootSet::resolve(
+            &dirs, &[], Some(&[r1, r2]), Path::new("/"), &identity_canon,
+        ) else {
+            return Ok(());
+        };
+        let mut w = world(home.to_str().unwrap(), &[]);
+        w.roots = rs.scan_roots().to_vec();
+        let screen = w.check(path.to_str().unwrap());
+        let decision = decide_path_common(
+            &Facts {
+                kind: Kind::ExplorerSelection,
+                path: path.clone(),
+                ident: Identity { dev: 1, ino: 5 },
+                is_symlink: false,
+                root_dev: RootDev(1),
+                is_mount_point: false,
+            },
+            &rs,
+        );
+        match decision {
+            GuardDecision::Skip(_) => prop_assert!(screen.is_err(), "{path:?}"),
+            GuardDecision::Allow(a) => {
+                if screen.is_ok() {
+                    let policy = DeletePolicy::for_allowed(
+                        &a, RootDev(1), 1, home.clone(), Identity { dev: 1, ino: 1 },
+                        rs.scan_roots().to_vec(),
+                    ).unwrap();
+                    prop_assert_eq!(policy.validate(path.file_name().unwrap()), Ok(()), "{:?}", path);
+                }
+            }
+        }
+    }
+
     /// M2 and the engine's rule F give equal answers: for a path M1 admits, the explorer refuses it with
     /// `ProtectedPath` exactly when `DeletePolicy::validate` does (for an allowed target equal to the path).
     #[test]
