@@ -109,8 +109,8 @@ selftest() {
   mfx "a build.rs fails" "has a build script" '' crates/tui/build.rs
   mfx "a [lib] path that leaves the crate fails" "leaves the crate" '\n[lib]\npath = "../core/src/lib.rs"\n'
   mfx "a [[bin]] path that leaves the crate fails" "leaves the crate" '\n[[bin]]\nname = "x"\npath = "../cli/src/main.rs"\n'
-  rm -rf "$d/m"; fixture "$d/m"; printf '\n[dev-dependencies]\ninsta = "1"\nproptest = "1"\nexpectrl = "0.7"\n' >> "$d/m/crates/tui/Cargo.toml"
-  expect 0 "the allowed dev-dependencies pass" "^ok:" "$self" "$d/m"
+  rm -rf "$d/m"; fixture "$d/m"; printf '\n[dev-dependencies]\ninsta = "1"\nproptest = "1"\nexpectrl = "0.7"\ndisk-cleanup-adapters = "0.1"\n' >> "$d/m/crates/tui/Cargo.toml"
+  expect 0 "the allowed dev-dependencies pass (adapters only for the pty probe example)" "^ok:" "$self" "$d/m"
   printf '\n[dependencies]\n[dependencies]\n' >> "$d/m/crates/tui/Cargo.toml"
   expect 2 "an unparsable manifest fails closed instead of passing" "cargo metadata failed" "$self" "$d/m"
 
