@@ -15,6 +15,8 @@ use rustix::fs::{flock, FlockOperation};
 use crate::signals::SignalState;
 use crate::state::{chown_if, Owner};
 
+const ENOSPC: i32 = 28;
+
 #[derive(Debug)]
 pub enum LockError {
     /// Another process holds the lock; `pid` is 0 when its pid line could not be read.
@@ -54,7 +56,13 @@ impl RunLock {
             Ok(()) => {
                 file.set_len(0).map_err(LockError::Io)?;
                 file.seek(SeekFrom::Start(0)).map_err(LockError::Io)?;
-                writeln!(file, "{}", std::process::id()).map_err(LockError::Io)?;
+                // The pid line only helps a second run name the holder. On a full state directory the write
+                // fails with ENOSPC while the flock is held: the run must go on (its reserves make room for the
+                // audit log), and a contender then sees pid 0.
+                match writeln!(file, "{}", std::process::id()) {
+                    Err(e) if e.raw_os_error() != Some(ENOSPC) => return Err(LockError::Io(e)),
+                    _ => {}
+                }
                 Ok(RunLock { _file: file })
             }
             Err(e) if e == rustix::io::Errno::WOULDBLOCK => Err(LockError::Held {

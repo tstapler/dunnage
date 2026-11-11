@@ -268,3 +268,124 @@ pub fn canary_violations(paths: &[String], allowed: &[PathBuf], exact: &[&str]) 
     bad.dedup();
     bad
 }
+
+// ---------------------------------------------------------------- Story 2.3.3 helpers
+
+use std::time::{Duration, SystemTime};
+
+/// The repository root (`CARGO_MANIFEST_DIR` is `crates/cli`).
+pub fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// `<dir>/f` holding `bytes` bytes, the file and the directory aged `days` days (so `--min-age` sees the age).
+pub fn aged_dir(dir: &Path, bytes: usize, days: u64) {
+    std::fs::create_dir_all(dir).expect("aged dir");
+    let file = dir.join("f");
+    std::fs::write(&file, vec![5u8; bytes]).expect("aged file");
+    let then = SystemTime::now() - Duration::from_secs(days * 86_400);
+    for p in [&file, &dir.to_path_buf()] {
+        std::fs::File::open(p)
+            .and_then(|f| f.set_modified(then))
+            .expect("set mtime");
+    }
+}
+
+/// The command lines of the first `Next:` block of a dry run: `^  (disk-cleanup|sudo ...) `; the explanation
+/// under each line is indented by six spaces and never matches.
+pub fn next_commands(stdout: &str) -> Vec<String> {
+    let mut in_next = false;
+    let mut out = Vec::new();
+    for line in stdout.lines() {
+        if line == "Next:" {
+            in_next = true;
+            continue;
+        }
+        if !in_next {
+            continue;
+        }
+        if line.is_empty() {
+            break;
+        }
+        let is_command = line.starts_with("  disk-cleanup ") || line.starts_with("  sudo ");
+        if is_command && !line.starts_with("   ") {
+            out.push(line.trim().to_string());
+        }
+    }
+    out
+}
+
+/// Runs a printed `Next:` command line under the fixture environment with stdin from `/dev/null`: the binary
+/// name is swapped for the binary under test, nothing else changes. A `sudo` line is a test failure.
+pub fn run_line(fx: &Fixture, line: &str) -> Output {
+    assert!(
+        !line.contains('\'') && !line.contains('"') && !line.starts_with("sudo "),
+        "a fixture run cannot take this line: {line}"
+    );
+    let mut words = line.split_whitespace();
+    assert_eq!(words.next(), Some("disk-cleanup"), "{line}");
+    fx.fixture_cmd()
+        .args(words)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("run the Next line")
+}
+
+pub fn text_of(out: &Output) -> (String, String) {
+    (
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+/// `unshare -rm` works here (rootless user and mount namespace). The rehearsal tests are a named skip without
+/// it unless `DC_REQUIRE_UNSHARE=1`.
+pub fn unshare_works() -> bool {
+    let ok = Command::new("unshare")
+        .args(["-rm", "true"])
+        .output()
+        .is_ok_and(|o| o.status.success());
+    if !ok {
+        assert!(
+            std::env::var_os("DC_REQUIRE_UNSHARE").is_none(),
+            "DC_REQUIRE_UNSHARE is set and `unshare -rm` does not work"
+        );
+        eprintln!(
+            "SKIP: unshare -rm does not work here (DC_REQUIRE_UNSHARE=1 makes this a failure)"
+        );
+    }
+    ok
+}
+
+/// names, sizes, modes and mtimes of everything below `dir` (what "unchanged" means for a dry run).
+pub fn tree_hash(dir: &Path) -> BTreeMap<PathBuf, String> {
+    use std::os::unix::fs::MetadataExt;
+    fn walk(base: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, String>) {
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for e in rd.flatten() {
+            let p = e.path();
+            let Ok(m) = std::fs::symlink_metadata(&p) else {
+                continue;
+            };
+            let rel = p.strip_prefix(base).unwrap_or(&p).to_path_buf();
+            out.insert(
+                rel,
+                format!(
+                    "size={} mode={:o} mtime={}.{:09}",
+                    m.len(),
+                    m.mode(),
+                    m.mtime(),
+                    m.mtime_nsec()
+                ),
+            );
+            if m.is_dir() {
+                walk(base, &p, out);
+            }
+        }
+    }
+    let mut out = BTreeMap::new();
+    walk(dir, dir, &mut out);
+    out
+}

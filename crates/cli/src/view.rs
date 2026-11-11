@@ -506,7 +506,12 @@ pub fn commands(input: &PlanInput) -> Vec<NextCmd> {
         });
     }
 
-    let selected_ids: Vec<SelectorId> = sel.kinds().ids().collect();
+    // A default kind this build does not ship (`worktrees` before Gate C) must not be echoed: naming it exits 64.
+    let selected_ids: Vec<SelectorId> = sel
+        .kinds()
+        .ids()
+        .filter(|id| !input.not_built.iter().any(|n| n == id.id()))
+        .collect();
     let add_rows: Vec<&ItemRow> = rows.iter().filter(|r| is_add_on_row(r)).collect();
     if !add_rows.is_empty() {
         let mut ids = selected_ids.clone();
