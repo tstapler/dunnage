@@ -34,6 +34,7 @@ pub use dirops::{
 
 pub use command::RealCommandRunner;
 pub use docker_cli::DockerCli;
+pub use explore::lister::RealDirLister;
 pub use explore::signals::RealTermSignals;
 pub use fiemap::FiemapProbe;
 pub use probe::RealProbe;

@@ -32,3 +32,5 @@ serde_json.workspace = true
 disk-cleanup-adapters = { path = ".", features = ["test-support"] }
 tempfile = "3"
 proptest = "1"
+# a safe counting allocator for the lister's memory bound; check-token-sites.sh forbids `unsafe` in tests
+peak_alloc = "0.3"
