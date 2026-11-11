@@ -364,6 +364,16 @@ fn a_bad_dc_test_root_should_exit_64_in_every_mode() {
 fn a_fixture_apply_should_pass_confinement_and_reach_the_gate_a_refusal() {
     let fx = Fixture::new();
     let out = fx.fixture_cmd().arg("--apply").output().unwrap();
+    if cfg!(feature = "gate-b") {
+        // A Gate B build registers `caches`: the same run passes confinement and applies (nothing to remove).
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        return;
+    }
     assert_eq!(out.status.code(), Some(64));
     assert!(String::from_utf8_lossy(&out.stderr).contains("apply is not enabled in this build"));
 }
