@@ -219,8 +219,7 @@ fn unmutated_fixtures_should_parse() {
 }
 
 #[test]
-fn empty_ps_a_with_containers_in_system_df_should_make_docker_Unavailable_and_no_volume_removable_When_counts_differ(
-) {
+fn safety_empty_ps_a_with_containers_in_system_df_makes_no_volume_removable() {
     let r = healthy_but(&[PS]);
     r.on(PS, ok(""));
     let cli = DockerCli::new(&r, None);

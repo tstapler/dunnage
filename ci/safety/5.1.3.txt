@@ -1,0 +1,31 @@
+# Story 5.1.3: the 22 named guarantees of `make safety`, one test (or more) each. A name already listed by its owning story is repeated
+# here on purpose: this file is the checklist, and the manifest check de-duplicates. G<n> is the guarantee's position in the plan's AC.
+safety_dirty_worktree_not_removed_when_a_file_appears_after_planning   # G1 dirty worktree not removed
+safety_locked_worktree_not_removed_when_locked_after_planning          # G2 locked worktree not removed
+safety_out_of_root_cache_not_deleted                                   # G3 out of root: caches (Exact table paths)
+safety_out_of_root_build_dir_not_deleted                               # G3 out of root: build dirs against the scan roots
+safety_out_of_root_worktree_not_removed                                # G3, G6 out of root: worktrees
+safety_steam_remnant_names_outside_scope_refused                       # G3 out of root: Steam library
+safety_build_dir_symlink_swap_leaves_target_alone                      # G4 symlinked build dir not followed
+safety_symlinked_worktree_dir_not_removed_and_target_untouched         # G5 symlinked agent-* worktree dir not removed
+safety_bare_run_deletes_nothing                                        # G7 bare run deletes nothing
+safety_force_and_yes_flags_rejected                                    # G8 --force and -y rejected
+safety_docker_never_issues_a_broad_prune                               # G9 Docker system prune never issued
+safety_mislabelled_mutating_cmd_refused                                # G10 mislabelled mutating Cmd refused in plan mode
+safety_fixture_home_canary                                             # G11 fixture-HOME canary
+safety_floor_rule_both_sides                                           # G12 floor rule F, both sides
+safety_bind_mount_below_target_refused                                 # G13 bind mount below the target (unshare -rm)
+safety_worktree_removal_never_uses_force_or_prune                      # G14 worktree removal argv, engine side
+safety_worktree_removal_grep_fixtures_and_repo_clean                   # G14 worktree removal argv, grep fixtures
+safety_token_site_and_release_feature_checks_selftest                  # G15 token-site and release-feature checks with --selftest
+safety_unconfined_apply_refused_with_and_without_the_cargo_environment # G16 unconfined --apply refused (both profiles via make safety)
+safety_confined_runner_refuses_brew_cleanup_outside_the_fixture        # G17 ConfinedCommandRunner refuses brew cleanup outside the fixture
+safety_empty_ps_a_with_containers_in_system_df_makes_no_volume_removable # G18 empty docker ps -a never marks a volume removable
+safety_destructive_apply_needs_plan_id                                 # G19 destructive --apply needs --plan-id (exit 64)
+safety_build_dirs_apply_needs_plan_id                                  # G19
+safety_steam_apply_needs_plan_id                                       # G19
+safety_docker_volume_younger_than_30d_not_removed                      # G20 Docker volume younger than 30 d
+safety_docker_volume_database_like_or_unreadable_not_removed           # G20 database-like or unreadable
+safety_proton_prefix_with_a_recent_file_inside_not_removed             # G21 Proton prefix with a recent file inside
+safety_steam_saves_protected_without_discard                           # G21 Proton prefix with saves
+safety_steam_remnant_not_offered_while_any_library_unmounted           # G22 Steam remnant while a library is unmounted
