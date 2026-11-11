@@ -532,7 +532,7 @@ pub fn destructive_gate(
     };
     let age = now - entry.saved_at;
     // A `saved_at` in the future (a clock stepped back) would never age out: treat it as stale (review C10).
-    if age > SAVED_TTL_SECS || age < 0 {
+    if !(0..=SAVED_TTL_SECS).contains(&age) {
         return Err(GateRefusal::Stale {
             supplied: id,
             age_secs: age,

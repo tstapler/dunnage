@@ -170,10 +170,10 @@ impl VerifyReport {
 
     /// 2 a deletion, partial deletion or intent outside the allowed roots; 1 only unjudged lines.
     pub fn exit_code(&self) -> i32 {
-        if !self.violations.is_empty() {
-            2
-        } else {
+        if self.violations.is_empty() {
             i32::from(!self.warnings.is_empty())
+        } else {
+            2
         }
     }
 }

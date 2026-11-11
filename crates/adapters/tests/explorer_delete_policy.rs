@@ -39,13 +39,13 @@ fn scope_for(f: &Fixture, path: &Path) -> Result<Allowed, SkipReason> {
     }
 }
 
-fn policy(f: &Fixture, scope: Allowed) -> DeletePolicy {
+fn policy(f: &Fixture, scope: &Allowed) -> DeletePolicy {
     let roots = roots_for(f);
     let mnt = RealDirOps::confined_to(&f.code);
     let root = open_verified_root(&mnt, &f.code, ident(&f.code)).unwrap();
     let opened = disk_cleanup_adapters::DirOps::fstat(&mnt, root.dir()).unwrap();
     DeletePolicy::for_allowed(
-        &scope,
+        scope,
         RootDev(ident(&f.code).dev),
         opened.mnt_id.unwrap_or(1),
         roots.home().to_path_buf(),
@@ -81,7 +81,7 @@ fn delete_tree_should_remove_a_marked_directory_When_the_policy_is_built_from_it
     fs::create_dir_all(dir.join("sub")).unwrap();
     fs::write(dir.join("sub/x"), b"x").unwrap();
     let scope = scope_for(&f, &dir).expect("a directory below the root is allowed");
-    run(&f, &policy(&f, scope), &dir).unwrap();
+    run(&f, &policy(&f, &scope), &dir).unwrap();
     assert!(!dir.exists());
     assert!(f.code.join("app").exists(), "the parent stays");
 }
@@ -106,7 +106,7 @@ fn safety_explorer_scope_made_for_one_path_refuses_dot_git_and_leaves_it_When_re
     fs::create_dir_all(&ok).unwrap();
     fs::create_dir_all(git.join("objects")).unwrap();
     let scope = scope_for(&f, &ok).unwrap();
-    let mut p = policy(&f, scope);
+    let mut p = policy(&f, &scope);
     p.target = git.clone();
     assert_eq!(run(&f, &p, &git), Err(DeleteError::OutsideScope));
     assert!(git.join("objects").exists());
@@ -117,7 +117,7 @@ fn for_allowed_should_build_only_a_BelowScanRoot_policy_with_the_roots_mount_id_
     let f = fixture();
     let ok = f.code.join("app/data");
     fs::create_dir_all(&ok).unwrap();
-    let p = policy(&f, scope_for(&f, &ok).unwrap());
+    let p = policy(&f, &scope_for(&f, &ok).unwrap());
     assert!(matches!(p.allowed, AllowedTarget::BelowScanRoot(_)));
     assert!(p.root_mnt.is_some());
     assert!(p.require_sibling_any.is_empty());
@@ -132,7 +132,7 @@ fn delete_tree_should_refuse_a_regular_file_with_the_engines_own_error_When_one_
     fs::write(&file, b"keep").unwrap();
     let scope = scope_for(&f, &file).unwrap();
     assert_eq!(
-        run(&f, &policy(&f, scope), &file),
+        run(&f, &policy(&f, &scope), &file),
         Err(DeleteError::Symlink)
     );
     assert!(file.exists());

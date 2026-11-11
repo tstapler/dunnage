@@ -165,7 +165,8 @@ fn child_sees_a_real_bind_mount() {
         cache: home.join("c"),
         config: home.join("g"),
     };
-    let rootset = RootSet::resolve(&dirs, &[code.clone()], None, &home, &canon).unwrap();
+    let rootset =
+        RootSet::resolve(&dirs, std::slice::from_ref(&code), None, &home, &canon).unwrap();
     let GuardDecision::Allow(allowed) = decide_path_common(
         &Facts {
             kind: Kind::ExplorerSelection,
