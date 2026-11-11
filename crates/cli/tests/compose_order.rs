@@ -434,7 +434,11 @@ fn a_starved_filesystem_should_refuse_with_exit_3_after_the_audit_opened_and_bef
         "{}",
         r.stderr
     );
-    assert!(!rig.audit.calls().contains(&AuditCall::Intent));
+    assert_eq!(
+        rig.audit.calls(),
+        [AuditCall::RunStart, AuditCall::RunEnd],
+        "the refused run is closed in the log: no intent, and no 'previous run did not finish' next time"
+    );
     assert!(c.executed().is_empty());
 }
 
