@@ -864,6 +864,11 @@ impl WalkerBackend {
         // (4) the cache is saved only while the gate is set, from the visited records plus the old
         // records of directories this run did not reach.
         if let Some(c) = cfg.filter(|_| req.save.load(Ordering::Relaxed)) {
+            let refused = req.save_guard.as_ref().and_then(|g| g(&c.path).err());
+            if let Some(why) = refused {
+                summary.notes.push(format!("cache not saved: {why}"));
+                return Ok(summary);
+            }
             let mut next = ctx.old;
             if !summary.truncated {
                 next.retain(|p, _| !roots.iter().any(|r| p.starts_with(r)));

@@ -149,7 +149,13 @@ pub struct StreamRequest<'a> {
     pub save: Arc<AtomicBool>,
     /// Largest batch handed to the sink.
     pub batch_max: usize,
+    /// Asked just before the cache is written (and only while `save` is set); `Err(why)` skips the write
+    /// and records the note `cache not saved: <why>`. Lets a caller refuse a save on a nearly full disk.
+    pub save_guard: Option<SaveGuard>,
 }
+
+/// See [`StreamRequest::save_guard`].
+pub type SaveGuard = Arc<dyn Fn(&Path) -> std::result::Result<(), String> + Send + Sync>;
 
 impl<'a> StreamRequest<'a> {
     pub fn new(collect: CollectRequest<'a>, cancel: Arc<AtomicBool>) -> Self {
@@ -159,6 +165,7 @@ impl<'a> StreamRequest<'a> {
             paint_from_cache: false,
             save: Arc::new(AtomicBool::new(true)),
             batch_max: DEFAULT_BATCH_MAX,
+            save_guard: None,
         }
     }
 }
