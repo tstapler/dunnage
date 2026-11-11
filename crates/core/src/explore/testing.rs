@@ -7,14 +7,14 @@ use std::sync::{Arc, Mutex};
 
 use super::msg::{FileRows, PlanPreview, ScanMsg};
 
-/// The walker's record types, so a crate that builds `NodeEvent`s in tests (the `tui` crate, which may not
-/// depend on the scan crate) names them here.
-pub use disk_cleanup_scan::estimate::Stats;
-pub use disk_cleanup_scan::index::DirInfo;
 use super::ports::{
     DirLister, ExplorerActions, Handoff, PreviewHandle, ScanHandle, ScanOpts, ScanSource,
     TermSignals,
 };
+/// The walker's record types, so a crate that builds `NodeEvent`s in tests (the `tui` crate, which may not
+/// depend on the scan crate) names them here.
+pub use disk_cleanup_scan::estimate::Stats;
+pub use disk_cleanup_scan::index::DirInfo;
 
 /// The channel depth of the real source; a consumer that stops receiving blocks the sender.
 pub const FAKE_CHANNEL_DEPTH: usize = 64;
