@@ -18,6 +18,11 @@ unicode-width = "0.2"
 
 [dev-dependencies]
 disk-cleanup-core = { path = "../core", features = ["test-support"] }
+# Only the probe example needs a real signal source; the library may not depend on it (scripts/check-tui-deps.sh).
+disk-cleanup-adapters = { path = "../adapters", features = ["test-support"] }
 insta = "1"
 proptest = "1"
 expectrl = "0.7"
+
+[[example]]
+name = "guard_probe"

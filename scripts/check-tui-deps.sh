@@ -10,7 +10,7 @@
 # shellcheck disable=SC2016
 set -u -o pipefail
 allowed_deps='disk-cleanup-core ratatui crossterm unicode-width'
-allowed_dev_deps='insta proptest expectrl'
+allowed_dev_deps='insta proptest expectrl disk-cleanup-adapters'
 
 manifest_half() { # $1 = root
   local root=$1 meta pkg bad=0 line kind name dir
