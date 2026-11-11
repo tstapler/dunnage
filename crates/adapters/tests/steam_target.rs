@@ -107,8 +107,8 @@ fn age(p: &Path, days: u64) {
 
 /// Ages the symlink itself (not what it points to).
 fn age_link(p: &Path, days: u64) {
-    use rustix::fs::{utimensat, AtFlags, Timestamps, CWD};
     use rustix::fs::Timespec;
+    use rustix::fs::{utimensat, AtFlags, Timestamps, CWD};
     let t = Timespec {
         tv_sec: i64::try_from(
             (SystemTime::now() - DAY * u32::try_from(days).unwrap())
@@ -440,7 +440,7 @@ fn prefix_with_save(s: &Steam, id: &str, dir: &str) -> PathBuf {
 }
 
 #[test]
-fn guard_should_skip_may_hold_saves_naming_the_dir_When_a_save_directory_holds_a_file() {
+fn safety_steam_saves_protected_without_discard() {
     let s = steam(&[]);
     manifest(&s.libs[0], 620, "Portal 2");
     let dirs = [
@@ -536,7 +536,7 @@ fn apply_should_remove_the_orphan_prefix_and_audit_kind_steam_prefix_When_the_pl
 }
 
 #[test]
-fn apply_should_skip_symlink_and_leave_the_target_alone_When_the_prefix_dir_is_a_symlink() {
+fn safety_steam_symlinked_prefix_and_remnant_leave_target_alone() {
     let s = steam(&[]);
     manifest(&s.libs[0], 620, "Portal 2");
     let victim = s.base.join("victim");
@@ -753,7 +753,7 @@ fn apply_should_remove_the_remnant_and_audit_kind_steam_remnant_When_the_plan_id
 }
 
 #[test]
-fn execute_should_refuse_with_outside_scope_When_the_installdir_is_dot_dot_hidden_or_has_a_slash() {
+fn safety_steam_remnant_names_outside_scope_refused() {
     let s = remnant_fixture();
     let (t, rig) = (target(&s), Rig::new(&s));
     let env = rig.env();
@@ -790,7 +790,7 @@ fn execute_should_refuse_with_outside_scope_When_the_installdir_is_dot_dot_hidde
 // ------------------------------------------------------------------ execute-time re-check
 
 #[test]
-fn guard_before_delete_should_skip_steam_running_and_execute_remove_nothing_When_steam_starts_after_the_plan(
+fn safety_steam_running_at_execute_removes_nothing(
 ) {
     let s = remnant_fixture();
     let orphan = entry(&s.libs[0], "compatdata", "99999", 100, 90);
@@ -813,7 +813,7 @@ fn guard_before_delete_should_skip_steam_running_and_execute_remove_nothing_When
 }
 
 #[test]
-fn guard_before_delete_should_skip_library_unmounted_When_a_library_disappears_after_the_plan() {
+fn safety_steam_unmounted_library_at_execute_removes_nothing() {
     let s = remnant_fixture();
     let t = target(&s);
     let rig = Rig::new(&s);

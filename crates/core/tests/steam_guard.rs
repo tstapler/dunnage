@@ -83,7 +83,11 @@ fn decide(f: &SteamGuardFacts, saves: Option<Discard>) -> SteamGuard {
 fn decide_should_allow_each_kind_When_old_orphan_with_no_saves() {
     for f in [
         prefix(31),
-        facts(Kind::SteamShaderCache, "/lib/steamapps/shadercache/99999", 31),
+        facts(
+            Kind::SteamShaderCache,
+            "/lib/steamapps/shadercache/99999",
+            31,
+        ),
         facts(Kind::SteamRemnant, "/lib/steamapps/common/OldGame", 31),
     ] {
         assert!(matches!(decide(&f, None), SteamGuard::Allow(_)), "{f:?}");
@@ -95,7 +99,11 @@ fn decide_should_apply_the_age_rule_to_the_newest_file_inside_with_a_sharp_bound
     assert!(matches!(decide(&prefix(30), None), SteamGuard::Allow(_)));
     assert_eq!(skip(decide(&prefix(29), None)).0, SkipReason::TooRecent);
     for f in [
-        facts(Kind::SteamShaderCache, "/lib/steamapps/shadercache/99999", 2),
+        facts(
+            Kind::SteamShaderCache,
+            "/lib/steamapps/shadercache/99999",
+            2,
+        ),
         facts(Kind::SteamRemnant, "/lib/steamapps/common/OldGame", 2),
     ] {
         assert_eq!(skip(decide(&f, None)).0, SkipReason::TooRecent);
@@ -124,7 +132,11 @@ fn decide_should_skip_may_hold_saves_naming_the_dir_unless_discard_or_not_a_pref
         decide(&f, Some(Discard::Discard)),
         SteamGuard::Allow(_)
     ));
-    let mut shader = facts(Kind::SteamShaderCache, "/lib/steamapps/shadercache/99999", 90);
+    let mut shader = facts(
+        Kind::SteamShaderCache,
+        "/lib/steamapps/shadercache/99999",
+        90,
+    );
     shader.saves_dir = Some("Documents".into());
     assert!(matches!(decide(&shader, None), SteamGuard::Allow(_)));
 }
@@ -153,7 +165,10 @@ fn decide_should_skip_identity_changed_When_the_inode_differs_or_a_manifest_now_
     g.still_orphan = false;
     assert_eq!(
         skip(decide(&g, None)),
-        (SkipReason::IdentityChanged, Some(DETAIL_NOW_INSTALLED.into()))
+        (
+            SkipReason::IdentityChanged,
+            Some(DETAIL_NOW_INSTALLED.into())
+        )
     );
 }
 

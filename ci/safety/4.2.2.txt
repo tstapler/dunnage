@@ -1,0 +1,7 @@
+# Story 4.2.2: steam orphans, shader caches and remnants (adapters/tests/steam_target.rs; the cli one needs gate-d)
+safety_steam_apply_needs_plan_id                          # cli, gate-d: no id, an altered id: exit 64, library trees unchanged
+safety_steam_running_at_execute_removes_nothing           # Steam starting after the plan: SteamRunning at the pre-delete guard, nothing removed
+safety_steam_unmounted_library_at_execute_removes_nothing # a library vanishing after the plan: LibraryUnmounted, nothing removed
+safety_steam_symlinked_prefix_and_remnant_leave_target_alone  # a link in compatdata/common is Skip(Symlink), its target untouched
+safety_steam_saves_protected_without_discard              # a prefix with files under Documents/AppData/... stays without --steam-saves discard
+safety_steam_remnant_names_outside_scope_refused          # installdir `..`, `.hidden`, `a/b` are refused with OutsideScope
