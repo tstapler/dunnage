@@ -40,7 +40,11 @@ document adds `freed_bytes` and a `summary` object.
 
 ## `status` and `kinds`
 
-`status`: `path`, `verdict` (`ok|warn|crit|unknown`), `fs`. `kinds`: `kinds[]` of `{id, family, tier,
+`status` is a superset of the old `metascope status --json`: `fs` (the `/sys/fs/btrfs/<uuid>` directory, null off btrfs),
+`allocation`, `unallocated_bytes`, `metadata_headroom_bytes`, `verdict` (`ok|warn|crit|unknown`) and `findings[]` keep
+their old values; `path`, `filesystem` (`{before, after}` df snapshots), `notes[]` and `errors[]` are added. Exit 0, 1
+and 2 are ok, warn and crit; 74 is an unreadable state (`verdict: "unknown"`, `errors[0].code` `state_unreadable`).
+`audit verify --json`: `deletions`, `runs`, `violations[]` of `{run_id, kind, path, reason}`, `unfinished_runs[]`. `kinds`: `kinds[]` of `{id, family, tier,
 default, available, min_age, touches}`.
 
 ## Reading the report by column
