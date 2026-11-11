@@ -59,7 +59,7 @@ dc_integration_tests(
     proc_macro_deps = all_crate_deps(proc_macro = True) + all_crate_deps(proc_macro_dev = True),
     per_test = {
         # Drives the loop with a real-time key script (100/200/600 ms): misses its frame when the machine is
-        # saturated (failed in 3 of 5 full runs at load 30+, passes 6 of 6 alone).
+        # saturated (failed in 3 of 6 full runs at load 20 to 35, passes 6 of 6 alone).
         "loop_fake": {"flaky": True},
         "pty_restore": {
             "data": [":guard_probe"],

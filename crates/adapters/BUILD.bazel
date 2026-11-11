@@ -50,7 +50,7 @@ dc_unit_and_doc_tests(
     name = "adapters",
     crate = ":adapters_ts",
     # probe::run_state's flock test races with sibling tests that fork (its own comment says so); under load the
-    # window widens (observed 2 of 3 full runs at load 34, 0 of 6 alone). Bazel retries it up to 3 times.
+    # window widens (observed 3 of 6 full runs at load 20 to 35, 0 of 6 alone). Bazel retries it up to 3 times.
     flaky = True,
     data = TEST_DATA,
     deps = all_crate_deps(normal_dev = True),
@@ -79,7 +79,7 @@ dc_integration_tests(
             "tags": ["requires-btrfs"],
         },
         # Asserts the name of the process holding a cwd; a sibling test's forked-but-not-yet-exec'd child shows the
-        # test binary's name instead (seen once in 4 full runs at load 34, 0 of 8 alone). Same race as the unit test.
+        # test binary's name instead (seen once in 5 full runs at load 20 to 35, 0 of 8 alone). Same race as the unit test.
         "probe_cwd": {"flaky": True},
         "explore_signals": {
             "data": [":dc-sigprobe"],
