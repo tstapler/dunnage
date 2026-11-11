@@ -160,6 +160,13 @@ pub trait Target: Send + Sync {
         Vec::new()
     }
 
+    /// Whether `execute` of `c` ended by leaving its command running in the kernel because the run was
+    /// interrupted (Story 4.3.2). The executor then records the item as `Status::Running` and the run as
+    /// interrupted.
+    fn left_running(&self, _c: &Candidate) -> bool {
+        false
+    }
+
     /// The size of the duplicate set `c` belongs to, for the `kept as newest of N duplicates` text.
     fn duplicate_set_size(&self, _c: &Candidate) -> Option<usize> {
         None

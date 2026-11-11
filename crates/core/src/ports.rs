@@ -91,11 +91,30 @@ const TABLE: &[(&str, Class, &[T])] = &[
             P("until="),
         ],
     ),
+    // Story 4.3.2: `-dusage=0` only moves empty chunks; every other step is bounded to 8 chunks by the
+    // filter's own `limit`, so an unbounded `-dusage=N` is not a row. One `-d` token: the filters of one
+    // chunk type are comma-separated (btrfs-balance(8)).
     ("btrfs", M, &[L("balance"), L("start"), L("-dusage=0"), V]),
-    ("btrfs", M, &[L("balance"), L("start"), L("-dusage=5"), V]),
-    ("btrfs", M, &[L("balance"), L("start"), L("-dusage=10"), V]),
-    ("btrfs", M, &[L("balance"), L("start"), L("-dusage=20"), V]),
-    ("btrfs", M, &[L("balance"), L("start"), L("-dusage=40"), V]),
+    (
+        "btrfs",
+        M,
+        &[L("balance"), L("start"), L("-dusage=5,limit=8"), V],
+    ),
+    (
+        "btrfs",
+        M,
+        &[L("balance"), L("start"), L("-dusage=10,limit=8"), V],
+    ),
+    (
+        "btrfs",
+        M,
+        &[L("balance"), L("start"), L("-dusage=20,limit=8"), V],
+    ),
+    (
+        "btrfs",
+        M,
+        &[L("balance"), L("start"), L("-dusage=40,limit=8"), V],
+    ),
     ("fstrim", M, &[L("-v"), V]),
     ("go", M, &[L("clean"), L("-cache")]),
     ("pip", M, &[L("cache"), L("purge")]),
@@ -144,6 +163,9 @@ const TABLE: &[(&str, Class, &[T])] = &[
     ("docker", R, &[L("system"), L("df")]),
     ("docker", R, &[L("context"), L("show")]),
     ("btrfs", R, &[L("balance"), L("status"), V]),
+    // Story 4.3.2: is a scrub or the balance timer running before a balance starts
+    ("btrfs", R, &[L("scrub"), L("status"), V]),
+    ("systemctl", R, &[L("is-active"), L("btrfs-balance.timer")]),
     ("go", R, &[L("env"), V]),
     ("pip", R, &[L("cache"), L("dir")]),
     ("pip3", R, &[L("cache"), L("dir")]),
@@ -245,6 +267,20 @@ pub trait CommandRunner: Send + Sync {
         w: &WorktreeRemoval,
         proof: &ApplyToken,
     ) -> Result<CmdOutput, DeleteError>;
+
+    /// [`run_mutating`](Self::run_mutating) for a command that runs in the kernel and that this tool must not
+    /// cancel (`btrfs balance`, Story 4.3.2): when `abort` is set the wait ends and the result is `Ok(None)`
+    /// while the command is left running in its own process group. The default cannot stop waiting, so it
+    /// just waits.
+    fn run_mutating_unless_aborted(
+        &self,
+        cmd: &Cmd,
+        proof: &ApplyToken,
+        abort: &AbortFlag,
+    ) -> Result<Option<CmdOutput>, DeleteError> {
+        let _ = abort;
+        self.run_mutating(cmd, proof).map(Some)
+    }
 }
 
 /// Plan-mode runner: forwards read-only rows to `inner` and refuses everything that mutates.

@@ -96,6 +96,8 @@ pub fn reason(why: SkipReason, facts: &ReasonFacts, ctx: &TextCtx) -> String {
             Some(path) => text.replace("<path>", &path.to_string_lossy()),
             None => "Steam library not mounted".into(),
         },
+        // Story 4.3.2: the detail names which job is in the way (balance, scrub or the timer).
+        SkipReason::AlreadyRunning => detail.map_or_else(|| text.to_string(), str::to_string),
         SkipReason::ToolMissing => with(text, "<tool>", detail, "a required tool is not installed"),
         SkipReason::NonLocalDockerContext => with(
             text,

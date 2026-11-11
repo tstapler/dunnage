@@ -477,6 +477,7 @@ impl<'a> Executor<'a> {
                 attribution_pct: None,
                 causes: Vec::new(),
                 explained: false,
+                interrupted: false,
             });
             return Err(refused_fatal(&fatal, &notes, plan_id));
         }
@@ -549,6 +550,7 @@ impl<'a> Executor<'a> {
             attribution_pct: summary.attribution_pct,
             causes: summary.causes.clone(),
             explained: summary.explained,
+            interrupted: matches!(abort, Some(AbortCause::Interrupted(_))),
         };
         hooks.step("run_end");
         let end_errno = env
@@ -772,6 +774,12 @@ impl<'a> Executor<'a> {
         }
         let started = Instant::now();
         let out = match target.execute(c, env, shared.token) {
+            Ok(freed) if target.left_running(c) => {
+                if let Some(cause) = self.abort_cause(shared) {
+                    lock(&shared.abort).get_or_insert(cause);
+                }
+                outcome(env, run_id, c, Status::Running, freed, started)
+            }
             Ok(freed) => outcome(env, run_id, c, Status::Removed, freed, started),
             Err(DeleteFailure { error, freed }) => {
                 if is_no_space(&error) {

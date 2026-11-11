@@ -105,6 +105,9 @@ pub enum Status {
     Removed,
     Skipped(SkipReason),
     Error(String),
+    /// The command was started and this tool stopped waiting for it while it still ran (a `btrfs balance`
+    /// after SIGINT, Story 4.3.2). Not removed, not an error: the kernel finishes it.
+    Running,
 }
 
 /// One row per item; equals one audit `result` line. The byte fields are named `est_bytes` and

@@ -94,6 +94,7 @@ fn end(run: &str) -> RunEnd {
         attribution_pct: Some(100.0),
         causes: vec![],
         explained: true,
+        interrupted: false,
     }
 }
 

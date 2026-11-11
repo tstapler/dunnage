@@ -136,3 +136,43 @@ fn cache_apt_needs_root_should_name_the_finest_id_with_a_quoted_binary_path_and_
     );
     assert!(!text.contains("--kinds caches"));
 }
+
+#[test]
+fn btrfs_needs_root_should_print_the_sudo_line_with_the_absolute_binary_path_and_the_finest_id() {
+    let sel = default_selection();
+    let exe = PathBuf::from("/home/u/.cargo/bin/disk-cleanup");
+    let ctx = TextCtx {
+        selection: &sel,
+        selector: SelectorId::Btrfs,
+        exe: &exe,
+        ascii_only: true,
+    };
+    assert_eq!(
+        next_action(SkipReason::NeedsRoot, &ReasonFacts::default(), &ctx),
+        "sudo /home/u/.cargo/bin/disk-cleanup --apply --kinds btrfs"
+    );
+}
+
+#[test]
+fn already_running_should_name_which_job_is_in_the_way_when_the_target_gives_a_detail() {
+    let sel = default_selection();
+    let exe = PathBuf::from("/x/disk-cleanup");
+    let ctx = TextCtx {
+        selection: &sel,
+        selector: SelectorId::Btrfs,
+        exe: &exe,
+        ascii_only: true,
+    };
+    let facts = ReasonFacts {
+        detail: Some("not started: a btrfs scrub is running".into()),
+        ..ReasonFacts::default()
+    };
+    assert_eq!(
+        reason(SkipReason::AlreadyRunning, &facts, &ctx),
+        "not started: a btrfs scrub is running"
+    );
+    assert_eq!(
+        reason(SkipReason::AlreadyRunning, &ReasonFacts::default(), &ctx),
+        "btrfs balance already running"
+    );
+}

@@ -1,0 +1,5 @@
+# Story 4.3.2 (Gate D, btrfs balance): always active; the tests are in crates/adapters/tests/btrfs_balance.rs.
+safety_btrfs_balance_is_never_cancelled_by_the_tool  # a signal ends the wait; no `balance cancel` argv is issued or runnable
+safety_btrfs_balance_non_root_runs_no_command_and_never_sudo  # euid != 0: Skip(NeedsRoot), no command at all
+safety_btrfs_balance_non_zero_steps_are_bounded_and_need_one_gib_unallocated  # -dusage=N>0 carries limit=8 and waits for 1 GiB
+safety_btrfs_balance_never_starts_beside_a_running_job  # a balance, scrub or the timer in the way: Skip(AlreadyRunning)

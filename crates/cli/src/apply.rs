@@ -85,6 +85,11 @@ pub fn apply_rows(input: &ApplyInput) -> Vec<ItemRow> {
                 }
                 Status::Skipped(r) => (RowStatus::Skip, Some(*r), None),
                 Status::Error(t) => (RowStatus::Err, None, Some(t.clone())),
+                Status::Running => (
+                    RowStatus::Err,
+                    None,
+                    Some("still running in the kernel; this tool does not stop it".to_string()),
+                ),
             };
             let freed = (status == RowStatus::Freed).then(|| match o.freed.attributed_bytes.0 {
                 0 => o.measured_bytes.unwrap_or(0),
@@ -551,8 +556,21 @@ fn quiet_summary(out: &mut Out, input: &ApplyInput, rows: &[ItemRow]) {
     out.text(&s.measured_line);
     out.text(&s.attribution_line);
     out.text(&remainder_line(s));
+    balance_running_line(out, input);
     errors_section(out, input, rows);
     spent_line(out, input);
+}
+
+/// The hand-over line of a balance this run left running (Story 4.3.2): the tool never cancels it.
+fn balance_running_line(out: &mut Out, input: &ApplyInput) {
+    if input
+        .summary
+        .outcomes
+        .iter()
+        .any(|o| o.status == Status::Running && o.kind == disk_cleanup_core::Kind::BtrfsBalance)
+    {
+        out.text(disk_cleanup_core::targets::btrfs_guard::BALANCE_STILL_RUNNING);
+    }
 }
 
 fn full_summary(out: &mut Out, input: &ApplyInput, rows: &[ItemRow]) {
@@ -576,6 +594,7 @@ fn full_summary(out: &mut Out, input: &ApplyInput, rows: &[ItemRow]) {
             units::count(n, "item", "items")
         ));
     }
+    balance_running_line(out, input);
     if input.exit_code == 2 {
         let avail = s.fs_after.as_ref().unwrap_or(&s.fs_before).avail_bytes;
         out.text(&format!(

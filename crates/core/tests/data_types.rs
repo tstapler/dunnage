@@ -60,6 +60,7 @@ fn audit_record_should_roundtrip_each_line_type_with_a_type_tag() {
         measured_drop: Some(-1),
         attribution_pct: None,
         explained: false,
+        interrupted: false,
         causes: vec![Cause {
             kind: CauseKind::SnapshotHeld,
             bytes: 0,

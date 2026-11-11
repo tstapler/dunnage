@@ -465,8 +465,11 @@ fn kinds_should_list_every_selector_with_availability_and_exit_0() {
             assert!(row(unbuilt).contains(" yes "), "{unbuilt}");
             continue;
         }
-        if cfg!(feature = "gate-d") && unbuilt == "steam" {
-            assert!(row(unbuilt).contains(" yes "), "{unbuilt}");
+        // A Gate D build registers docker, steam and btrfs. Their availability depends on the host (a daemon, a
+        // Steam install, root), so the row only has to stop saying the kind is unbuilt (Stories 4.1.x to 4.3.2).
+        if cfg!(feature = "gate-d") && ["docker", "steam", "btrfs"].contains(&unbuilt) {
+            let r = row(unbuilt);
+            assert!(!r.contains("not available in this build"), "{r}");
             continue;
         }
         assert!(

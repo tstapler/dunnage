@@ -119,4 +119,7 @@ pub struct RunEnd {
     /// Measured causes account for the shortfall; `scripts/outcome-report.sh` reads this, never the prose.
     #[serde(default)]
     pub explained: bool,
+    /// The run was ended by SIGINT or SIGTERM.
+    #[serde(default)]
+    pub interrupted: bool,
 }

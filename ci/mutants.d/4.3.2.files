@@ -1,0 +1,3 @@
+# Story 4.3.2: the balance ladder rules and the target that runs them
+crates/core/src/targets/btrfs_guard.rs
+crates/adapters/src/targets/btrfs_balance.rs
