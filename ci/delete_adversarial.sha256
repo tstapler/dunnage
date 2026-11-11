@@ -1,5 +1,5 @@
 # Tests that are pinned by scripts/check-test-authorship.sh (sha256, repo-root relative).
-3af623415a7ccc185fd4ca2c6ecfc7b4b1f6986da7f97787d6233819a1c6eab8  crates/adapters/tests/delete_adversarial.rs
+1f1afc11e139ff467a61e944290421bf4929e546af2c437c29dc0abd91dadc8d  crates/adapters/tests/delete_adversarial.rs
 29bc0772f3be04a2193cff844b952b09e52ec9843996322d135603a45ab78864  crates/core/tests/floor_rule.rs
 68cf305733a2fd0b1d944ad9acd03e2f97744ff2b8cb89f7faabf6fad35c3fc0  crates/adapters/tests/delete_aa_mutants.rs
 d5fd95ddfcba5d9f45ab7e0ffae46ef0ad844414cdc8f2255ea52d489b3674d6  crates/core/tests/floor_rule_mutants.rs
