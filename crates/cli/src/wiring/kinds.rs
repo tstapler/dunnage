@@ -53,6 +53,23 @@ pub struct KindCtx<'a> {
     pub fixture_mode: bool,
 }
 
+/// The first gate whose build registers the explorer's hidden `explorer-selection` kind (ADR-006, owner
+/// decision 2026-11-10): the explorer's delete is built now and enabled with Gate D's review.
+pub const EXPLORER_SELECTION_GATE: char = 'D';
+
+/// Whether a build that reached `gate` registers `explorer-selection`. Hidden on purpose: it is no [`Target`]
+/// in [`KindRegistry::targets`], never in [`KindRegistry::listed`] (so absent from `kinds`) and never
+/// apply-capable from the command line; `KindSelector::parse` refuses to name it.
+pub const fn explorer_selection_registered_at(gate: char) -> bool {
+    gate >= EXPLORER_SELECTION_GATE
+}
+
+/// Whether this binary registers `explorer-selection`: false in the default shipped build, true with
+/// `--features gate-d`.
+pub const fn explorer_selection_registered() -> bool {
+    explorer_selection_registered_at(build_gate())
+}
+
 /// One registered kind.
 pub struct Registered {
     pub target: Box<dyn Target>,
@@ -88,6 +105,7 @@ impl Registrar {
 /// The targets of one build and the selectors among them that may delete.
 pub struct KindRegistry {
     registered: Vec<Registered>,
+    hidden: Vec<SelectorId>,
 }
 
 impl KindRegistry {
@@ -124,8 +142,14 @@ impl KindRegistry {
                 });
             }
         }
+        let hidden = if explorer_selection_registered_at(gate) {
+            vec![SelectorId::ExplorerSelection]
+        } else {
+            Vec::new()
+        };
         KindRegistry {
             registered: reg.registered,
+            hidden,
         }
     }
 
@@ -148,6 +172,11 @@ impl KindRegistry {
         v.sort();
         v.dedup();
         v
+    }
+
+    /// Selectors registered for the explorer only: not listed, not nameable, not in `apply_capable`.
+    pub fn hidden(&self) -> &[SelectorId] {
+        &self.hidden
     }
 
     /// The selectors that may delete in this build; empty for the shipped binary until Gate B's review.

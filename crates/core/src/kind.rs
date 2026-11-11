@@ -20,6 +20,9 @@ pub enum Kind {
     SteamRemnant,
     BtrfsBalance,
     BtrfsTrim,
+    /// The explorer's marked set (Story 6.6.2, ADR-006). Not in [`Kind::ALL`]: only `disk-cleanup explore`
+    /// builds candidates of this kind.
+    ExplorerSelection,
     /// Test-only (Story 2.3.4): a stale directory removed by the `fixture-destructive` target. The variant
     /// does not exist in a build without `test-support`, so a release binary cannot name it.
     #[cfg(feature = "test-support")]
@@ -57,6 +60,7 @@ impl Kind {
             Kind::SteamRemnant => "steam-remnant",
             Kind::BtrfsBalance => "btrfs-balance",
             Kind::BtrfsTrim => "btrfs-trim",
+            Kind::ExplorerSelection => "explorer-selection",
             #[cfg(feature = "test-support")]
             Kind::FixtureStale => "fixture-stale",
         }
@@ -71,6 +75,7 @@ impl Kind {
             Kind::DockerImage | Kind::DockerBuildCache | Kind::DockerVolume => "docker",
             Kind::SteamPrefix | Kind::SteamShaderCache | Kind::SteamRemnant => "steam",
             Kind::BtrfsBalance | Kind::BtrfsTrim => "btrfs",
+            Kind::ExplorerSelection => "explorer-selection",
             #[cfg(feature = "test-support")]
             Kind::FixtureStale => "fixture-destructive",
         }
@@ -90,7 +95,8 @@ impl Kind {
             | Kind::CargoTarget
             | Kind::DockerVolume
             | Kind::SteamPrefix
-            | Kind::SteamShaderCache => Risk::Destructive,
+            | Kind::SteamShaderCache
+            | Kind::ExplorerSelection => Risk::Destructive,
             #[cfg(feature = "test-support")]
             Kind::FixtureStale => Risk::Destructive,
         }
@@ -121,6 +127,9 @@ pub enum SelectorId {
     Steam,
     Btrfs,
     BtrfsTrim,
+    /// The explorer's marked set (Story 6.6.2). Not in [`SelectorId::ALL`], so it is absent from `kinds`, and
+    /// `KindSelector::parse` refuses to name it.
+    ExplorerSelection,
     /// Test-only (Story 2.3.4): drives the destructive flow of the Gate B end-to-end tests.
     #[cfg(feature = "test-support")]
     FixtureDestructive,
@@ -160,6 +169,7 @@ impl SelectorId {
             SelectorId::Steam => "steam",
             SelectorId::Btrfs => "btrfs",
             SelectorId::BtrfsTrim => "btrfs-trim",
+            SelectorId::ExplorerSelection => "explorer-selection",
             #[cfg(feature = "test-support")]
             SelectorId::FixtureDestructive => "fixture-destructive",
         }
@@ -178,6 +188,7 @@ impl SelectorId {
         SelectorId::Steam => "orphan prefixes, shader caches, uninstalled-game remnants",
         SelectorId::Btrfs => "balance (usage ladder)",
         SelectorId::BtrfsTrim => "fstrim",
+        SelectorId::ExplorerSelection => "the paths marked in 'disk-cleanup explore' (explore only)",
         #[cfg(feature = "test-support")]
         SelectorId::FixtureDestructive => "directories named stale-* below --root (test only)",
         }
@@ -199,6 +210,7 @@ impl SelectorId {
             ],
             SelectorId::Btrfs => &[Kind::BtrfsBalance],
             SelectorId::BtrfsTrim => &[Kind::BtrfsTrim],
+            SelectorId::ExplorerSelection => &[Kind::ExplorerSelection],
             #[cfg(feature = "test-support")]
             SelectorId::FixtureDestructive => &[Kind::FixtureStale],
         }
@@ -213,7 +225,8 @@ impl SelectorId {
             .unwrap_or(Risk::Safe)
     }
 
-    /// Destructive selectors decide the plan-id gate: exactly `build-dirs`, `docker-volumes` and `steam`.
+    /// Destructive selectors decide the plan-id gate: `build-dirs`, `docker-volumes`, `steam` and the explorer's
+    /// `explorer-selection`.
     pub fn is_destructive(self) -> bool {
         self.tier() == Risk::Destructive
     }
@@ -239,6 +252,7 @@ pub fn selector_of(facts: &KindFacts) -> SelectorId {
         KindFacts::Steam(_) => SelectorId::Steam,
         KindFacts::Btrfs(crate::candidate::BtrfsFacts::Balance { .. }) => SelectorId::Btrfs,
         KindFacts::Btrfs(crate::candidate::BtrfsFacts::Trim) => SelectorId::BtrfsTrim,
+        KindFacts::Explorer(_) => SelectorId::ExplorerSelection,
         #[cfg(feature = "test-support")]
         KindFacts::Fixture(_) => SelectorId::FixtureDestructive,
     }

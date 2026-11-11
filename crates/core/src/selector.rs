@@ -74,6 +74,10 @@ pub enum SelectorError {
         id: &'static str,
     },
     Empty,
+    /// `explorer-selection` typed after `--kinds`: only the explorer's own code can select it (ADR-006).
+    Unnameable {
+        id: &'static str,
+    },
 }
 
 impl std::fmt::Display for SelectorError {
@@ -99,6 +103,10 @@ impl std::fmt::Display for SelectorError {
             SelectorError::Empty => {
                 write!(f, "a kind list is empty. See 'disk-cleanup kinds'.")
             }
+            SelectorError::Unnameable { id } => write!(
+                f,
+                "error: {id} is not a kind you can name; it exists only inside 'disk-cleanup explore'. Nothing was deleted."
+            ),
         }
     }
 }
@@ -146,6 +154,11 @@ impl KindSelector {
         }
         let mut ids = BTreeSet::new();
         for word in input.split(',') {
+            if word == SelectorId::ExplorerSelection.id() {
+                return Err(SelectorError::Unnameable {
+                    id: SelectorId::ExplorerSelection.id(),
+                });
+            }
             let known = || SelectorId::ALL.iter().chain(SelectorId::TEST_ONLY.iter());
             let Some(id) = known().copied().find(|s| s.id() == word) else {
                 let suggestion = known()
@@ -202,7 +215,8 @@ pub fn default_min_age_secs(id: SelectorId) -> Option<u64> {
         | SelectorId::CacheApt
         | SelectorId::Docker
         | SelectorId::Btrfs
-        | SelectorId::BtrfsTrim => None,
+        | SelectorId::BtrfsTrim
+        | SelectorId::ExplorerSelection => None,
         #[cfg(feature = "test-support")]
         SelectorId::FixtureDestructive => None,
     }
@@ -354,6 +368,17 @@ impl Selection {
             .map(|p| "--only ".len() + shell_quote(p.as_os_str(), false).len() + 1)
             .sum::<usize>()
             .saturating_sub(1)
+    }
+
+    /// The selection of the explorer's marked set (Story 6.6.2): only `explorer-selection`, restricted by
+    /// `--only` to the marks. Not reachable from the command line (`KindSelector::parse` refuses the id).
+    pub fn explorer(marks: Vec<PathBuf>) -> Selection {
+        let mut sel = Selection::new(
+            KindSelector::of(&[SelectorId::ExplorerSelection]),
+            KindSelector::default(),
+        );
+        sel.only = marks;
+        sel
     }
 
     /// `kinds` minus `except`.

@@ -199,6 +199,7 @@ pub fn kind_order(kind: Kind) -> u8 {
         Kind::SteamPrefix | Kind::SteamShaderCache | Kind::SteamRemnant => 3,
         Kind::DockerImage | Kind::DockerBuildCache | Kind::DockerVolume => 4,
         Kind::BtrfsBalance | Kind::BtrfsTrim => 5,
+        Kind::ExplorerSelection => 6,
         #[cfg(feature = "test-support")]
         Kind::FixtureStale => 2,
     }

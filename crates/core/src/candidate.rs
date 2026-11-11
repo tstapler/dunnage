@@ -79,6 +79,12 @@ pub enum BtrfsFacts {
     Trim,
 }
 
+/// Facts of one explorer mark (Story 6.6.2): the cleaner knows nothing else about it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExplorerFacts {
+    pub is_dir: bool,
+}
+
 /// Facts of the test-only `fixture-destructive` kind.
 #[cfg(feature = "test-support")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -102,6 +108,7 @@ pub enum KindFacts {
     Docker(DockerFacts),
     Steam(SteamFacts),
     Btrfs(BtrfsFacts),
+    Explorer(ExplorerFacts),
     #[cfg(feature = "test-support")]
     Fixture(FixtureFacts),
 }
@@ -125,6 +132,7 @@ impl KindFacts {
             KindFacts::Steam(SteamFacts::Remnant { .. }) => Kind::SteamRemnant,
             KindFacts::Btrfs(BtrfsFacts::Balance { .. }) => Kind::BtrfsBalance,
             KindFacts::Btrfs(BtrfsFacts::Trim) => Kind::BtrfsTrim,
+            KindFacts::Explorer(_) => Kind::ExplorerSelection,
             #[cfg(feature = "test-support")]
             KindFacts::Fixture(_) => Kind::FixtureStale,
         }

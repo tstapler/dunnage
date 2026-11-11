@@ -307,7 +307,10 @@ impl RootSet {
             | Kind::DockerBuildCache
             | Kind::DockerVolume
             | Kind::BtrfsBalance
-            | Kind::BtrfsTrim => Vec::new(),
+            | Kind::BtrfsTrim
+            // The explorer's marks are checked by `admits` (any path strictly below a scan root); the
+            // frozen `NamePattern` has no "any name" pattern, so the apply path of Story 6.6.3 adds its own.
+            | Kind::ExplorerSelection => Vec::new(),
             // The test-only target names its own `Exact` paths per item.
             #[cfg(feature = "test-support")]
             Kind::FixtureStale => Vec::new(),
@@ -320,6 +323,9 @@ impl RootSet {
     pub fn admits(&self, kind: Kind, path: &Path) -> bool {
         if !lexically_clean(path) {
             return false;
+        }
+        if kind == Kind::ExplorerSelection {
+            return self.scan_roots.iter().any(|r| strictly_below(r, path));
         }
         self.allowed(kind).iter().any(|t| match t {
             AllowedTarget::Exact(p) => p == path,
