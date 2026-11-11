@@ -1,0 +1,30 @@
+# The owner-reviewed table `disk-cleanup audit verify` compares every logged deletion with (Story 1.2.4, E-10).
+# It is embedded in the binary (include_str!) and pinned by ci/gate.d/1.2.4.required: a one-line edit fails
+# every later gate until the owner re-pins it with `sha256sum ci/allowed-roots.txt`.
+#
+# Format: <kind> <rule> <value...>   (kind is the kebab-case Kind id of the audit `result` line)
+#   roots default <dir>...      scan roots every build-dirs and worktrees rule is checked against ("~/" is HOME)
+#   <kind> exact <path>         the deletion is exactly this path
+#   <kind> tool-owned <name>    a tool-reported directory: strictly inside HOME, at least two levels below it, last name <name>
+#   <kind> under-roots <pat>    strictly below one of the roots and its trailing components match <pat> ("*" ends a prefix glob)
+#   <kind> under-library <pat>  <library>/<pat>, one component per segment; the library comes from Steam's own library list
+roots default ~/code ~/dotfiles ~/Programming
+cache exact ~/.npm/_cacache
+cache exact ~/.gradle/caches
+cache exact ~/.cargo/registry/cache
+cache exact ~/.cargo/registry/src
+cache exact ~/.cache/ms-playwright
+cache exact ~/Library/Caches/JetBrains
+cache exact ~/Library/Caches/com.apple.dt.Xcode
+cache exact ~/Library/Developer/Xcode/DerivedData
+cache exact ~/Library/Caches/ms-playwright
+cache exact ~/Library/Caches/Homebrew
+cache exact /var/cache/apt/archives
+cache tool-owned go-build
+cache tool-owned pip
+node-modules under-roots node_modules
+cargo-target under-roots target
+worktree under-roots .claude/worktrees/agent-*
+steam-prefix under-library steamapps/compatdata/*
+steam-shader-cache under-library steamapps/shadercache/*
+steam-remnant under-library steamapps/common/*
