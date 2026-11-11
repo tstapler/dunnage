@@ -49,6 +49,10 @@ fn real_main() -> i32 {
             return code;
         }
     };
+    // Read-only and stateless: dispatched before any Env, lock or audit sink exists (Story 1.2.5).
+    if let Some(Command::Scan(scan)) = &cli.command {
+        return disk_cleanup_cli::scan_cmd::run_wired(scan, cli.json);
+    }
     let base = match resolve_real_dirs() {
         Ok(d) => d,
         Err(e) => {

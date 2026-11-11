@@ -15,6 +15,7 @@ pub mod progress;
 pub mod reasontext;
 pub mod render;
 pub mod render_json;
+pub mod scan_cmd;
 pub mod status;
 pub mod terminal;
 pub mod units;

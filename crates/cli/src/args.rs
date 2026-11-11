@@ -161,6 +161,9 @@ pub struct Cli {
 pub enum Command {
     /// Filesystem usage and verdict (exit 0 ok, 1 warn, 2 crit)
     Status(StatusArgs),
+    /// Read-only inode and metadata report per repo or checkout (the former `metascope scan`)
+    #[command(after_help = SCAN_AFTER_HELP)]
+    Scan(ScanArgs),
     /// List cleanable kinds, tiers and availability
     Kinds,
     /// Steam tools (steam list)
@@ -174,6 +177,76 @@ pub enum Command {
         #[command(subcommand)]
         command: AuditCommand,
     },
+}
+
+const SCAN_AFTER_HELP: &str = "\
+The first run is cold: the old metascope/walker.cache is not migrated; this command keeps its own scan.cache.
+Exit codes: 0 ok, 2 fatal, 64 usage (a nonexistent root), 130 interrupted (SIGINT), 143 (SIGTERM).
+--json prints the scanner's own report document; it is not the schema_version 1 agent contract.
+The old `metascope status` is the `disk-cleanup status` command.";
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScanBy {
+    Repo,
+    Checkout,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScanSort {
+    Inodes,
+    Meta,
+    Size,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScanBackend {
+    Auto,
+    Walker,
+    Btrfs,
+}
+
+// Mirrors the flags of the old `metascope scan` one for one.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Args, Debug)]
+pub struct ScanArgs {
+    /// Roots to scan (default: ~/Programming, ~/code and ~/dotfiles, those that exist)
+    pub paths: Vec<PathBuf>,
+    /// Rows to print per table
+    #[arg(long, default_value_t = 20)]
+    pub top: usize,
+    /// Table granularity: one row per repo family, or per checkout/worktree
+    #[arg(long, value_enum, default_value = "repo")]
+    pub by: ScanBy,
+    /// Row order
+    #[arg(long, value_enum, default_value = "inodes")]
+    pub sort: ScanSort,
+    /// Data source: walker (no root, uses the cache), btrfs (tree search, needs root), or auto
+    #[arg(long, value_enum, default_value = "auto")]
+    pub backend: ScanBackend,
+    /// Do not read or write the incremental cache (walker only)
+    #[arg(long)]
+    pub no_cache: bool,
+    /// Ignore cached directory records but write fresh ones (walker only)
+    #[arg(long)]
+    pub rescan: bool,
+    /// Cache file (default: $XDG_CACHE_HOME/disk-cleanup/scan.cache)
+    #[arg(long, value_name = "FILE")]
+    pub cache_file: Option<PathBuf>,
+    /// Re-list cached directories older than this many hours
+    #[arg(long, default_value_t = 24)]
+    pub cache_max_age_hours: u64,
+    /// Accepted for compatibility; everything is counted
+    #[arg(long, hide = true)]
+    pub include_ignored: bool,
+    /// Descend into other mounts and btrfs subvolumes (walker only)
+    #[arg(long)]
+    pub cross_fs: bool,
+    /// Walker threads (0 = 3x CPUs, capped at 64)
+    #[arg(long, default_value_t = 0)]
+    pub threads: usize,
+    /// Stop walking after this many seconds and report partial results (0 = no cap)
+    #[arg(long, default_value_t = 120)]
+    pub max_seconds: u64,
 }
 
 #[derive(Args, Debug)]
