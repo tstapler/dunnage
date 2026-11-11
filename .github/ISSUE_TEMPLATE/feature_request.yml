@@ -1,0 +1,17 @@
+name: Feature request
+description: A new cleaner kind, report or flag
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to free or find?
+      description: The directory or tool, how big it gets, and why it is safe to remove
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like it to do?
+    validations:
+      required: false
