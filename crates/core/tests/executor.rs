@@ -564,3 +564,43 @@ fn rig_clock_advancer(rig: &Rig) -> impl Fn(i64) + Send + Sync + 'static {
     let clock = rig.clock.clone();
     move |secs| clock.advance(secs)
 }
+
+fn plan_run_with_discovery_workers(workers: usize) -> (String, Vec<ItemKey>, Vec<String>, usize) {
+    let sel = selection(&[SelectorId::Caches, SelectorId::BuildDirs]);
+    // The slowest kind is registered first, so a concurrent run finishes them in the opposite order.
+    let mut a = FakeTarget::caches((1..=3).map(|i| cache(i, 4096 * i)).collect());
+    a.on_discover = Box::new(|| std::thread::sleep(std::time::Duration::from_millis(60)));
+    let mut b = FakeTarget::new(
+        &[SelectorId::BuildDirs],
+        (1..=3).map(|i| build_dir(i, 8192 * i, 70)).collect(),
+    );
+    b.on_discover = Box::new(|| std::thread::sleep(std::time::Duration::from_millis(30)));
+    let c = FakeTarget::caches((4..=5).map(|i| cache(i, 4096 * i)).collect());
+    let rig = Rig::new();
+    let env = rig.env();
+    let ex = disk_cleanup_core::executor::Executor::new(
+        &env,
+        vec![&a as &dyn disk_cleanup_core::target::Target, &b, &c],
+        common::options(4),
+    )
+    .with_discovery_workers(workers);
+    let r = ex
+        .run(&sel, &disk_cleanup_core::executor::Mode::Plan, None)
+        .unwrap();
+    (
+        format!("{}", r.plan_id),
+        r.plan.keys(&sel),
+        r.notes,
+        r.plan.will_count(),
+    )
+}
+
+#[test]
+fn concurrent_discovery_should_give_the_same_plan_id_items_order_and_notes_as_sequential_When_kinds_finish_in_reverse(
+) {
+    let sequential = plan_run_with_discovery_workers(1);
+    for workers in [2, 3, 16] {
+        assert_eq!(plan_run_with_discovery_workers(workers), sequential);
+    }
+    assert_eq!(sequential.3, 8);
+}
