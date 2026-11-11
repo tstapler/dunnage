@@ -1,5 +1,5 @@
 {
-  "checksum": "446335c8f990f3f3cd20bb0a4a38a9c4f26d4a25875359aca1a10468a8883a38",
+  "checksum": "10249a83b34f3f448a5e9e1a670d492fa533a8d163fa06b686d131e5f9fd1b22",
   "conditions": {
     "aarch64-apple-darwin": [
       "aarch64-apple-darwin"
@@ -2201,6 +2201,10 @@
           }
         ],
         "deps_dev": [
+          {
+            "id": "expectrl 0.7.1",
+            "target": "expectrl"
+          },
           {
             "id": "tempfile 3.27.0",
             "target": "tempfile"

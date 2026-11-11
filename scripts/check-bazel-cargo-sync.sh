@@ -126,6 +126,17 @@ bazel_checks() {
   local root=$1 bz=${DC_BAZEL:-$1/scripts/bazel.sh} rc=0 targets crate f stem
   [ -x "$bz" ] || command -v "$bz" >/dev/null 2>&1 || { echo "FAIL: $bz not found (DC_SYNC_BAZEL=0 skips the Bazel checks)"; return 1; }
   (cd "$root" && "$bz" build --nobuild --lockfile_mode=error //... >/dev/null 2>&1) || { echo "FAIL: MODULE.bazel.lock is out of date (run: scripts/bazel.sh build --nobuild --lockfile_mode=update //...) or bazel failed"; rc=1; }
+  # A Cargo.toml dependency change (a new dev-dependency, a bumped version) leaves cargo-bazel-lock.json stale, and
+  # Bazel then fails later with "cannot find crate": re-pin in place and fail if the committed lock changes.
+  if [ "${DC_SYNC_REPIN:-1}" != 0 ]; then
+    local before after
+    before=$(sha256sum "$root/cargo-bazel-lock.json" 2>/dev/null | cut -d' ' -f1)
+    (cd "$root" && CARGO_BAZEL_REPIN=1 "$bz" build --nobuild //crates/cli:cli_ts >/dev/null 2>&1)
+    after=$(sha256sum "$root/cargo-bazel-lock.json" 2>/dev/null | cut -d' ' -f1)
+    if [ "$before" != "$after" ]; then
+      echo "FAIL: cargo-bazel-lock.json was stale: a Cargo.toml dependency changed (it is now re-pinned in the working tree: review and commit it)"; rc=1
+    fi
+  fi
   targets=$(cd "$root" && "$bz" query 'kind("rust_test", //crates/...)' 2>/dev/null) || { echo "FAIL: bazel query failed"; return 1; }
   for f in "$root"/crates/*/tests/*.rs; do
     [ -e "$f" ] || continue
