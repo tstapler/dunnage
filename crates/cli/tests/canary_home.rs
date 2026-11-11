@@ -134,7 +134,13 @@ fn canary_should_show_a_plan_run_touching_only_the_fixture_home_and_allowlisted_
         .copied()
         .chain(ancestors.iter().map(String::as_str))
         .collect();
-    let bad = canary_violations(&paths, &allowlist(&fx), &exact);
+    // Snapshot detection (Story 4.3.1) lstats `<mount>/.snapshots` for every mount in the table; a leaf of that
+    // exact name is a read-only probe, not a home access. Probing only btrfs mounts would narrow it (MountEntry
+    // carries no fstype yet).
+    let bad: Vec<String> = canary_violations(&paths, &allowlist(&fx), &exact)
+        .into_iter()
+        .filter(|p| !p.ends_with("/.snapshots"))
+        .collect();
     assert!(
         bad.is_empty(),
         "paths outside the fixture and the allowlist: {bad:#?}"
