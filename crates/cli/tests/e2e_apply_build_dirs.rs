@@ -118,7 +118,7 @@ fn kinds_should_list_build_dirs_as_a_destructive_kind_that_can_delete_When_the_g
 // ------------------------------------------------------------------ the destructive-kind gate
 
 #[test]
-fn apply_should_exit_64_and_delete_nothing_When_the_plan_id_is_missing_or_altered() {
+fn safety_build_dirs_apply_needs_plan_id() {
     let f = Fixture::new();
     let nms = two_stale(&f);
     let before = tree_manifest(&f.home());
@@ -363,7 +363,7 @@ fn keep_newest_should_exit_64_When_build_dirs_is_not_in_kinds_and_the_zero_warni
 }
 
 #[test]
-fn the_floor_should_keep_a_young_dir_When_min_age_is_zero() {
+fn safety_build_dirs_floor_not_lowerable_by_min_age() {
     let f = Fixture::new();
     let all = mixed(&f);
     let id = dry_id(&f, &["--min-age", "0"]);

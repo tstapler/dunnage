@@ -1,0 +1,6 @@
+# Story 3.2.4 (Gate C, build-dirs): always active; the tests are compiled with the gate-c feature or by default as noted.
+safety_build_dirs_apply_needs_plan_id           # cli, gate-c: no id, an altered id: exit 64, tree manifest unchanged
+safety_build_dirs_floor_not_lowerable_by_min_age  # cli, gate-c: --min-age 0 cannot reach a dir younger than 60 minutes
+safety_build_dir_symlink_swap_leaves_target_alone  # a build dir swapped for a link after planning: refused, target untouched
+safety_build_dir_unreadable_mount_table_fails_closed  # no mount table, no delete
+safety_build_dir_running_build_never_deleted     # RunningBuild and RunStateUnknown skip at plan time and before the delete

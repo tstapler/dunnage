@@ -1,0 +1,4 @@
+# Story 3.2.4: the build-dir guard, its re-check and the target that removes through delete_tree
+crates/core/src/targets/build_dir.rs
+crates/adapters/src/targets/build_dir.rs
+crates/core/src/guard.rs

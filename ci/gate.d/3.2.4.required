@@ -1,0 +1,3 @@
+# <first-gate> <last-gate|-> <command>   (Story 3.2.4: Gate C, build-dirs --apply end to end)
+# The seconds assertion again, on a gate-c binary and a fixture HOME that holds build dirs (2.3.3.required runs it at B only).
+C - env DC_BENCH_FEATURE=gate-c scripts/bench-dry-run.sh --budget

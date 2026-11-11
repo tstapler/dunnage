@@ -292,7 +292,7 @@ fn plan_notes_should_name_the_floor_When_min_age_is_below_it_and_not_above() {
 // ------------------------------------------------------------------ running builds
 
 #[test]
-fn guard_should_skip_with_running_build_or_unknown_When_the_probe_says_so() {
+fn safety_build_dir_running_build_never_deleted() {
     let f = fixture();
     let busy = stale_node(&f, "busy", Some("l1"), 30);
     let dark = stale_node(&f, "dark", Some("l2"), 30);
@@ -348,8 +348,7 @@ fn guard_before_delete_should_skip_too_recent_and_keep_the_tree_When_a_file_is_w
 }
 
 #[test]
-fn guard_before_delete_should_skip_symlink_and_leave_the_target_alone_When_the_dir_is_swapped_for_a_link(
-) {
+fn safety_build_dir_symlink_swap_leaves_target_alone() {
     let f = fixture();
     let nm = stale_node(&f, "app", Some("l"), 30);
     let elsewhere = f.home.join("elsewhere");
@@ -374,7 +373,7 @@ fn guard_before_delete_should_skip_symlink_and_leave_the_target_alone_When_the_d
 }
 
 #[test]
-fn guards_should_fail_closed_When_the_mount_table_cannot_be_read() {
+fn safety_build_dir_unreadable_mount_table_fails_closed() {
     let f = fixture();
     let nm = stale_node(&f, "app", Some("l"), 30);
     let t = target(&f);

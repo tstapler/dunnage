@@ -105,6 +105,13 @@ fixture_env() {
   mkdir -p "$root/home/.npm/_cacache" "$root/xdg/state" "$root/xdg/cache" "$root/xdg/config" "$root/bin"
   : > "$root/.dc-test-root"
   head -c 65536 /dev/zero > "$root/home/.npm/_cacache/blob"
+  # Build dirs for the Gate C build-dirs kind (a build without it ignores them): the walker, the guards and the probes run on them.
+  for i in 1 2 3; do
+    mkdir -p "$root/home/code/app$i/node_modules"
+    echo '{}' > "$root/home/code/app$i/package.json"; echo "lock-$i" > "$root/home/code/app$i/package-lock.json"
+    head -c 4096 /dev/zero > "$root/home/code/app$i/node_modules/f"
+    touch -d '40 days ago' "$root/home/code/app$i/node_modules/f" "$root/home/code/app$i/node_modules"
+  done
   printf '#!/bin/sh\necho "%s/xdg/cache/go-build"\n' "$root" > "$root/bin/go"; chmod +x "$root/bin/go"
 }
 
@@ -221,7 +228,8 @@ bin=${DC_BENCH_BIN:-${CARGO_TARGET_DIR:-target}/release/disk-cleanup}
 usage="usage: $0 [--bin PATH | --budget [--bin PATH]] | --selftest"
 # The default binary is rebuilt (a no-op when fresh): a gate runs this before its own release build.
 build_default() { [ -n "${DC_BENCH_BIN:-}" ] || cargo build --release --locked -q || fail "cargo build --release failed"; }
-build_gate_b() { [ -n "${DC_BENCH_BIN:-}" ] || cargo build --release --locked -q --features disk-cleanup/gate-b || fail "cargo build --release (gate-b) failed"; }
+# DC_BENCH_FEATURE names the gate feature the budget binary is built with (gate-b by default; Gate C passes gate-c).
+build_gate_b() { [ -n "${DC_BENCH_BIN:-}" ] || cargo build --release --locked -q --features "disk-cleanup/${DC_BENCH_FEATURE:-gate-b}" || fail "cargo build --release (${DC_BENCH_FEATURE:-gate-b}) failed"; }
 case ${1:-} in
   --selftest) selftest ;;
   --bin) [ $# = 2 ] || { echo "$usage"; exit 64; }; run "$2" ;;
