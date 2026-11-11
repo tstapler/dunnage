@@ -58,6 +58,7 @@ pub struct ExplorerScopeWrongKind;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExplorerScope {
     path: PathBuf,
+    ident: Identity,
 }
 
 impl ExplorerScope {
@@ -67,6 +68,7 @@ impl ExplorerScope {
         }
         Ok(ExplorerScope {
             path: allowed.path.clone(),
+            ident: allowed.ident,
         })
     }
 
@@ -74,10 +76,18 @@ impl ExplorerScope {
         &self.path
     }
 
+    /// The identity the guard saw for `path`; `DeletePolicy::validate` compares it with `$HOME`'s.
+    pub fn ident(&self) -> Identity {
+        self.ident
+    }
+
     /// Unit tests of `floor_rule` need a scope for a path the guard would never allow (a `.git` component).
     #[cfg(test)]
     pub(crate) fn test_scope(path: &str) -> ExplorerScope {
-        ExplorerScope { path: path.into() }
+        ExplorerScope {
+            path: path.into(),
+            ident: Identity { dev: 0, ino: 0 },
+        }
     }
 }
 
