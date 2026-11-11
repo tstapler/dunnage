@@ -858,19 +858,11 @@ fn only_refusal(
     candidates: &[Candidate],
     avail: &Availability,
 ) -> Option<Box<Refused>> {
-    let missing = sel.only.iter().find(|o| {
-        !candidates
-            .iter()
-            .any(|c| sel.selects(c.selector()) && path_of(c).as_deref() == Some(o.as_path()))
-    })?;
-    let kinds = sel.kinds_resolved();
+    let missing = crate::plan::non_items(sel, candidates).into_iter().next()?;
     Some(Box::new(Refused {
         exit: ExitClass::Usage,
         notes: avail.notes.clone(),
-        text: format!(
-            "error: --only {} is not an item of the selected kinds ({kinds}). It may be new, under the age floor, kept as the newest duplicate, or not a cleanable item at all, or spelled differently from the path the cleaner prints (no symlinks, no '.' or '..', no trailing slash); dry run without --only to list the items. Nothing was deleted.",
-            crate::shell_quote::shell_quote(missing.as_os_str(), false)
-        ),
+        text: crate::plan::not_an_item_text(sel, missing),
         refusal: None,
         plan_id: None,
         fatal: None,
