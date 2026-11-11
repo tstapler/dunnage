@@ -15,7 +15,13 @@ path = "src/lib.rs"
 name = "disk-cleanup"
 path = "src/main.rs"
 
+[features]
+# `disk-cleanup explore`; off, the subcommand exits 64 with "'explore' is not available in this build".
+default = ["explore"]
+explore = ["dep:disk-cleanup-tui"]
+
 [dependencies]
+disk-cleanup-tui = { path = "../tui", optional = true }
 disk-cleanup-core = { path = "../core" }
 disk-cleanup-adapters = { path = "../adapters" }
 clap.workspace = true
