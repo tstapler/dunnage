@@ -9,7 +9,7 @@
 # present they are compared like the ADR hash, when absent that part is not checked (the review format has no slot).
 # Outcome: STALE (exit 1) if any recorded hash differs from the current text; BLOCK, a malformed header or no review
 # fails; PASS passes; CONCERNS passes only if explorer-deletion-review-response.md exists, has at least one
-# `| C<n> ...` table row and no row ends a cell in OPEN or UNRESOLVED. The response covers the first review, so a second
+# `| C<n> ...` or `| N<n> ...` table row (N: second review) and no row ends a cell in OPEN or UNRESOLVED. The response covers the first review, so a second
 # review that says CONCERNS passes on the same rule: an open row, not the file name, is what blocks it.
 # Env: DC_ADR_DIR (default ~/dotfiles/project_plans/rust-disk-cleaner/implementation), DC_ADR006 (default
 # $DC_ADR_DIR/../decisions/ADR-006-explorer-deletion.md), DC_PLAN (default $DC_ADR_DIR/plan.md).
@@ -63,9 +63,9 @@ check() {
     CONCERNS)
       resp=$dir/explorer-deletion-review-response.md
       [ -f "$resp" ] || { echo "FAIL: $name says CONCERNS and $resp does not exist: the concerns are not accepted"; return 1; }
-      grep -qE '^\| *C[0-9]+ ' "$resp" || { echo "FAIL: $resp has no '| C<n> ...' concern rows"; return 1; }
-      if grep -nE '^\| *C[0-9]+ .*\| *(OPEN|UNRESOLVED) *\|' "$resp"; then echo "FAIL: $resp has open concerns (rows above)"; return 1; fi
-      echo "ok: $name CONCERNS accepted: $(grep -cE '^\| *C[0-9]+ ' "$resp") concern rows in the response, none open" ;;
+      grep -qE '^\| *[CN][0-9]+ ' "$resp" || { echo "FAIL: $resp has no '| C<n> ...' or '| N<n> ...' concern rows"; return 1; }
+      if grep -nE '^\| *[CN][0-9]+ .*\| *(OPEN|UNRESOLVED) *\|' "$resp"; then echo "FAIL: $resp has open concerns (rows above)"; return 1; fi
+      echo "ok: $name CONCERNS accepted: $(grep -cE '^\| *[CN][0-9]+ ' "$resp") concern rows in the response, none open" ;;
   esac
 }
 
@@ -93,6 +93,10 @@ selftest() {
   run "CONCERNS with a closed response passes" 0 "^ok: .*CONCERNS accepted: 2 concern rows"
   printf '| C3 y | AGREE | OPEN |\n' >> "$d/impl/explorer-deletion-review-response.md"
   run "CONCERNS with an OPEN row fails" 1 "has open concerns"
+  printf '| N7 z | AGREE | OPEN |\n' > "$d/impl/explorer-deletion-review-response.md"
+  run "CONCERNS with an OPEN N-row fails" 1 "has open concerns"
+  printf '| N7 z | AGREE | task C |\n' > "$d/impl/explorer-deletion-review-response.md"
+  run "CONCERNS with only a closed N-row passes" 0 "^ok: .*CONCERNS accepted: 1 concern rows"
   rm "$d/impl/explorer-deletion-review-response.md"
   review BLOCK "$h"
   run "BLOCK fails" 1 "says VERDICT: BLOCK"

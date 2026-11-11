@@ -1,0 +1,11 @@
+# Task 6.6.5k (review N7): cargo mutants --no-shuffle -j 3 -f crates/core/src/floor_rule.rs -f crates/core/src/allowed.rs
+# Run 1 (main at 209ddff + Tasks 6.6.5k/l): 73 mutants, 62 caught, 9 unviable, 2 missed (below). No timeouts.
+# Run 2 (with crates/core/tests/floor_rule_below_scan_root_mutants.rs): 73 mutants, 64 caught, 9 unviable, 0 missed.
+# No survivor is accepted: both run-1 survivors are killed by the new unpinned test file.
+#
+# Killed (no longer survive):
+# crates/core/src/allowed.rs:100:9: replace <impl std::fmt::Display for WrongKind>::fmt -> std::fmt::Result with Ok(Default::default())
+#   killed by wrong_kind_should_display_the_reason_it_was_refused
+# crates/core/src/floor_rule.rs:35:9: replace || with && in is_structurally_protected
+#   killed by floor_protected_should_protect_slash_even_when_home_is_not_an_absolute_path (`target == "/"` is redundant
+#   with `home.starts_with(target)` only while $HOME is absolute; validate guarantees that, the pub floor_protected does not)

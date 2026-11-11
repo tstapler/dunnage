@@ -26,6 +26,9 @@ UNSAFE_OK='^crates/adapters/src/(dirops|space_meter|lock|signals|fiemap)\.rs:|^c
 # while every `libc::` name in it is on SECCOMP_LIBC_OK and it holds no transmute, asm! or pointer cast
 SECCOMP_TEST=crates/adapters/tests/delete_aa_mutants.rs
 SECCOMP_LIBC_OK='^(prctl|PR_SET_NO_NEW_PRIVS|PR_SET_SECCOMP|SECCOMP_MODE_FILTER|sock_filter|sock_fprog|SYS_statx|E[A-Z0-9]+)$'
+# DeletePolicy literals (Task 6.6.5k, review N1; ADR-006 A1): the core definition files (roots.rs builds the configured AllowedTarget lists), the four cleaner targets that
+# build real policies, and tests (compiled only under cfg(test); they cannot reach the binary)
+POLICY_OK='^(crates/core/src/(delete_types|floor_rule|roots)\.rs:|crates/adapters/src/(steam/target|targets/(fixture_kind|cache|build_dir))\.rs:|crates/[^/]+/tests/)'
 FORGE_OK='^crates/scan/src/btrfs_tree\.rs:[0-9]+:from_raw_parts$'
 
 SELF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")
@@ -439,6 +442,20 @@ rule:
   kind: macro_invocation
   has: { field: macro, regex: '^(include|paste|concat_idents)$' }
 EOF
+  cat > "$d/policylit.yml" <<'EOF'
+id: policylit
+language: rust
+rule:
+  any:
+    - { kind: struct_expression, has: { field: name, regex: '(^|::)(r#)?DeletePolicy$|^(r#)?Within$' } }
+    - kind: scoped_identifier
+      regex: '(^|::)(r#)?AllowedTarget::(r#)?(Exact|Within)$'
+      not: { inside: { any: [ { kind: tuple_struct_pattern }, { kind: struct_pattern } ] } }
+    - { kind: call_expression, has: { field: function, regex: '^(r#)?Exact$' } }
+    - { kind: token_tree, regex: '(DeletePolicy\s*\{|AllowedTarget\s*::\s*(Exact|Within)|\bExact\s*\()' }
+    - { kind: use_as_clause, regex: '\b(DeletePolicy|AllowedTarget)\b' }
+    - { kind: type_item, regex: '\b(DeletePolicy|AllowedTarget)\b' }
+EOF
   cat > "$d/useas.yml" <<'EOF'
 id: useas
 language: rust
@@ -542,7 +559,7 @@ main() {
   in_file() { printf '%s\n' "$1" | grep -E -- "^$2:" || true; }
   not_in() { printf '%s\n' "$1" | grep -Ev -- "$2" | grep . || true; }
 
-  for r in ident ptrread useptr union ptrtype unsafewitness allowednew unsafe forbid macro macroinv useas typealias literal ctorfn traitimpl derive-token derive-witness; do
+  for r in ident ptrread useptr union ptrtype unsafewitness allowednew policylit unsafe forbid macro macroinv useas typealias literal ctorfn traitimpl derive-token derive-witness; do
     eval "H_${r//-/_}=\$(hits $r)" || { bad "rule $r did not run"; return 1; }
   done
 
@@ -568,6 +585,9 @@ main() {
   # oracles match on it, and in tests; a delete site in adapters/cli cannot build one except through
   # DeletePolicy::for_allowed.
   flag "'BelowScanRoot' outside core's floor_rule/delete_types/roots/hint, the explorer facts and tests" < <(not_in "$(printf '%s\n' "$H_ident" | awk -F: '$3 == "BelowScanRoot"')" "^(crates/core/src/(floor_rule|delete_types|roots|explore/hint)\.rs:|crates/adapters/src/explore/facts\.rs:|crates/[^/]+/tests/)")
+  # The fields of DeletePolicy stay `pub` because five pinned tests build literals and may not be edited; this rule is the
+  # enforcement. The explorer's policy comes only from DeletePolicy::for_allowed (floor_rule.rs).
+  flag "DeletePolicy/AllowedTarget literal outside the named policy-building files (the explorer uses DeletePolicy::for_allowed)" < <(not_in "$H_policylit" "$POLICY_OK")
   flag "'grant_apply' outside its definition, its call site and the import in compose.rs" < <(not_in "$ga" "^($DEF_APPLY|$SITE_APPLY):")
   [ "$(count "$(in_file "$g" "$DEF_TOKEN")")" -eq 1 ] || bad "$DEF_TOKEN must contain exactly one 'grant' identifier (its definition; a Self::grant() wrapper or second use is a second site), found $(count "$(in_file "$g" "$DEF_TOKEN")") (0 also means the scan is blind)"
   [ "$(count "$(in_file "$g" "$SITE_GRANT")")" -eq "$expect" ] || bad "$SITE_GRANT must contain exactly $expect 'grant' identifier(s) (the call site), found $(count "$(in_file "$g" "$SITE_GRANT")")"
@@ -659,6 +679,13 @@ selftest() {
   cp -r "$t/clean" "$t/pos"
   printf '// ApplyToken::grant() in a comment\nfn s() { let _ = "ApplyToken::grant(); //"; }\n' >> "$t/pos/crates/adapters/src/dirops.rs"
   if "$SELF" --expect-sites 1 "$t/pos" >/dev/null 2>&1; then echo "ok: grant named only in a comment or a string is not a site"; else echo "SELFTEST BAD: comment/string false positive"; rc=1; fi
+  # the named policy-building files and tests may hold DeletePolicy literals (Task 6.6.5k); matches!/patterns are not literals
+  cp -r "$t/clean" "$t/pos-policy"; mkdir -p "$t/pos-policy/crates/adapters/src/targets" "$t/pos-policy/crates/adapters/tests"
+  printf 'fn a(t: P) -> DeletePolicy { DeletePolicy { target: t, allowed: AllowedTarget::Exact(t.clone()) } }\n' > "$t/pos-policy/crates/adapters/src/targets/cache.rs"
+  printf 'fn a(t: P) -> DeletePolicy { DeletePolicy { target: t, allowed: AllowedTarget::Within { root: r, below: 1 } } }\n' > "$t/pos-policy/crates/core/src/floor_rule.rs"
+  printf 'fn a(t: P) { let _ = DeletePolicy { target: t, ..x }; }\n' > "$t/pos-policy/crates/core/tests/p.rs"
+  printf 'fn m(a: AllowedTarget) -> bool { matches!(a, AllowedTarget::Exact(p) if p == q) }\nfn n(a: AllowedTarget) { match a { AllowedTarget::Within { root, .. } => {}, _ => {} } }\n' > "$t/pos-policy/crates/adapters/src/targets/build_dir.rs"
+  if out=$("$SELF" --expect-sites 1 "$t/pos-policy" 2>&1); then echo "ok: DeletePolicy literals in the named files and tests pass"; else echo "SELFTEST BAD: named policy files rejected: $out"; rc=1; fi
   # negatives: name | file to append to (or replace) | text
   declare -A WANT=(
     [allowed-new-in-targets-dir]="Allowed::new outside"
@@ -681,6 +708,11 @@ selftest() {
     [grant-apply-alias]="'grant_apply' outside"
     [grant-apply-fnptr]="exactly 1 'grant_apply' call"
     [below-scan-root-in-target]="'BelowScanRoot' outside"
+    [policy-literal-explorer]="DeletePolicy/AllowedTarget literal outside"
+    [policy-exact-call]="DeletePolicy/AllowedTarget literal outside"
+    [policy-functional-update]="DeletePolicy/AllowedTarget literal outside"
+    [policy-alias]="DeletePolicy/AllowedTarget literal outside"
+    [policy-in-macro]="DeletePolicy/AllowedTarget literal outside"
     [second-unconfined]="'unconfined' outside"
     [unconfined-alias]="'use ... as' renames|'unconfined' outside"
     [impl-default]="trait impl on"
@@ -756,6 +788,11 @@ fn a() { let _ = <T>::grant(); }'
   neg grant-apply-alias crates/cli/src/explore/apply.rs 'use crate::wiring::token::grant_apply as g;'
   neg grant-apply-fnptr crates/cli/src/wiring/compose.rs 'fn run3() { let f = grant_apply; let _ = f; }'
   neg below-scan-root-in-target crates/adapters/src/targets/x.rs 'fn a() { let _ = AllowedTarget::BelowScanRoot(s); }'
+  neg policy-literal-explorer crates/adapters/src/targets/explorer_selection.rs 'fn a(target: P, x: DeletePolicy) -> DeletePolicy { DeletePolicy { target, allowed: AllowedTarget::Exact(t), ..x } }'
+  neg policy-exact-call crates/cli/src/x.rs 'use AllowedTarget::*; fn a() { let _ = Exact(p); }'
+  neg policy-functional-update crates/adapters/src/y.rs 'fn a(x: DeletePolicy) -> DeletePolicy { DeletePolicy { ..x } }'
+  neg policy-alias crates/adapters/src/z.rs 'type P = DeletePolicy; fn a() { let _ = P { target }; }'
+  neg policy-in-macro crates/cli/src/m.rs 'fn a() { let _ = vec![DeletePolicy { target }]; }'
   neg second-unconfined crates/adapters/src/x.rs 'fn a(t: &ApplyToken) { let _ = RealDirOps::unconfined(t); }'
   neg unconfined-alias crates/cli/src/x.rs 'use adapters::RealDirOps as R;
 fn a(t: &ApplyToken) { let f = R::unconfined; }'

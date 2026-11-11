@@ -1,0 +1,3 @@
+# Task 6.6.5k (review N7): the BelowScanRoot code: DeletePolicy::validate / for_allowed and ExplorerScope
+crates/core/src/floor_rule.rs
+crates/core/src/allowed.rs

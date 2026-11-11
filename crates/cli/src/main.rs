@@ -107,7 +107,12 @@ fn resolve_roots(cli: &Cli, base: &Dirs) -> Result<RootSet, i32> {
         Err(_) => disk_cleanup_adapters::config::Config::default(),
     };
     let cwd = std::env::current_dir().unwrap_or_else(|_| base.home.clone());
-    let flag_roots = if cleaner { cli.root.as_slice() } else { &[] };
+    // The global --root widens the cleaner's roots only; explore never does (ADR-006 O-8: config.toml is the one place).
+    let flag_roots = if cli.command.is_none() {
+        cli.root.as_slice()
+    } else {
+        &[]
+    };
     match RootSet::resolve_on(
         base,
         flag_roots,

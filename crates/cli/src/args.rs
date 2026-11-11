@@ -206,6 +206,7 @@ Environment:
 /// never with a flag).
 pub const EXPLORE_NO_APPLY: &str = "error: explore has no --apply. In the explorer mark items with Space, press p for the plan and d to delete after typing the count; from the shell, dry run 'disk-cleanup' and use a Next: line. Nothing was deleted.";
 const EXPLORE_NO_CROSS: &str = "error: explore has no --cross-device: it never crosses into another filesystem (other filesystems show as 'x' rows). Nothing was deleted.";
+const EXPLORE_NO_GLOBAL_ROOT: &str = "error: explore does not take the cleaner's --root before the subcommand: the folders it may delete from are the 'roots' of config.toml, and adding one is an edit of that file ('disk-cleanup explore --root PATH' only chooses what to show). Nothing was deleted.";
 const EXPLORE_NO_MOUSE: &str = "error: explore has no --mouse: mouse reporting stays off so the terminal's own selection copies paths. Nothing was deleted.";
 const EXPLORE_NO_VERBOSITY: &str = "error: explore has no -q or -v: it prints one fixed view. Use --text or --json for plain output. Nothing was deleted.";
 
@@ -545,6 +546,8 @@ fn explore_refusal(cli: &Cli) -> Option<&'static str> {
             || !cli.only.is_empty()
         {
             Some(EXPLORE_NO_APPLY)
+        } else if !cli.root.is_empty() {
+            Some(EXPLORE_NO_GLOBAL_ROOT)
         } else if cli.quiet || cli.verbose {
             Some(EXPLORE_NO_VERBOSITY)
         } else {
