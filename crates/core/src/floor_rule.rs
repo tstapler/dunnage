@@ -186,7 +186,7 @@ mod explorer_tests {
 
     fn policy(target: &str, scope: &str) -> DeletePolicy {
         let mut p = DeletePolicy::for_scope_tests(
-            ExplorerScope::for_tests(scope),
+            ExplorerScope::test_scope(scope),
             vec!["/home/u/code".into()],
         );
         p.target = target.into();
@@ -257,11 +257,11 @@ mod explorer_tests {
     #[test]
     fn validate_should_apply_the_two_components_below_home_floor_to_a_root_outside_home() {
         let mut p = DeletePolicy::for_scope_tests(
-            ExplorerScope::for_tests("/home/u/code/app"),
+            ExplorerScope::test_scope("/home/u/code/app"),
             vec!["/home/u".into()],
         );
         p.target = "/home/u/app".into();
-        p.allowed = AllowedTarget::BelowScanRoot(ExplorerScope::for_tests("/home/u/app"));
+        p.allowed = AllowedTarget::BelowScanRoot(ExplorerScope::test_scope("/home/u/app"));
         assert_eq!(p.validate("app".as_ref()), Err(DeleteError::ProtectedPath));
     }
 

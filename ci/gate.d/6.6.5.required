@@ -1,0 +1,3 @@
+# Story 6.6.5 (Task 6.6.5d): check-token-sites.sh now counts grant_apply (one definition in wiring/token.rs, exactly
+# --expect-sites call sites in wiring/compose.rs, nowhere else); its lines in 0.1.3.required and 1.2.2.required run it
+# and its --selftest unchanged, so no new line is needed here.

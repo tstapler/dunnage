@@ -76,7 +76,7 @@ impl ExplorerScope {
 
     /// Unit tests of `floor_rule` need a scope for a path the guard would never allow (a `.git` component).
     #[cfg(test)]
-    pub(crate) fn for_tests(path: &str) -> ExplorerScope {
+    pub(crate) fn test_scope(path: &str) -> ExplorerScope {
         ExplorerScope { path: path.into() }
     }
 }
