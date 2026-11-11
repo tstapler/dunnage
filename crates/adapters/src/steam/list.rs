@@ -153,9 +153,10 @@ pub fn load(root: &Path) -> Result<Listing, ListError> {
             .flatten()
             .map(|e| e.path())
             .filter(|p| {
-                p.file_name()
-                    .and_then(|n| n.to_str())
-                    .is_some_and(|n| n.starts_with("appmanifest_") && n.ends_with(".acf"))
+                p.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                    n.starts_with("appmanifest_")
+                        && Path::new(n).extension().is_some_and(|e| e == "acf")
+                })
             })
             .collect();
         manifests.sort();
@@ -468,6 +469,7 @@ fn read_string(it: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<Stri
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::format_push_string)]
 mod tests {
     use super::*;
     use std::fs;

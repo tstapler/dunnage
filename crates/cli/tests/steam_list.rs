@@ -1,3 +1,9 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    non_snake_case,
+    clippy::format_push_string
+)]
 //! Story 4.2.3: `steam list` end to end on fixture Steam libraries under the fixture HOME. Read-only: the
 //! whole fixture tree must be byte-identical after every run. Never touches the owner's real libraries.
 
