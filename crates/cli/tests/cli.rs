@@ -450,6 +450,9 @@ fn kinds_should_list_every_selector_with_availability_and_exit_0() {
         assert!(caches.contains("list only"), "{caches}");
     }
     for unbuilt in ["worktrees", "build-dirs", "docker", "steam", "btrfs"] {
+        if cfg!(feature = "gate-c") && unbuilt == "worktrees" {
+            continue;
+        }
         assert!(
             row(unbuilt).contains("not available in this build"),
             "{unbuilt}"

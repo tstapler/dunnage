@@ -81,6 +81,10 @@ fn kinds_should_list_caches_as_available_and_the_other_gates_as_not_available_Wh
         "btrfs",
         "btrfs-trim",
     ] {
+        if cfg!(feature = "gate-c") && id == "worktrees" {
+            // Gate C registers it (Story 3.1.3); `worktree_git.rs` covers it.
+            continue;
+        }
         assert_eq!(cell(id), "not available in this build", "{id}");
         for apply in [false, true] {
             let mut args = vec!["--kinds", id];
@@ -132,7 +136,7 @@ fn the_two_command_flow_should_remove_the_caches_with_no_prompt_and_apply_the_de
     assert!(with_id.contains("--plan-id"), "{with_id}");
     assert!(with_id.contains("fixture-destructive"), "{with_id}");
     assert!(
-        !with_id.contains("worktrees"),
+        cfg!(feature = "gate-c") || !with_id.contains("worktrees"),
         "the echoed line names a kind this build does not ship: {with_id}"
     );
     // The id altered by one hex digit: exit 64, nothing deleted.
