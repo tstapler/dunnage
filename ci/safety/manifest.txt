@@ -3,7 +3,7 @@
 # `fn safety_*` under crates/ must be listed here, in ci/safety-guarantees.txt or in ci/safety/<story>.txt.
 # The owning story names its test as listed (or edits the name here in the same commit). Raise active-gate when
 # the gate's work starts (it is the gate whose owner wait comes next, as in ci/safety/kinds-by-gate.txt).
-active-gate B
+active-gate C
 B safety_bare_run_deletes_nothing            # a plain `disk-cleanup` run changes no file (Story 1.2.4 / 2.3.3)
 B safety_force_and_yes_flags_rejected        # --force and -y exit 64 (Story 1.2.4)
 B safety_out_of_root_cache_not_deleted       # caches: only Exact table paths (Story 1.1.5 oracle, 2.1.x)

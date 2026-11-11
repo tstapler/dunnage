@@ -1,4 +1,4 @@
-active-gate B
+active-gate C
 # <selector-id> <first-gate-that-lists-it> <first-gate-that-can-delete>   (Story 2.3.4, Task 2.3.4b)
 # Read by crates/cli/tests/kind_registry.rs, which compares it with what wiring/kinds.rs registers.
 # Gate A (v0.1.0): caches and cache-apt are listed (plan only), nothing can delete.
