@@ -81,6 +81,10 @@ fn kinds_should_list_caches_as_available_and_the_other_gates_as_not_available_Wh
         "btrfs",
         "btrfs-trim",
     ] {
+        if cfg!(feature = "gate-c") && id == "build-dirs" {
+            // Gate C registers it (Story 3.2.4); `e2e_apply_build_dirs.rs` covers it.
+            continue;
+        }
         assert_eq!(cell(id), "not available in this build", "{id}");
         for apply in [false, true] {
             let mut args = vec!["--kinds", id];
@@ -537,7 +541,12 @@ const SYSTEM_PREFIXES: [&str; 8] = [
     "/dev",
     "/bin",
 ];
-const SYSTEM_EXACT: [&str; 2] = ["/etc/ld.so.cache", "/etc/ld.so.preload"];
+/// `/sys/devices/system/cpu/online`: the walker of the Gate C build-dirs discovery sizes its thread pool from it.
+const SYSTEM_EXACT: [&str; 3] = [
+    "/etc/ld.so.cache",
+    "/etc/ld.so.preload",
+    "/sys/devices/system/cpu/online",
+];
 
 /// `<fixture>/bin/go`: answers `go env GOCACHE` with a directory below the fixture HOME and empties it on
 /// `go clean -cache`, logging every call.
