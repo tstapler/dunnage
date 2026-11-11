@@ -10,6 +10,7 @@
 
 mod common;
 
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -554,7 +555,6 @@ fn go_shim(f: &Fixture) -> PathBuf {
         cache = f.home().join(".cache/go-build").display(),
     );
     std::fs::write(&shim, script).unwrap();
-    use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&shim, std::fs::Permissions::from_mode(0o755)).unwrap();
     let cache = f.home().join(".cache/go-build/ab");
     std::fs::create_dir_all(&cache).unwrap();

@@ -55,7 +55,7 @@ fn the_hash_of_the_fixture_home_should_be_unchanged_and_the_state_should_exist_u
             .output()
             .unwrap();
         assert!(
-            matches!(out.status.code(), Some(0 | 1 | 2)),
+            matches!(out.status.code(), Some(0..=2)),
             "{args:?}: {}",
             text_of(&out).1
         );
