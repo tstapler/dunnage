@@ -11,11 +11,15 @@
 #                             run (discarded) and WARM_RUNS warm runs of the report on a fixture HOME with the cache rows
 #                             present; the median must be <= 12.7 s. Builds the Gate B binary (--features
 #                             disk-cleanup/gate-b) unless --bin is given. The owner machine run stays an owner action.
+#                             With DC_BENCH_FEATURE=gate-d (Story 4.3.3, Task 4.3.3a) the binary registers the Docker, Steam
+#                             and btrfs kinds, so the daemon must be up: with it down the script prints
+#                             `INCONCLUSIVE: docker down` and exits 77 rather than pass without the Docker kinds. A miss
+#                             prints the wall time of each kind alone (the plan document carries no per-kind timings).
 # Both modes need the report to be one JSON document with the npm and go caches in it: a binary that prints {}
 # instantly is not "10x". Exit 0 pass, 1 fail, 77 INCONCLUSIVE (load), 64 usage.
 # Overrides for the selftest and for a noisy machine: DC_BENCH_BIN, DC_BENCH_BUDGET_MS, DC_BENCH_RESCAN_BUDGET_MS,
 # DC_BENCH_WARM_RUNS, DC_BENCH_MAX_LOAD, DC_BENCH_LOADAVG_FILE, DC_BENCH_DIRS_OUTER, DC_BENCH_DIRS_INNER,
-# DC_BENCH_RACY_SLEEP.
+# DC_BENCH_RACY_SLEEP, DC_BENCH_DOCKER_CMD (the command that must succeed for the daemon to count as up).
 set -u -o pipefail
 
 BUDGET_MS=${DC_BENCH_BUDGET_MS:-12700}
@@ -139,11 +143,32 @@ counters_mode() {
   say "PASS (counters)"
 }
 
+# Gate D: the Docker kinds are in the binary, so a run without the daemon would time less work than the budget covers.
+docker_check() {
+  [ "${DC_BENCH_FEATURE:-}" = gate-d ] || return 0
+  if ! timeout 10 "${DC_BENCH_DOCKER_CMD:-docker}" info >/dev/null 2>&1; then
+    say "INCONCLUSIVE: docker down (the Gate D budget needs the daemon up so the Docker kinds are timed)"
+    exit 77
+  fi
+}
+
+# On a miss: each kind alone, wall ms of a dry run (the plan document carries no per-kind discover_ms/plan_ms).
+print_kind_times() {
+  local root=$1 bin=$2 k t0
+  for k in caches worktrees build-dirs docker docker-images docker-volumes steam btrfs btrfs-trim; do
+    t0=$(now_ms)
+    env -i PATH="$root/bin:/usr/bin:/bin" HOME="$root/home" XDG_STATE_HOME="$root/xdg/state" XDG_CACHE_HOME="$root/xdg/cache" \
+      XDG_CONFIG_HOME="$root/xdg/config" DC_TEST_ROOT="$root" LANG=C "$bin" --json --no-progress --kinds "$k" >/dev/null 2>&1
+    say "  kind $k: $(( $(now_ms) - t0 )) ms (discover + plan, wall)"
+  done
+}
+
 budget_mode() {
   local bin=$1 tmp=$2 root i t0 ms walls=() med
   root=$tmp/fx
   fixture_env "$root"
   load_check
+  docker_check
   say "budget mode: fixture HOME, load $(cut -d' ' -f1 "$LOADAVG_FILE"), binary $bin"
   report() {
     env -i PATH="$root/bin:/usr/bin:/bin" HOME="$root/home" XDG_STATE_HOME="$root/xdg/state" XDG_CACHE_HOME="$root/xdg/cache" \
@@ -159,7 +184,11 @@ budget_mode() {
   med=$(printf '%s\n' "${walls[@]}" | median)
   say "warm runs (ms): ${walls[*]}"
   say "median warm: ${med} ms (budget ${BUDGET_MS} ms, headroom $(( BUDGET_MS - med )) ms)"
-  if [ "$med" -gt "$BUDGET_MS" ]; then say "MISS: median ${med} ms > ${BUDGET_MS} ms"; print_phases "$tmp/warm.json"; exit 1; fi
+  if [ "$med" -gt "$BUDGET_MS" ]; then
+    say "MISS: median ${med} ms > ${BUDGET_MS} ms"; print_phases "$tmp/warm.json"
+    [ "${DC_BENCH_FEATURE:-}" = gate-d ] && print_kind_times "$root" "$bin"
+    exit 1
+  fi
   say "PASS (budget)"
 }
 
@@ -220,6 +249,9 @@ STUB
   expect 1 "budget mode: a median above the budget is a MISS" "MISS: median" env DC_BENCH_BUDGET_MS=100 "$self" --budget --bin "$(stub slow)"
   expect 1 "budget mode: a {} stub fails too" "empty document" "$self" --budget --bin "$(stub empty)"
   expect 77 "budget mode: load above the threshold is INCONCLUSIVE" "INCONCLUSIVE: load" env DC_BENCH_LOADAVG_FILE="$d/load-high" "$self" --budget --bin "$(stub good)"
+  expect 77 "gate-d budget: a down daemon is INCONCLUSIVE, not a pass" "INCONCLUSIVE: docker down" env DC_BENCH_FEATURE=gate-d DC_BENCH_DOCKER_CMD=false "$self" --budget --bin "$(stub good)"
+  expect 0 "gate-d budget: a daemon that answers lets the budget pass" "PASS (budget)" env DC_BENCH_FEATURE=gate-d DC_BENCH_DOCKER_CMD=true "$self" --budget --bin "$(stub good)"
+  expect 1 "gate-d budget: a miss prints the time of each kind" "kind docker-volumes:" env DC_BENCH_FEATURE=gate-d DC_BENCH_DOCKER_CMD=true DC_BENCH_BUDGET_MS=100 "$self" --budget --bin "$(stub slow)"
   [ "$bad" = 0 ] || { echo "bench-dry-run selftest: $bad failed"; exit 1; }
   echo "bench-dry-run selftest: $n ok"
 }

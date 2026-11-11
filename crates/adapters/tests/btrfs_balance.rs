@@ -301,6 +301,40 @@ fn ladder_should_stop_at_the_target_from_the_reread_value() {
 }
 
 #[test]
+fn result_line_should_print_the_gain_from_the_reread_value_When_a_balance_raised_unallocated_by_38_gib(
+) {
+    let rig = Rig::new(0, &[3 * GIB, 41 * GIB]);
+    on_steps(&rig, [4, 1, 1, 1, 1]);
+
+    let r = apply(&rig, &BtrfsBalanceTarget::new());
+
+    let text = r.notes.join("\n");
+    assert!(
+        text.contains(
+            "btrfs unallocated: 3.0 GiB before, 41.0 GiB after (+38.0 GiB, re-read from the filesystem)"
+        ),
+        "{text}"
+    );
+    assert!(!text.contains("did not grow"), "{text}");
+}
+
+#[test]
+fn result_line_should_say_unallocated_did_not_grow_When_the_reread_value_is_unchanged() {
+    let rig = Rig::new(0, &[3 * GIB, 3 * GIB, 3 * GIB, 3 * GIB]);
+    on_steps(&rig, [1, 1, 0, 9, 9]);
+
+    let r = apply(&rig, &BtrfsBalanceTarget::new());
+
+    let text = r.notes.join("\n");
+    assert!(
+        text.contains(
+            "3.0 GiB before, 3.0 GiB after (unallocated did not grow, +0 B, re-read from the filesystem)"
+        ),
+        "{text}"
+    );
+}
+
+#[test]
 fn every_non_zero_step_cmd_should_carry_dlimit_8_When_issued() {
     let rig = Rig::new(0, &[3 * GIB, 4 * GIB, 5 * GIB, 6 * GIB, 7 * GIB, 8 * GIB]);
     on_steps(&rig, [1, 1, 1, 1, 1]);
