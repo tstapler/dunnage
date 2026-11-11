@@ -123,6 +123,12 @@ fn digits_match_should_be_true_only_for_the_decimal_text_of_the_count() {
 }
 
 #[test]
+fn confirm_should_report_the_count_and_the_bytes_of_the_plan_it_consumed() {
+    let c = Confirm::new(plan_of(3, 4_000_000_000));
+    assert_eq!((c.count(), c.bytes()), (3, 4_000_000_000));
+}
+
+#[test]
 fn accepts_should_keep_the_prompt_When_the_entry_is_wrong() {
     let refusal = Confirm::new(plan_of(2, 5)).accepts("3").unwrap_err();
     let again = refusal.into_confirm();
