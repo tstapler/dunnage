@@ -407,6 +407,10 @@ fn explorer_plan_should_call_a_replaced_parent_gone_and_keep_an_unreadable_mark_
         explorer_plan(&marks, OnlyMode::Explorer, ctx).unwrap()
     });
     let saved = plan.saved_selection(1, 2);
-    let keys: Vec<&str> = saved.items.iter().map(|k| k.as_str()).collect();
+    let keys: Vec<&str> = saved
+        .items
+        .iter()
+        .map(disk_cleanup_core::ItemKey::as_str)
+        .collect();
     assert_eq!(keys, ["explorer-selection:/home/u/code/c"]);
 }
