@@ -238,6 +238,24 @@ impl ViewState {
         self.rebuild(tree, now_ms, badge);
     }
 
+    /// Whether `/` text or `f` narrows the rows (what Esc clears first).
+    pub fn filter_active(&self) -> bool {
+        self.filter != Filter::All || !self.text.is_empty()
+    }
+
+    /// Esc: back to every row. Marks are not touched.
+    pub fn clear_filters(
+        &mut self,
+        tree: &ExploreTree,
+        now_ms: u64,
+        badge: &dyn Fn(NodeId) -> Badge,
+    ) {
+        self.note_key(now_ms);
+        self.filter = Filter::All;
+        self.text.clear();
+        self.rebuild(tree, now_ms, badge);
+    }
+
     pub fn set_text_filter(
         &mut self,
         text: &str,
