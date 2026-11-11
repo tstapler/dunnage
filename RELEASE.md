@@ -86,3 +86,27 @@ The Gate B apply path is built but the shipped binary does not register it (`gat
    `disk-cleanup audit verify` must say `0 outside the allowed roots` (exit 0; 2 is a violation and keeps the
    gate closed). `make safety` must pass on both profiles.
 6. On accept: add `"gate-b"` to `default` in `crates/cli/Cargo.toml`, commit, and cut `v0.2.0` from that commit.
+
+## OWNER WAIT C: the first live `--apply --kinds build-dirs`
+
+Build dirs (Story 3.2.4) are built but not registered in the shipped binary: `gate-c` is not a default feature of
+`crates/cli`. Worktrees (Story 3.1.3) are reviewed in the same wait; its steps follow the build-dir ones.
+
+1. Gate: `make gate GATE=C` on a clean tree, then at once `make install-gated GATE=C`; attach the report, the
+   `make safety` output and `make mutants` (the guard modules in `ci/mutants.d/*.files`, survivors listed in
+   `ci/mutants.d/*.survivors.txt`).
+2. Read the dry run: `disk-cleanup --kinds build-dirs`. Rows show the newest-mtime age, `kept as newest of N
+   duplicates`, `not reproducible` (an `npm link`ed package or no lockfile) and `running build`. A dir younger than
+   60 minutes is never offered, whatever `--min-age` says (the Notes block says when the floor was raised).
+   `--keep-newest 0` offers the newest copy of every duplicate set and prints a WARNING.
+3. Apply: `disk-cleanup --apply --kinds build-dirs --plan-id <id>`, the id from the `Next:` line of that dry run
+   (24 h, same user, same flags). Count how many times you hit `plan-id ... does not match the plan just computed`
+   (`changed`): that number is the evidence rule of `design/ux.md` 1.4 (the id binds the item set, there is no
+   tolerance in v1). A partly failed or interrupted apply spends its id; the summary says so and names the
+   command. A dir that an apply emptied but could not remove has a fresh mtime and stays under the 60 minute floor
+   for an hour.
+4. Judge it: `disk-cleanup audit verify` over all live runs (exit 0, `0 outside the allowed roots`), `make safety`
+   on both profiles, `scripts/outcome-report.sh`.
+5. Pick `--jobs` from the table in `research/spikes.md` (Story 3.2.4) if the default does not suit this disk.
+6. On accept (build dirs and worktrees): add `"gate-c"` to `default` in `crates/cli/Cargo.toml`, set `active-gate C`
+   in `ci/safety/kinds-by-gate.txt` and `ci/safety/manifest.txt`, commit, cut `v0.3.0` from that commit.
