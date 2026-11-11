@@ -315,7 +315,7 @@ fn command(st: &mut ExploreState, tree: &ExploreTree, cmd: Cmd, env: &KeyEnv<'_>
             None => Action::None,
         },
         Cmd::RescanAll => Action::Rescan(Rescan::All),
-        Cmd::Escape => escape(st, tree, env),
+        Cmd::Escape => on_escape(st, tree, env),
         Cmd::Errors => {
             st.input.mode = Mode::Errors;
             Action::None
@@ -348,7 +348,7 @@ fn marked_or_message(st: &mut ExploreState, action: Action) -> Action {
 
 /// Esc in the main view acts on the first applicable of: a filter, a running scan. (An overlay or a prompt
 /// has already taken Esc in [`dispatch`], and it comes first.)
-fn escape(st: &mut ExploreState, tree: &ExploreTree, env: &KeyEnv<'_>) -> Action {
+fn on_escape(st: &mut ExploreState, tree: &ExploreTree, env: &KeyEnv<'_>) -> Action {
     if st.view.filter_active() {
         st.view.clear_filters(tree, env.now_ms, env.badge);
         return Action::None;
