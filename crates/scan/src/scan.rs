@@ -277,6 +277,20 @@ fn age_secs(mtime: i64) -> u64 {
 }
 
 /// Pure classification pass over the walk's per-directory map.
+/// Sorts by `Path` order (component-wise) without the slow component iterator: with `/` mapped to NUL the
+/// bytes of a normalized absolute path compare exactly as its components do (`a/b` before `a-b`).
+fn sort_component_order(dirs: &mut [(PathBuf, DirInfo)]) {
+    use std::os::unix::ffi::OsStrExt;
+    dirs.sort_by_cached_key(|(p, _)| {
+        p.as_os_str()
+            .as_bytes()
+            .iter()
+            .map(|b| if *b == b'/' { 0 } else { *b })
+            .collect::<Vec<u8>>()
+    });
+    debug_assert!(dirs.windows(2).all(|w| w[0].0 <= w[1].0));
+}
+
 fn build_report(
     roots: &[PathBuf],
     mut dirs: Vec<(PathBuf, DirInfo)>,
@@ -284,7 +298,7 @@ fn build_report(
     walk_ms: u128,
 ) -> ScanReport {
     // Path ordering is component-wise, so every directory's descendants follow it contiguously.
-    dirs.sort_by(|a, b| a.0.cmp(&b.0));
+    sort_component_order(&mut dirs);
     let index: HashMap<&Path, usize> = dirs
         .iter()
         .enumerate()
@@ -324,13 +338,9 @@ fn build_report(
         }
     }
 
-    let group_of = |path: &Path| -> (PathBuf, GroupKind, PathBuf) {
-        for anc in path.ancestors() {
-            if let Some((kind, repo)) = git_roots.get(anc) {
-                return (anc.to_path_buf(), *kind, repo.clone());
-            }
-        }
-        let loose = roots.iter().find(|r| path.starts_with(r)).map_or_else(
+    // Directories under no git root group by their first component below the scan root.
+    let loose_of = |path: &Path| -> PathBuf {
+        roots.iter().find(|r| path.starts_with(r)).map_or_else(
             || path.to_path_buf(),
             |r| {
                 let rel = path.strip_prefix(r).unwrap_or(path);
@@ -338,29 +348,106 @@ fn build_report(
                     .next()
                     .map_or_else(|| r.clone(), |c| r.join(c))
             },
-        );
+        )
+    };
+    let group_of = |path: &Path| -> (PathBuf, GroupKind, PathBuf) {
+        for anc in path.ancestors() {
+            if let Some((kind, repo)) = git_roots.get(anc) {
+                return (anc.to_path_buf(), *kind, repo.clone());
+            }
+        }
+        let loose = loose_of(path);
         (loose.clone(), GroupKind::Loose, loose)
     };
 
-    let mut groups: BTreeMap<PathBuf, Group> = BTreeMap::new();
+    // `dirs` is sorted, so the git roots enclosing a directory form a stack that only moves at git roots:
+    // the same answer as `group_of` without hashing every ancestor of every directory.
+    let mut slots: Vec<Group> = Vec::new();
+    let mut slot_of: HashMap<PathBuf, usize> = HashMap::new();
+    fn slot_for(
+        slots: &mut Vec<Group>,
+        slot_of: &mut HashMap<PathBuf, usize>,
+        gpath: PathBuf,
+        kind: GroupKind,
+        repo: PathBuf,
+    ) -> usize {
+        *slot_of.entry(gpath.clone()).or_insert_with(|| {
+            slots.push(Group {
+                path: gpath,
+                kind,
+                repo,
+                stats: CategoryStats::default(),
+                inodes: 0,
+                metadata_est_bytes: 0,
+            });
+            slots.len() - 1
+        })
+    }
+    let mut git_keys: Vec<&PathBuf> = git_roots.keys().collect();
+    git_keys.sort();
+    let mut git_keys = git_keys.into_iter().peekable();
+    let mut stack: Vec<(&Path, usize)> = Vec::new();
     let mut totals = CategoryStats::default();
     for (i, (path, info)) in dirs.iter().enumerate() {
-        // Files belong to the directory key, dir entries to their own path: same ancestry walk.
-        let (gpath, kind, repo) = group_of(path);
-        let g = groups.entry(gpath.clone()).or_insert_with(|| Group {
-            path: gpath,
-            kind,
-            repo,
-            stats: CategoryStats::default(),
-            inodes: 0,
-            metadata_est_bytes: 0,
-        });
-        g.stats.get_mut(cats[i]).merge(&info.stats);
+        while let Some(k) = git_keys.next_if(|k| k.as_path() <= path.as_path()) {
+            while stack.last().is_some_and(|(top, _)| !k.starts_with(top)) {
+                stack.pop();
+            }
+            if let Some((kind, repo)) = git_roots.get(k) {
+                stack.push((
+                    k.as_path(),
+                    slot_for(&mut slots, &mut slot_of, k.clone(), *kind, repo.clone()),
+                ));
+            }
+        }
+        while stack.last().is_some_and(|(top, _)| !path.starts_with(top)) {
+            stack.pop();
+        }
+        let idx = match stack.last() {
+            Some((_, idx)) => *idx,
+            None => {
+                let loose = loose_of(path);
+                slot_for(
+                    &mut slots,
+                    &mut slot_of,
+                    loose.clone(),
+                    GroupKind::Loose,
+                    loose,
+                )
+            }
+        };
+        slots[idx].stats.get_mut(cats[i]).merge(&info.stats);
         totals.get_mut(cats[i]).merge(&info.stats);
     }
+    let mut groups: BTreeMap<PathBuf, Group> =
+        slots.into_iter().map(|g| (g.path.clone(), g)).collect();
     for g in groups.values_mut() {
         g.inodes = g.stats.combined().inodes;
         g.metadata_est_bytes = g.stats.metadata_est_bytes();
+    }
+
+    // Oracle (tests only): the per-directory ancestor lookup the stack replaced must group identically.
+    #[cfg(test)]
+    {
+        let mut expect: BTreeMap<PathBuf, (GroupKind, PathBuf, CategoryStats)> = BTreeMap::new();
+        for (i, (path, info)) in dirs.iter().enumerate() {
+            let (gpath, kind, repo) = group_of(path);
+            expect
+                .entry(gpath)
+                .or_insert((kind, repo, CategoryStats::default()))
+                .2
+                .get_mut(cats[i])
+                .merge(&info.stats);
+        }
+        let got: Vec<_> = groups
+            .values()
+            .map(|g| (g.path.clone(), g.kind, g.repo.clone(), g.stats))
+            .collect();
+        let want: Vec<_> = expect
+            .into_iter()
+            .map(|(p, (k, r, s))| (p, k, r, s))
+            .collect();
+        assert_eq!(got, want, "stack grouping differs from the ancestor lookup");
     }
 
     // Build roots: sum the subtree range that follows each root in sorted order.
@@ -523,6 +610,23 @@ pub fn scan(opts: &ScanOptions) -> Result<ScanReport> {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn sort_component_order_should_match_path_order_When_names_share_a_prefix_with_dash_dot_and_slash(
+    ) {
+        let names = [
+            "/r/a/b", "/r/a-b", "/r/a.b/c", "/r/a", "/r/a/b/c", "/r/a b", "/r/ab", "/r", "/r/a_b",
+        ];
+        let mut dirs: Vec<(PathBuf, DirInfo)> = names
+            .iter()
+            .rev()
+            .map(|n| (PathBuf::from(n), DirInfo::default()))
+            .collect();
+        sort_component_order(&mut dirs);
+        let mut want: Vec<PathBuf> = names.iter().map(PathBuf::from).collect();
+        want.sort();
+        assert_eq!(dirs.into_iter().map(|d| d.0).collect::<Vec<_>>(), want);
+    }
 
     fn tmp(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!(
