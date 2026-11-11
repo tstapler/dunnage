@@ -117,7 +117,7 @@ impl Fixture {
 
     /// The binary under test under the fixture environment.
     pub fn fixture_cmd(&self) -> Command {
-        self.command_for(env!("CARGO_BIN_EXE_disk-cleanup"))
+        self.command_for(bin_path())
     }
 
     /// Runs plan mode with `--json`, reads its `plan_id`, then runs the same arguments with `--apply
@@ -288,6 +288,14 @@ pub fn canary_violations(paths: &[String], allowed: &[PathBuf], exact: &[&str]) 
 // ---------------------------------------------------------------- Story 2.3.3 helpers
 
 use std::time::{Duration, SystemTime};
+
+/// The binary under test as an absolute path. Cargo's `CARGO_BIN_EXE_*` already is; under Bazel it is relative to
+/// the runfiles directory (the test's working directory), which a child started with `current_dir` would not find.
+pub fn bin_path() -> PathBuf {
+    std::env::current_dir()
+        .expect("cwd")
+        .join(env!("CARGO_BIN_EXE_disk-cleanup"))
+}
 
 /// The repository root (`CARGO_MANIFEST_DIR` is `crates/cli`).
 pub fn repo_root() -> PathBuf {

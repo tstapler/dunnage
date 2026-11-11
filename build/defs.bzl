@@ -65,7 +65,7 @@ def dc_library(name, crate_name, srcs, deps, proc_macro_deps = [], crate_feature
             **common
         )
 
-def dc_integration_tests(crate, deps, proc_macro_deps, features = [], data = [], compile_data = [], env = {}, rustc_env = {}, per_test = {}, tags = [], size = "small"):
+def dc_integration_tests(crate, deps, proc_macro_deps, features = [], data = [], compile_data = [], env = {}, rustc_env = {}, per_test = {}, tags = [], size = "medium"):
     """One rust_test per tests/*.rs file (glob: a new file gets a target on its own).
 
     Subdirectories of tests/ (`common`, `support`, fixtures, ...) are shared sources of every test, as in Cargo
@@ -80,6 +80,7 @@ def dc_integration_tests(crate, deps, proc_macro_deps, features = [], data = [],
         kw = dict(
             name = stem + "_test",
             srcs = [f] + shared_srcs,
+            crate_name = stem,
             crate_root = f,
             edition = "2021",
             deps = deps,
@@ -87,7 +88,7 @@ def dc_integration_tests(crate, deps, proc_macro_deps, features = [], data = [],
             crate_features = features,
             data = data + shared_data + extra.get("data", []),
             compile_data = compile_data + shared_data + shared_srcs + extra.get("compile_data", []),
-            env = dict(env, **extra.get("env", {})),
+            env = dict({"INSTA_UPDATE": "no"}, **dict(env, **extra.get("env", {}))),
             rustc_env = dict(rustc_env, **extra.get("rustc_env", {})),
             tags = tags + extra.get("tags", []),
             size = extra.get("size", size),
@@ -98,11 +99,13 @@ def dc_integration_tests(crate, deps, proc_macro_deps, features = [], data = [],
             kw["timeout"] = extra["timeout"]
         if "flaky" in extra:
             kw["flaky"] = extra["flaky"]
+        if "env_inherit" in extra:
+            kw["env_inherit"] = extra["env_inherit"]
         if "shard_count" in extra:
             kw["shard_count"] = extra["shard_count"]
         rust_test(**kw)
 
-def dc_unit_and_doc_tests(name, crate, deps, proc_macro_deps, data = [], env = {}, tags = [], doc = True):
+def dc_unit_and_doc_tests(name, crate, deps, proc_macro_deps, data = [], env = {}, tags = [], doc = True, doc_crate = None, flaky = False):
     """Unit tests (#[cfg(test)] in src/) and doc-tests of `crate` (the _ts variant, as `cargo test` builds it)."""
     rust_test(
         name = name + "_unit_test",
@@ -112,8 +115,9 @@ def dc_unit_and_doc_tests(name, crate, deps, proc_macro_deps, data = [], env = {
         data = data,
         env = env,
         tags = tags,
+        flaky = flaky,
         rustc_env_files = [MANIFEST_ENV],
         lint_config = LINTS,
     )
     if doc:
-        rust_doc_test(name = name + "_doc_test", crate = crate, deps = deps, tags = tags)
+        rust_doc_test(name = name + "_doc_test", crate = doc_crate or crate, deps = deps, tags = tags)

@@ -132,6 +132,33 @@ dc_integration_tests(
     features = FEATURES,
     proc_macro_deps = all_crate_deps(proc_macro = True) + all_crate_deps(proc_macro_dev = True),
     rustc_env = {"CARGO_BIN_EXE_disk-cleanup": "$(rootpath :disk-cleanup_ts)"},
+    per_test = {
+        # Run `cargo run --offline` in a scratch git repo: needs cargo and git on PATH (rustup also HOME).
+        "build_provenance": {
+            "env_inherit": [
+                "HOME",
+                "CARGO_HOME",
+                "RUSTUP_HOME",
+            ],
+            "tags": ["requires-cargo"],
+        },
+        # Build the release/dist/gate-b binaries with cargo in a private target dir (minutes). Under Bazel they take
+        # the tests' own named skip; `make gate` runs them through cargo (scripts/gate.sh, "cargo-only tests").
+        "kind_registry": {
+            "env": {"DC_SKIP_PROFILE_BUILDS": "1"},
+            "tags": ["requires-cargo"],
+        },
+        "e2e_apply_caches": {
+            "env": {"DC_SKIP_PROFILE_BUILDS": "1"},
+            "tags": [
+                "requires-cargo",
+                "requires-strace",
+                "requires-unshare",
+            ],
+        },
+        "e2e_apply_build_dirs": {"tags": ["requires-unshare"]},
+        "canary_home": {"tags": ["requires-strace"]},
+    },
 )
 
 filegroup(

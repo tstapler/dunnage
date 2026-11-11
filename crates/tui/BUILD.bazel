@@ -61,6 +61,7 @@ dc_integration_tests(
         "pty_restore": {
             "data": [":guard_probe"],
             "env": {"DC_GUARD_PROBE": "$(rootpath :guard_probe)"},
+            "tags": ["requires-pty"],
         },
     },
 )

@@ -5,11 +5,8 @@ common --enable_bzlmod
 build --workspace_status_command=build/workspace_status.sh
 build --incompatible_strict_action_env
 build --nostamp
-# rules_rust passes warnings through; tests and clippy decide what is fatal.
-build --@rules_rust//rust/settings:error_format=rendered
 
 test --test_output=errors
-test --test_verbose_timeout_warnings
 # Tests are fixture-only (DC_TEST_ROOT); a test that must see the real machine says so with the tags
 # `local`/`no-sandbox` and one `requires-*` tag (see crates/*/BUILD.bazel and docs/adr or ADR-008).
 test --test_env=PATH

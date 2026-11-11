@@ -27,6 +27,10 @@ dc_unit_and_doc_tests(
     name = "core",
     crate = ":core_ts",
     data = TEST_DATA,
+    # rules_rust's rustdoc --test ignores crate_features, so the doc-tests run against the shipped (feature-off)
+    # library. Cargo's run never sees `NoForTestsWithoutFeature` (the self dev-dependency turns the feature on);
+    # here its compile_fail check of "no ApplyToken::for_tests without the feature" runs for real.
+    doc_crate = ":core",
     deps = all_crate_deps(normal_dev = True),
     proc_macro_deps = all_crate_deps(proc_macro_dev = True),
 )

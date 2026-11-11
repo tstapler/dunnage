@@ -49,6 +49,9 @@ TEST_DATA = ["//:repo_files"]
 dc_unit_and_doc_tests(
     name = "adapters",
     crate = ":adapters_ts",
+    # probe::run_state's flock test races with sibling tests that fork (its own comment says so); under load the
+    # window widens (observed 2 of 3 full runs at load 34, 0 of 6 alone). Bazel retries it up to 3 times.
+    flaky = True,
     data = TEST_DATA,
     deps = all_crate_deps(normal_dev = True),
     proc_macro_deps = all_crate_deps(proc_macro_dev = True),
@@ -65,6 +68,19 @@ dc_integration_tests(
     ] + all_crate_deps(normal = True) + all_crate_deps(normal_dev = True),
     proc_macro_deps = all_crate_deps(proc_macro = True) + all_crate_deps(proc_macro_dev = True),
     per_test = {
+        # Need a real btrfs: they skip by name ("SKIP: not btrfs") elsewhere. To force them on a btrfs path:
+        #   --test_env=DC_FIXTURE_ROOT=<dir on btrfs> --test_env=DC_REQUIRE_BTRFS=1 --sandbox_writable_path=<dir>
+        "explore_fiemap": {
+            "size": "large",
+            "tags": ["requires-btrfs"],
+        },
+        "fiemap_attr": {
+            "size": "large",
+            "tags": ["requires-btrfs"],
+        },
+        # Asserts the name of the process holding a cwd; a sibling test's forked-but-not-yet-exec'd child shows the
+        # test binary's name instead (seen once in 4 full runs at load 34, 0 of 8 alone). Same race as the unit test.
+        "probe_cwd": {"flaky": True},
         "explore_signals": {
             "data": [":dc-sigprobe"],
             "rustc_env": {"CARGO_BIN_EXE_dc-sigprobe": "$(rootpath :dc-sigprobe)"},
