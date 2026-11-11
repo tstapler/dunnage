@@ -139,7 +139,7 @@ mod interactive {
             tty: screen.tty,
         };
         match mode {
-            Mode::Interactive => interactive(cli, base, roots, &settings, signals, size, &screen),
+            Mode::Interactive => interactive(base, roots, &settings, signals, size, &screen),
             Mode::Text { note } => {
                 if let Some(n) = note {
                     eprintln!("{n}");
@@ -182,7 +182,6 @@ mod interactive {
     }
 
     fn interactive(
-        cli: &Cli,
         base: &Dirs,
         roots: &RootSet,
         settings: &Settings,
@@ -200,21 +199,21 @@ mod interactive {
             eprintln!("{note}");
         }
         let mut cfg = ExplorerConfig::new(settings.display_roots.clone(), roots.clone());
-        cfg.scan_opts = env.scan_opts.clone();
+        cfg.scan_opts.clone_from(&env.scan_opts);
         cfg.sort = settings.sort;
-        cfg.cleaner_roots = env.cleaner_roots.clone();
-        cfg.config_path = env.config_path.clone();
+        cfg.cleaner_roots.clone_from(&env.cleaner_roots);
+        cfg.config_path.clone_from(&env.config_path);
         cfg.home = Some(base.home.clone());
         cfg.tty = true;
-        cfg.color = screen.color && !cli.no_color;
-        cfg.mark_check = env.mark_check.clone();
+        cfg.color = screen.color;
+        cfg.mark_check.clone_from(&env.mark_check);
         cfg.owner_of = Some(env.owner_of.clone());
         cfg.device_label = Some(env.device_label.clone());
         cfg.now_unix = env.now_unix;
-        cfg.cache_age = env.cache_age.clone();
-        cfg.initial_headroom = env.initial_headroom.clone();
-        cfg.headroom_path = env.headroom_path.clone();
-        cfg.start_note = env.start_note.clone();
+        cfg.cache_age.clone_from(&env.cache_age);
+        cfg.initial_headroom.clone_from(&env.initial_headroom);
+        cfg.headroom_path.clone_from(&env.headroom_path);
+        cfg.start_note.clone_from(&env.start_note);
         let ports = Ports {
             scan: env.scan.clone(),
             lister: env.lister.clone(),
@@ -243,6 +242,7 @@ mod interactive {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 
@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn a_missing_path_should_be_roots_unreadable_with_its_errno() {
         let missing = PathBuf::from("/definitely/not/here");
-        let err = resolve_display_roots(&[missing.clone()]).unwrap_err();
+        let err = resolve_display_roots(std::slice::from_ref(&missing)).unwrap_err();
         assert_eq!(err.exit_code(), 2);
         assert!(
             err.text().contains("/definitely/not/here"),

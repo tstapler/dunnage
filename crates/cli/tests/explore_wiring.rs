@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 //! Story 6.5.4, Task 6.5.4c: the production `mark_check` closure, built by the wiring from the real
 //! `lstat`, `/proc/self/mountinfo` and `Dirs` (the hand-off of Story 6.6.1).
+#![cfg(feature = "explore")]
 
 mod common;
 

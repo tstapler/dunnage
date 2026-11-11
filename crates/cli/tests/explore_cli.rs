@@ -6,7 +6,9 @@ mod common;
 
 use std::path::PathBuf;
 
-use common::{tree_manifest, Fixture};
+#[cfg(feature = "explore")]
+use common::tree_manifest;
+use common::Fixture;
 use disk_cleanup_cli::args::{self, Command, ExploreSortArg, Parsed, EXPLORE_NO_APPLY};
 
 fn explore_args(argv: &[&str]) -> args::ExploreArgs {

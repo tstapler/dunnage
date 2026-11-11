@@ -2,6 +2,7 @@
 //! Story 6.5.4, Task 6.5.4c: the spawned `explore` binary. Its text and JSON stdout equal the library's, a
 //! signal mid-scan ends it with the table's exit code, and a run writes nothing but the explorer cache, the
 //! first-run reserve files and, after a preview, `last_plan` (UX-T32, UX-T33, N-8).
+#![cfg(feature = "explore")]
 
 mod common;
 
