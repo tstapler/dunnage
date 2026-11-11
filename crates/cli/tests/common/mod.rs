@@ -117,7 +117,7 @@ impl Fixture {
 
     /// The binary under test under the fixture environment.
     pub fn fixture_cmd(&self) -> Command {
-        self.command_for(env!("CARGO_BIN_EXE_disk-cleanup"))
+        self.command_for(bin_path())
     }
 
     /// Runs plan mode with `--json`, reads its `plan_id`, then runs the same arguments with `--apply
@@ -289,9 +289,22 @@ pub fn canary_violations(paths: &[String], allowed: &[PathBuf], exact: &[&str]) 
 
 use std::time::{Duration, SystemTime};
 
+/// The binary under test as an absolute path. Cargo's `CARGO_BIN_EXE_*` already is; under Bazel it is relative to
+/// the runfiles directory (the test's working directory), which a child started with `current_dir` would not find.
+pub fn bin_path() -> PathBuf {
+    std::env::current_dir()
+        .expect("cwd")
+        .join(env!("CARGO_BIN_EXE_disk-cleanup"))
+}
+
 /// The repository root (`CARGO_MANIFEST_DIR` is `crates/cli`).
 pub fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    // Bazel runs tests in a runfiles tree of symlinks, which the repo-level scripts cannot walk: the tests that run
+    // them are tagged `local` and get the real checkout through DC_REPO_ROOT (scripts/bazel.sh sets it).
+    std::env::var_os("DC_REPO_ROOT").map_or_else(
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+        PathBuf::from,
+    )
 }
 
 /// `<dir>/f` holding `bytes` bytes, the file and the directory aged `days` days (so `--min-age` sees the age).

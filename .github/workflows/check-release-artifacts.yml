@@ -1,29 +1,41 @@
-# Called from the generated release.yml (dist-workspace.toml: local-artifacts-jobs). release.yml's `host` job needs
-# this job, so a failure here stops the GitHub Release. dist has no hook between its build and its upload, and a
-# custom job runs beside the build, not after it: so this rebuilds exactly what dist builds (`-p disk-cleanup`,
-# profile dist; the package name lives in scripts/check-release-features.sh) and checks that build. The check
-# against the shipped archives themselves is `scripts/check-release-features.sh --artifact <bin>` (RELEASE.md).
+# Called by the tag-triggered release workflow before its release job (RELEASE.md), and runnable by hand. Builds the
+# dist binary exactly as the release does (`bazel build --config=dist //crates/cli:disk-cleanup`) on each release
+# runner and checks that binary: no `test-support` marker, and `main` reaches `build_flavor()` so the marker leg is
+# not blind (scripts/check-release-features.sh --artifact). The Cargo and Bazel graph legs run in ci.yml.
 name: Check release features
 
 on:
   workflow_call:
-    inputs:
-      plan:
-        description: dist plan JSON (dist passes it to every custom job; unused here)
-        required: true
-        type: string
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+env:
+  DC_BAZEL_PLAIN: "1"
+
 jobs:
   no-test-support:
-    runs-on: ubuntu-24.04
+    name: no test-support (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The release targets and runners (RELEASE.md): x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, aarch64-apple-darwin.
+        runner: [ubuntu-22.04, ubuntu-24.04-arm, macos-15]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      - name: selftest
-        run: scripts/check-release-features.sh --selftest
-      - name: release and dist builds carry no test-support
-        run: scripts/check-release-features.sh
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: bazel-contrib/setup-bazel@f34d6a05eae3c24acab7fa54587492daeaeffdab # 0.19.2
+        with:
+          disk-cache: release-check-${{ matrix.runner }}
+          repository-cache: true
+          cache-save: ${{ github.event_name != 'pull_request' }}
+      - name: build the release binary
+        run: bazel build --config=ci --config=dist //crates/cli:disk-cleanup
+      - name: no test-support in the release binary
+        run: scripts/check-release-features.sh --artifact bazel-bin/crates/cli/disk-cleanup
+      # Last: it builds tainted binaries into the same output path.
+      - name: the Bazel selftest (a tainted build must fail every leg)
+        run: scripts/check-release-features.sh --bazel-selftest

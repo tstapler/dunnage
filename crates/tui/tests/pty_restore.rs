@@ -16,6 +16,10 @@ const SHOW_CURSOR: &[u8] = b"\x1b[?25h";
 const RESET: &[u8] = b"\x1b[0m";
 
 fn probe() -> PathBuf {
+    // Bazel hands over the example's runfiles path; Cargo's `target/<profile>/examples` layout is the fallback.
+    if let Some(p) = std::env::var_os("DC_GUARD_PROBE") {
+        return fs::canonicalize(p).unwrap();
+    }
     let exe = std::env::current_exe().unwrap();
     let deps = exe.parent().unwrap();
     deps.parent().unwrap().join("examples").join("guard_probe")
@@ -154,7 +158,10 @@ impl Pty {
     fn finish(&mut self) {
         assert!(self.wait_for(b"SHELL-AFTER", 0), "{:?}", self.tail());
         let end = Instant::now() + Duration::from_secs(10);
-        while !self.dir.join("after").exists() && Instant::now() < end {
+        // Non-empty, not merely present: the shell creates `after` before `stty` has written it.
+        while fs::read_to_string(self.dir.join("after")).map_or(true, |t| t.is_empty())
+            && Instant::now() < end
+        {
             self.pump();
             std::thread::sleep(Duration::from_millis(20));
         }

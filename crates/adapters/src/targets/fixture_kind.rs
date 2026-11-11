@@ -258,7 +258,7 @@ mod imp {
 pub use imp::FixtureTarget;
 
 /// The `fixture-destructive` target, or `None` in a build without `test-support`.
-#[allow(unused_variables)]
+#[allow(unused_variables, clippy::needless_pass_by_value)] // both only feed the test-support branch
 pub fn fixture_destructive_target<D: DirOps + 'static>(
     roots: RootSet,
     ops: D,

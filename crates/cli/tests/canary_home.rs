@@ -4,7 +4,7 @@
 
 mod common;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use common::{
     canary_violations, strace_available, strace_cmd, strace_own_paths, tree_manifest, Fixture,
@@ -42,7 +42,8 @@ fn allowlist(fx: &Fixture) -> Vec<PathBuf> {
     let mut a: Vec<PathBuf> = SYSTEM_PREFIXES.iter().map(PathBuf::from).collect();
     a.push(std::fs::canonicalize(fx.root()).unwrap());
     a.push(fx.root().to_path_buf());
-    let exe = Path::new(env!("CARGO_BIN_EXE_disk-cleanup"));
+    let exe_buf = common::bin_path();
+    let exe = exe_buf.as_path();
     a.push(exe.parent().unwrap().to_path_buf());
     a
 }
@@ -107,7 +108,7 @@ fn canary_should_show_a_plan_run_touching_only_the_fixture_home_and_allowlisted_
     }
     let fx = Fixture::new();
     let log = fx.root().join("plan.log");
-    let mut c = strace_cmd(&fx, &log, env!("CARGO_BIN_EXE_disk-cleanup"));
+    let mut c = strace_cmd(&fx, &log, common::bin_path());
     c.arg("--json")
         .env("PATH", fixture_path(&fx))
         .current_dir(fx.home());

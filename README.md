@@ -104,9 +104,8 @@ Not cleaned by design: Maven's local repository, source files, `.git`, lockfiles
 # Homebrew (Linux x86_64 and aarch64 via Linuxbrew, macOS arm64) (after the first release)
 brew install tstapler/tap/disk-cleanup
 
-# GitHub release archives and shell installer (after the first release)
-# TODO-OUTPUT: paste the installer one-liner that cargo-dist prints in the first release notes.
-# Archives: disk-cleanup-x86_64-unknown-linux-gnu, disk-cleanup-aarch64-unknown-linux-gnu, disk-cleanup-aarch64-apple-darwin (.tar.xz)
+# GitHub release archives (after the first release; each has a .sha256 beside it)
+# Archives: disk-cleanup-<version>-<target>.tar.gz for x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu and aarch64-apple-darwin
 
 # cargo (after the first release, and only if crates.io publication happened; see Platforms)
 cargo install disk-cleanup

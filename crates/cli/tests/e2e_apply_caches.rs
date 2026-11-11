@@ -480,7 +480,7 @@ fn strace_network(f: &Fixture, log: &Path, args: &[&str]) -> std::process::Outpu
     f.command_for(strace)
         .args(["-f", "-e", "trace=network", "-o"])
         .arg(log)
-        .arg(env!("CARGO_BIN_EXE_disk-cleanup"))
+        .arg(common::bin_path())
         .args(args)
         .stdin(std::process::Stdio::null())
         .output()
@@ -534,7 +534,7 @@ fn the_plan_and_the_apply_should_open_no_inet_socket_When_traced_and_the_plan_sh
         let out = f
             .command_for("unshare")
             .args(["-rn"])
-            .arg(env!("CARGO_BIN_EXE_disk-cleanup"))
+            .arg(common::bin_path())
             .args(["--kinds", "caches"])
             .stdin(std::process::Stdio::null())
             .output()
@@ -610,7 +610,7 @@ fn safety_fixture_home_canary() {
     cold(&f);
     let shim = go_shim(&f);
     let log = f.root().join("apply.log");
-    let mut c = common::strace_cmd(&f, &log, env!("CARGO_BIN_EXE_disk-cleanup"));
+    let mut c = common::strace_cmd(&f, &log, common::bin_path());
     c.args(["--apply", "--kinds", "caches"])
         .env("PATH", fixture_path(&f))
         .current_dir(f.home())
@@ -637,8 +637,12 @@ fn safety_fixture_home_canary() {
     let mut allowed: Vec<PathBuf> = SYSTEM_PREFIXES.iter().map(PathBuf::from).collect();
     allowed.push(std::fs::canonicalize(f.root()).unwrap());
     allowed.push(f.root().to_path_buf());
+    let exe = common::bin_path();
+    allowed.push(exe.parent().unwrap().to_path_buf());
+    // Bazel's runfiles entry is a symlink; strace shows the file it resolves to.
     allowed.push(
-        Path::new(env!("CARGO_BIN_EXE_disk-cleanup"))
+        std::fs::canonicalize(&exe)
+            .unwrap()
             .parent()
             .unwrap()
             .to_path_buf(),
@@ -942,7 +946,7 @@ mod full_disk {
             f.xdg("cache").display(),
             f.xdg("config").display(),
             f.root().display(),
-            env!("CARGO_BIN_EXE_disk-cleanup"),
+            common::bin_path().display(),
         )
     }
 

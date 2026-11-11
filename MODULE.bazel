@@ -1,0 +1,40 @@
+"""Bazel build, test, lint and release-archive system for disk-cleanup (ADR-008).
+
+Cargo.toml / Cargo.lock stay the dependency source of truth: crate_universe reads them, and
+`cargo publish`, `cargo mutants` and plain `cargo build|test|clippy` keep working.
+"""
+
+module(
+    name = "disk_cleanup",
+    version = "0.1.0",
+)
+
+# Versions verified on the Bazel Central Registry on 2026-11-11:
+#   https://registry.bazel.build/modules/rules_rust (0.75.0), /rules_cc (0.2.28), /platforms (1.1.0),
+#   /bazel_skylib (1.9.2), /rules_shell (0.8.0)
+bazel_dep(name = "rules_rust", version = "0.75.0")
+bazel_dep(name = "rules_cc", version = "0.2.28")
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "bazel_skylib", version = "1.9.2")
+bazel_dep(name = "rules_shell", version = "0.8.0")
+
+# One rustc for Bazel and Cargo: keep in step with rust-toolchain.toml.
+RUST_VERSION = "1.98.1"
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2021",
+    versions = [RUST_VERSION],
+)
+use_repo(rust, "rust_toolchains")
+
+register_toolchains("@rust_toolchains//:all")
+
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crate.from_cargo(
+    name = "crates",
+    cargo_lockfile = "//:Cargo.lock",
+    lockfile = "//:cargo-bazel-lock.json",
+    manifests = ["//:Cargo.toml"],
+)
+use_repo(crate, "crates")

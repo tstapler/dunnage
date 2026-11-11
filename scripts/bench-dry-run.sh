@@ -334,14 +334,24 @@ bin=${DC_BENCH_BIN:-${CARGO_TARGET_DIR:-target}/release/disk-cleanup}
 usage="usage: $0 [--bin PATH | --budget [--bin PATH]] | --selftest"
 # The default binary is rebuilt (a no-op when fresh): a gate runs this before its own release build.
 # The owner-machine run measures the Gate D build, which registers every kind (Story 5.1.1).
+# DC_BENCH_BAZEL=1 (set by scripts/gate.sh): the binary is the Bazel -c opt build of the gate's registry, not Cargo's.
+bazel_bin() { bin=$(cd "$(dirname "$0")/.." && scripts/gate-binary.sh "$1") || fail "bazel build ($1) failed"; }
 build_default() {
   [ -n "${DC_BENCH_BIN:-}" ] && return 0
+  if [ "${DC_BENCH_BAZEL:-0}" = 1 ]; then
+    if [ "${DC_BENCH_OWNER_MACHINE:-0}" = 1 ]; then bazel_bin "${DC_BENCH_FEATURE:-gate-d}"; else bazel_bin none; fi
+    return 0
+  fi
   if [ "${DC_BENCH_OWNER_MACHINE:-0}" = 1 ]; then
     cargo build --release --locked -q --features "disk-cleanup/${DC_BENCH_FEATURE:-gate-d}" || fail "cargo build --release (${DC_BENCH_FEATURE:-gate-d}) failed"
   else cargo build --release --locked -q || fail "cargo build --release failed"; fi
 }
 # DC_BENCH_FEATURE names the gate feature the budget binary is built with (gate-b by default; Gate C passes gate-c).
-build_gate_b() { [ -n "${DC_BENCH_BIN:-}" ] || cargo build --release --locked -q --features "disk-cleanup/${DC_BENCH_FEATURE:-gate-b}" || fail "cargo build --release (${DC_BENCH_FEATURE:-gate-b}) failed"; }
+build_gate_b() {
+  [ -n "${DC_BENCH_BIN:-}" ] && return 0
+  if [ "${DC_BENCH_BAZEL:-0}" = 1 ]; then bazel_bin "${DC_BENCH_FEATURE:-gate-b}"; return 0; fi
+  cargo build --release --locked -q --features "disk-cleanup/${DC_BENCH_FEATURE:-gate-b}" || fail "cargo build --release (${DC_BENCH_FEATURE:-gate-b}) failed"
+}
 case ${1:-} in
   --selftest) selftest ;;
   --bin) [ $# = 2 ] || { echo "$usage"; exit 64; }; run "$2" ;;

@@ -1,0 +1,39 @@
+# Layering (lowest to highest): this file < .bazelrc.ci (--config=ci) < user.bazelrc (git-ignored, per machine)
+# < command line. Bazel 9 (.bazelversion), bzlmod only. See RELEASE.md and docs/ADR-008 for the Bazel/Cargo split.
+common --enable_bzlmod
+
+build --workspace_status_command=build/workspace_status.sh
+build --incompatible_strict_action_env
+build --nostamp
+
+test --test_output=errors
+# Tests are fixture-only (DC_TEST_ROOT); a test that must see the real machine says so with the tags
+# `local`/`no-sandbox` and one `requires-*` tag (see crates/*/BUILD.bazel and docs/adr or ADR-008).
+test --test_env=PATH
+test --test_env=TMPDIR=/tmp
+
+# --- profiles -------------------------------------------------------------------------------------------------
+# fastbuild (default) == cargo dev without debuginfo; dbg == cargo dev; opt == cargo --release.
+# dist == [profile.dist] of the root Cargo.toml (inherits release; lto = "thin"; no strip; panic = unwind).
+build:dist --compilation_mode=opt
+build:dist --@rules_rust//rust/settings:lto=thin
+build:dist --stamp
+
+# --- feature gates (Story 2.3.4): one --//build:gate value; the default registers no apply-capable kind ------------
+build:gate-b --//build:gate=b
+build:gate-c --//build:gate=c
+build:gate-d --//build:gate=d
+build:gate-b --stamp
+build:gate-c --stamp
+build:gate-d --stamp
+
+# --- lint: `bazel build --config=lint //...` (rustfmt + clippy -D warnings, the same lints as Cargo) -------------
+build:lint --aspects=@rules_rust//rust:defs.bzl%rustfmt_aspect
+build:lint --aspects=@rules_rust//rust:defs.bzl%rust_clippy_aspect
+build:lint --output_groups=+rustfmt_checks,+clippy_checks
+build:lint --@rules_rust//rust/settings:clippy_flags=-D,warnings
+# Lint every target, including testonly helpers; not the tests' run-time outputs.
+build:lint --keep_going
+
+import %workspace%/.bazelrc.ci
+try-import %workspace%/user.bazelrc

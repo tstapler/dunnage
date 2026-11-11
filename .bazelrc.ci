@@ -1,0 +1,13 @@
+# Used as `bazel ... --config=ci` (GitHub Actions: .github/workflows/ci.yml).
+build:ci --color=no
+build:ci --curses=no
+build:ci --show_timestamps
+build:ci --verbose_failures
+build:ci --keep_going
+build:ci --jobs=HOST_CPUS*0.75
+test:ci --test_output=errors
+
+# Remote cache: OFF by default. To use the self-hosted bazel-cache-proxy (github.com/tstapler/bazel-cache-proxy),
+# pass it on the command line or in user.bazelrc, never here (no credentials or hostnames in git):
+#   --remote_cache=grpcs://<proxy-host>:443 --remote_header=Authorization=Bearer\ <token> --remote_upload_local_results
+# CI runs must read-only on pull requests: --noremote_upload_local_results.

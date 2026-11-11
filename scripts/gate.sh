@@ -16,6 +16,8 @@ run_gate() {
   ls ci/gate.d/*.required >/dev/null 2>&1 || { echo "FAIL: ci/gate.d/*.required missing"; return 1; }
   [ -z "$(git status --porcelain)" ] || { echo "FAIL: working tree is not clean; the report must name a commit"; return 1; }
   sha=$(git rev-parse --short HEAD)
+  # The bench scripts build the gate's binary with Bazel instead of Cargo (see scripts/gate-binary.sh).
+  [ "${DC_GATE_SKIP_BUILD:-${DC_GATE_SKIP_CARGO:-0}}" = 1 ] || export DC_BENCH_BAZEL=1
   step() { local name=$1; shift; if "$@" >/dev/null 2>&1; then ok=$((ok+1)); echo "ok:   $name"; else fails=$((fails+1)); echo "FAIL: $name"; fi; }
   while read -r first last cmd; do
     [ -n "${first:-}" ] && [ "${first:0:1}" != "#" ] || continue
@@ -30,15 +32,24 @@ run_gate() {
     cat ci/gate.d/*.required | grep -qE "^[A-F] [A-F-] $script( |$)" || step "$script" "$script"
     if grep -q -- '--selftest' "$script"; then step "$script --selftest" "$script" --selftest; fi
   done
-  if [ "${DC_GATE_SKIP_CARGO:-0}" != 1 ]; then
+  # Build, lint and test with Bazel (ADR-008); the Cargo leg keeps the tests Bazel cannot run hermetically
+  # (they build release profiles with cargo) and a release build that detects Cargo/Bazel drift.
+  # DC_GATE_SKIP_BUILD=1 (alias DC_GATE_SKIP_CARGO) skips this block, for the selftest.
+  local bin=${DC_GATE_BINARY:-} copy=""
+  if [ "${DC_GATE_SKIP_BUILD:-${DC_GATE_SKIP_CARGO:-0}}" != 1 ]; then
     # The kinds a gate registers are a build setting (Story 2.3.4): gate B and later build with the gate's feature,
     # so the binary the gate stamps is the one whose registry matches ci/safety/kinds-by-gate.txt. Gate A has none.
-    local feat=()
-    case $gate in B) feat=(--features disk-cleanup/gate-b) ;; C) feat=(--features disk-cleanup/gate-c) ;; D|E|F) feat=(--features disk-cleanup/gate-d) ;; esac
-    step "cargo fmt --check" cargo fmt --all -- --check
-    step "cargo clippy" cargo clippy --workspace --all-targets "${feat[@]}" -- -D warnings
-    step "cargo test" env GATE="$gate" cargo test --workspace "${feat[@]}"
-    step "cargo build --release" cargo build --release --locked --workspace "${feat[@]}"
+    local cfg=() feat=()
+    case $gate in B) cfg=(--config=gate-b); feat=(--features disk-cleanup/gate-b) ;; C) cfg=(--config=gate-c); feat=(--features disk-cleanup/gate-c) ;;
+      D|E|F) cfg=(--config=gate-d); feat=(--features disk-cleanup/gate-d) ;; esac
+    step "bazel build //..." scripts/bazel.sh build //... "${cfg[@]}"
+    step "bazel lint (rustfmt + clippy -D warnings)" scripts/bazel.sh build --config=lint //... "${cfg[@]}"
+    step "bazel test //..." scripts/bazel.sh test //... "${cfg[@]}" --test_env=GATE="$gate"
+    step "cargo-only tests (release profile builds)" env GATE="$gate" cargo test -p disk-cleanup "${feat[@]}" --test kind_registry --test e2e_apply_caches
+    step "cargo build --release (Cargo/Bazel drift leg)" cargo build --release --locked --workspace "${feat[@]}"
+    if [ -z "$bin" ] && [ "$fails" = 0 ]; then
+      if bin=$(scripts/gate-binary.sh "$gate" 2>/dev/null); then ok=$((ok+1)); echo "ok:   bazel -c opt gate binary $bin"; else fails=$((fails+1)); echo "FAIL: bazel -c opt gate binary"; fi
+    fi
   fi
   prev=$(ls -t "$(git rev-parse --git-dir)/gate-reports/$gate-"*.txt 2>/dev/null | head -1)
   prev=${prev##*/}; prev=${prev#"$gate"-}; prev=${prev%.txt}
@@ -47,9 +58,10 @@ run_gate() {
   line="GATE $gate commit $sha tree clean checks $((ok+fails)) ok $ok failed $fails"
   mkdir -p "$(git rev-parse --git-dir)/gate-reports"; echo "$line" > "$(git rev-parse --git-dir)/gate-reports/$gate-$sha.txt"; echo "$line"
   # Gate stamp (Task 0.1.1d, consumed by Task 2.2.1d): only an all-green gate on a clean tree stamps the release binary it built.
-  bin=${DC_GATE_BINARY:-${CARGO_TARGET_DIR:-target}/release/disk-cleanup}
   rm -f "$(git rev-parse --git-dir)/gate-reports/stamp-$gate.json"
-  if [ $fails = 0 ] && [ -f "$bin" ]; then
+  if [ $fails = 0 ] && [ -n "$bin" ] && [ -f "$bin" ]; then
+    # Bazel reuses one output path for every gate: keep the exact stamped file for `make install-gated`.
+    copy=$(git rev-parse --git-dir)/gate-reports/bin-$gate; cp -f "$bin" "$copy"
     printf '{"schema":1,"gate":"%s","commit":"%s","binary_sha256":"%s"}\n' "$gate" "$(git rev-parse HEAD)" "$(sha256sum "$bin" | cut -d' ' -f1)" \
       > "$(git rev-parse --git-dir)/gate-reports/stamp-$gate.json"
     echo "stamp: $(git rev-parse --git-dir)/gate-reports/stamp-$gate.json"

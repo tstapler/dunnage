@@ -1,0 +1,4 @@
+# <first-gate> <last-gate|-> <command>   (ADR-008: Bazel as the build system; Cargo manifests stay the source of truth)
+A - scripts/check-bazel-cargo-sync.sh
+A - scripts/check-bazel-cargo-sync.sh --selftest
+A - scripts/check-release-features.sh --bazel-selftest
