@@ -28,8 +28,8 @@ use disk_cleanup_adapters::gate_stamp::{
 use disk_cleanup_adapters::signals::SwallowBrokenPipe;
 use disk_cleanup_adapters::space_meter::run_meter;
 use disk_cleanup_adapters::state::{
-    append_outcome, OutcomeLine, OutcomeMode, Owner, RealPlanStore, StateDir, StatePaths,
-    OUTCOME_SCHEMA,
+    append_outcome, LastPlanRead, OutcomeLine, OutcomeMode, Owner, RealPlanStore, StateDir,
+    StatePaths, OUTCOME_SCHEMA,
 };
 use disk_cleanup_adapters::{RealProbe, RealSpaceMeter};
 use disk_cleanup_core::executor::{ExitClass, Refused, RunHooks};
@@ -424,6 +424,10 @@ pub fn run_apply(args: Vec<OsString>, cli: &Cli, base: &Dirs, roots: &RootSet) -
         },
         Arc::new(unix_now),
     );
+    if plans.read() == LastPlanRead::Unreadable {
+        // Told on stderr why the gate will say "no dry run" (`design/ux.md` 3.5); nothing is created.
+        eprintln!("{}", plans.unreadable_warning().text());
+    }
     let space = run_meter(RealSpaceMeter::new(probe.platform()));
     let clock = SystemClock;
     let fs = RealFs;

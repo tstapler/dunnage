@@ -457,6 +457,18 @@ impl<'a> Executor<'a> {
             .flat_map(|s| s.kinds().iter().copied())
             .collect();
         if let Some(fatal) = preflight::check(&fs_before, &selected_kinds).fatal() {
+            // The log already holds this run's `run_start`; close it, or the next run would warn that this one
+            // was killed.
+            let _ = env.audit.run_end(&RunEnd {
+                run_id: run_id.clone(),
+                ts: env.clock.now_epoch(),
+                verdict_after: DiskVerdict::Unknown,
+                attributed_bytes: 0,
+                measured_drop: None,
+                attribution_pct: None,
+                causes: Vec::new(),
+                explained: false,
+            });
             return Err(refused_fatal(&fatal, &notes, plan_id));
         }
         hooks.step("header_rest");
