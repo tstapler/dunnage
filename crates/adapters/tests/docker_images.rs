@@ -293,3 +293,34 @@ fn locally_built_image_with_digest_none_should_be_skipped_LocalOnlyImage_with_a_
         Some("me/built:dev")
     );
 }
+
+#[test]
+fn safety_docker_never_issues_a_broad_prune() {
+    let s = dangling_scene(3);
+    let runner = s.runner();
+    for i in 0..3 {
+        runner.on(&["docker", "image", "rm", &format!("{i:012x}")], ok(""));
+    }
+    runner.on(
+        &[
+            "docker",
+            "builder",
+            "prune",
+            "--force",
+            "--filter",
+            "until=24h",
+        ],
+        ok(""),
+    );
+    let rig = Rig::with(runner, s.fs());
+    let env = rig.env();
+    let t = DockerImagesTarget::new(None);
+    let _ = plan_then_apply(vec![&t], &env, &select(&[SelectorId::Docker]));
+    for c in mutating(&rig.runner) {
+        assert!(
+            c.starts_with("docker image rm ")
+                || c == "docker builder prune --force --filter until=24h",
+            "{c}"
+        );
+    }
+}

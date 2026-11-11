@@ -1,7 +1,10 @@
-//! Registry slot for `docker_volumes` (first registered at Gate D). Empty until the owning story fills it; the story that
-//! does calls `reg.add(...)` with its target and its gate, so the kind exists only in a build that has
-//! reached that gate.
+//! Registry slot for `docker-volumes` (unreferenced volumes): listed and apply-capable from Gate D (Story 4.1.4).
 
+use disk_cleanup_adapters::targets::docker_volumes::DockerVolumesTarget;
+
+use super::docker::docker_host;
 use super::{KindCtx, Registrar};
 
-pub fn register(_reg: &mut Registrar, _ctx: &KindCtx<'_>) {}
+pub fn register(reg: &mut Registrar, _ctx: &KindCtx<'_>) {
+    reg.add('D', 'D', Box::new(DockerVolumesTarget::new(docker_host())));
+}

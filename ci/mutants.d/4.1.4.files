@@ -1,0 +1,6 @@
+# Stories 4.1.2 to 4.1.4: the pure Docker guards and the targets that issue the removals
+crates/core/src/targets/docker_volume_guard.rs
+crates/core/src/targets/docker_image_guard.rs
+crates/adapters/src/targets/docker_images.rs
+crates/adapters/src/targets/docker_unused_images.rs
+crates/adapters/src/targets/docker_volumes.rs
