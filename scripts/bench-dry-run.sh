@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bench-dry-run.sh [--bin PATH] | --selftest
+# bench-dry-run.sh [--bin PATH | --budget [--bin PATH]] | --selftest
 # Story 1.3.3 (extended by Story 5.1.1): times the read-only report and asserts the speed protocol of
 # requirements.md. 12.7 s is 127 s (the untraced bash baseline) divided by 10.
 #   DC_BENCH_OWNER_MACHINE=1  the owner's machine, real HOME: one cold run (reported apart, discarded), 7 warm
@@ -7,6 +7,10 @@
 #   otherwise                 counters, not seconds: a generated tree of 20,000 directories is scanned twice by
 #                             `disk-cleanup scan`; the second run must list nothing and serve every directory
 #                             from the cache. No wall-clock assertion.
+#   --budget                  Gate B (Story 2.3.3, Task 2.3.3a): the seconds assertion without the owner's HOME. One cold
+#                             run (discarded) and WARM_RUNS warm runs of the report on a fixture HOME with the cache rows
+#                             present; the median must be <= 12.7 s. Builds the Gate B binary (--features
+#                             disk-cleanup/gate-b) unless --bin is given. The owner machine run stays an owner action.
 # Both modes need the report to be one JSON document with the npm and go caches in it: a binary that prints {}
 # instantly is not "10x". Exit 0 pass, 1 fail, 77 INCONCLUSIVE (load), 64 usage.
 # Overrides for the selftest and for a noisy machine: DC_BENCH_BIN, DC_BENCH_BUDGET_MS, DC_BENCH_RESCAN_BUDGET_MS,
@@ -128,11 +132,36 @@ counters_mode() {
   say "PASS (counters)"
 }
 
+budget_mode() {
+  local bin=$1 tmp=$2 root i t0 ms walls=() med
+  root=$tmp/fx
+  fixture_env "$root"
+  load_check
+  say "budget mode: fixture HOME, load $(cut -d' ' -f1 "$LOADAVG_FILE"), binary $bin"
+  report() {
+    env -i PATH="$root/bin:/usr/bin:/bin" HOME="$root/home" XDG_STATE_HOME="$root/xdg/state" XDG_CACHE_HOME="$root/xdg/cache" \
+      XDG_CONFIG_HOME="$root/xdg/config" DC_TEST_ROOT="$root" LANG=C "$bin" --json --no-progress > "$1" 2>/dev/null
+  }
+  report "$tmp/cold.json" || fail "cold run exited non-zero"
+  doc_check "$tmp/cold.json" || fail "cold run: document check"
+  for i in $(seq 1 "$WARM_RUNS"); do
+    t0=$(now_ms); report "$tmp/warm.json" || fail "warm run $i exited non-zero"
+    ms=$(( $(now_ms) - t0 )); walls+=("$ms")
+    doc_check "$tmp/warm.json" || fail "warm run $i: document check"
+  done
+  med=$(printf '%s\n' "${walls[@]}" | median)
+  say "warm runs (ms): ${walls[*]}"
+  say "median warm: ${med} ms (budget ${BUDGET_MS} ms, headroom $(( BUDGET_MS - med )) ms)"
+  if [ "$med" -gt "$BUDGET_MS" ]; then say "MISS: median ${med} ms > ${BUDGET_MS} ms"; print_phases "$tmp/warm.json"; exit 1; fi
+  say "PASS (budget)"
+}
+
 run() {
   local bin=$1
   [ -x "$bin" ] || { say "binary not found: $bin (cargo build --release)"; exit 64; }
   tmp=$(mktemp -d); trap 'rm -rf "${tmp:-}"' EXIT
-  if [ "${DC_BENCH_OWNER_MACHINE:-0}" = 1 ]; then owner_mode "$bin" "$tmp"; else counters_mode "$bin" "$tmp"; fi
+  if [ "${BUDGET_MODE:-0}" = 1 ]; then budget_mode "$bin" "$tmp"
+  elif [ "${DC_BENCH_OWNER_MACHINE:-0}" = 1 ]; then owner_mode "$bin" "$tmp"; else counters_mode "$bin" "$tmp"; fi
 }
 
 selftest() {
@@ -179,16 +208,30 @@ STUB
   expect 1 "owner mode: a median above the budget is a MISS that prints the phases" "MISS: median" env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 DC_BENCH_BUDGET_MS=100 "$self" --bin "$(stub slow)"
   expect 1 "owner mode: a {} stub fails too" "empty document" env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 "$self" --bin "$(stub empty)"
   expect 1 "owner mode: a --rescan above its budget fails" "MISS: --rescan" env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 DC_BENCH_RESCAN_BUDGET_MS=100 "$self" --bin "$(stub slow)"
+  export DC_BENCH_OWNER_MACHINE=0 DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12
+  expect 0 "budget mode passes a fast binary" "PASS (budget)" "$self" --budget --bin "$(stub good)"
+  expect 1 "budget mode: a median above the budget is a MISS" "MISS: median" env DC_BENCH_BUDGET_MS=100 "$self" --budget --bin "$(stub slow)"
+  expect 1 "budget mode: a {} stub fails too" "empty document" "$self" --budget --bin "$(stub empty)"
+  expect 77 "budget mode: load above the threshold is INCONCLUSIVE" "INCONCLUSIVE: load" env DC_BENCH_LOADAVG_FILE="$d/load-high" "$self" --budget --bin "$(stub good)"
   [ "$bad" = 0 ] || { echo "bench-dry-run selftest: $bad failed"; exit 1; }
   echo "bench-dry-run selftest: $n ok"
 }
 
 bin=${DC_BENCH_BIN:-${CARGO_TARGET_DIR:-target}/release/disk-cleanup}
+usage="usage: $0 [--bin PATH | --budget [--bin PATH]] | --selftest"
 # The default binary is rebuilt (a no-op when fresh): a gate runs this before its own release build.
 build_default() { [ -n "${DC_BENCH_BIN:-}" ] || cargo build --release --locked -q || fail "cargo build --release failed"; }
+build_gate_b() { [ -n "${DC_BENCH_BIN:-}" ] || cargo build --release --locked -q --features disk-cleanup/gate-b || fail "cargo build --release (gate-b) failed"; }
 case ${1:-} in
   --selftest) selftest ;;
-  --bin) [ $# = 2 ] || { echo "usage: $0 [--bin PATH] | --selftest"; exit 64; }; run "$2" ;;
+  --bin) [ $# = 2 ] || { echo "$usage"; exit 64; }; run "$2" ;;
+  --budget)
+    BUDGET_MODE=1
+    case $# in
+      1) build_gate_b; run "$bin" ;;
+      3) [ "$2" = --bin ] || { echo "$usage"; exit 64; }; run "$3" ;;
+      *) echo "$usage"; exit 64 ;;
+    esac ;;
   "") build_default; run "$bin" ;;
-  *) echo "usage: $0 [--bin PATH] | --selftest"; exit 64 ;;
+  *) echo "$usage"; exit 64 ;;
 esac
