@@ -15,7 +15,10 @@ use crate::delete_types::{DeleteError, DeleteFailure, Freed};
 use crate::ids::CandidateId;
 use crate::kind::{Kind, SelectorId};
 use crate::outcome::{Outcome, SkipReason, Status};
-use crate::plan::{destructive_gate, GateRefusal, GateRenderCtx, Plan, PlanId, PlanItem, Planned};
+use crate::plan::{
+    destructive_gate, plan_only, GateRefusal, GateRenderCtx, OnlyMode, OnlyPlan, Plan, PlanId,
+    PlanItem, Planned,
+};
 use crate::plan_state::{BuildInfo, StampSummary};
 use crate::ports::{Env, ExtentAttribution, ExtentProbe, Unavailable};
 use crate::preflight;
@@ -215,6 +218,11 @@ pub struct RunReport {
     pub skipped_by_guard: Vec<CandidateId>,
     /// Wall ms of discovery per selector id, plus `availability` (the gate probes); the dominant phase of a slow run.
     pub discover_by_kind: Vec<(&'static str, u64)>,
+    /// The selection the plan was built with: `sel` itself, except that a plan run with a non-`Strict`
+    /// [`OnlyMode`] drops the `--only` values that are not items (so `plan_id` covers the survivors).
+    pub selection: Selection,
+    /// The `--only` values dropped that way; always empty under `Strict`, which refuses instead.
+    pub stale_only: Vec<PathBuf>,
 }
 
 pub struct Executor<'a> {
@@ -223,6 +231,7 @@ pub struct Executor<'a> {
     opts: RunOptions,
     extents: Option<&'a dyn ExtentProbe>,
     discovery_workers: usize,
+    only_mode: OnlyMode,
 }
 
 struct Shared<'t> {
@@ -355,7 +364,15 @@ impl<'a> Executor<'a> {
             opts,
             extents: None,
             discovery_workers: DISCOVERY_WORKERS,
+            only_mode: OnlyMode::Strict,
         }
+    }
+
+    /// How a plan run treats an `--only` value that is no longer an item. An apply is always `Strict`.
+    #[must_use]
+    pub fn with_only_mode(mut self, mode: OnlyMode) -> Executor<'a> {
+        self.only_mode = mode;
+        self
     }
 
     /// Kinds discovered at once; 1 is the sequential order the concurrent result must equal.
@@ -476,8 +493,15 @@ impl<'a> Executor<'a> {
 
         let (candidates, kind_ms) = self.discover_all(sel, &avail, self.discovery_workers);
         by_kind.extend(kind_ms);
-        if let Some(refused) = only_refusal(sel, &candidates, &avail) {
-            return Err(refused);
+        let only_mode = if applying {
+            OnlyMode::Strict
+        } else {
+            self.only_mode
+        };
+        if only_mode == OnlyMode::Strict {
+            if let Some(refused) = only_refusal(sel, &candidates, &avail) {
+                return Err(refused);
+            }
         }
         let notes_start = Instant::now();
         for t in self.targets.iter().copied() {
@@ -490,13 +514,34 @@ impl<'a> Executor<'a> {
         let discover_ms = millis(discover_start);
         let plan_start = Instant::now();
         let now = env.clock.now_epoch();
-        let plan = Plan::build(sel, now, candidates, &|c| self.plan_guard(c, &avail));
+        let guard = |c: &Candidate| self.plan_guard(c, &avail);
+        let planned = match plan_only(sel, now, candidates, &guard, only_mode) {
+            Ok(p) => p,
+            Err(text) => {
+                return Err(Box::new(Refused {
+                    exit: ExitClass::Usage,
+                    notes: avail.notes.clone(),
+                    text,
+                    refusal: None,
+                    plan_id: None,
+                    fatal: None,
+                }))
+            }
+        };
+        let (plan, stale_only) = (planned.plan, planned.stale);
+        let narrowed = planned.selection;
+        let sel = &narrowed;
         let plan_ms = millis(plan_start);
         let plan_id = PlanId::for_selection(&plan, sel);
 
         let Mode::Apply(token) = mode else {
             let stage = (discover_ms, plan_ms);
-            return Ok(self.plan_report(plan, plan_id, fs_before, avail.notes, stage, by_kind));
+            let planned = OnlyPlan {
+                plan,
+                selection: narrowed.clone(),
+                stale: stale_only,
+            };
+            return Ok(self.plan_report(planned, plan_id, fs_before, avail.notes, stage, by_kind));
         };
 
         hooks.step("plan_id_gate");
@@ -653,6 +698,8 @@ impl<'a> Executor<'a> {
             pre_delete,
             skipped_by_guard,
             discover_by_kind: by_kind,
+            selection: sel.clone(),
+            stale_only: Vec::new(),
         })
     }
 
@@ -707,7 +754,11 @@ impl<'a> Executor<'a> {
 
     fn plan_report(
         &self,
-        plan: Plan,
+        OnlyPlan {
+            plan,
+            selection,
+            stale: stale_only,
+        }: OnlyPlan,
         plan_id: PlanId,
         fs_before: FsSnapshot,
         notes: Vec<String>,
@@ -755,6 +806,8 @@ impl<'a> Executor<'a> {
             pre_delete: PreDeleteSamples::new(None, None, 0),
             skipped_by_guard: Vec::new(),
             discover_by_kind,
+            selection,
+            stale_only,
         }
     }
 

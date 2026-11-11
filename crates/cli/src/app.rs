@@ -279,7 +279,7 @@ fn unbuilt(registered: &[SelectorId]) -> Vec<String> {
         .collect()
 }
 
-fn fs_block(report: &RunReport) -> FsBlock {
+pub(crate) fn fs_block(report: &RunReport) -> FsBlock {
     let snapshot = report.summary.fs_before.clone();
     let (verdict, _) = assess(&snapshot);
     FsBlock { snapshot, verdict }
@@ -547,8 +547,12 @@ pub fn apply_flow(
 /// The plan-header line when `--min-age` was below the 24 h worktree floor (only when `worktrees` is
 /// selected and registered in this build).
 fn floor_notes(p: &Ports, sel: &Selection) -> Vec<String> {
-    let served = p
-        .targets
+    floor_notes_for(&p.targets, sel)
+}
+
+/// The worktree-floor note when `--min-age` was raised above the floor and worktrees are served.
+pub(crate) fn floor_notes_for(targets: &[&dyn Target], sel: &Selection) -> Vec<String> {
+    let served = targets
         .iter()
         .any(|t| t.selectors().contains(&SelectorId::Worktrees));
     let raised = sel.min_age_secs.is_some_and(|s| {
@@ -566,10 +570,16 @@ fn reason_facts(
     p: &Ports,
     plan: &disk_cleanup_core::plan::Plan,
 ) -> HashMap<disk_cleanup_core::CandidateId, ReasonFacts> {
+    reason_facts_for(&p.targets, plan)
+}
+
+pub(crate) fn reason_facts_for(
+    targets: &[&dyn Target],
+    plan: &disk_cleanup_core::plan::Plan,
+) -> HashMap<disk_cleanup_core::CandidateId, ReasonFacts> {
     let mut out = HashMap::new();
     for item in &plan.items {
-        let Some(t) = p
-            .targets
+        let Some(t) = targets
             .iter()
             .find(|t| t.selectors().contains(&item.candidate.selector()))
         else {

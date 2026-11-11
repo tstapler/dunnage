@@ -281,4 +281,6 @@ pub enum ScanMsg {
     },
     Facts(ClassifyFacts),
     Preview(PlanPreview),
+    /// The planner could not run (a mark still being scanned, every kind down): the line for the footer.
+    PreviewFailed(String),
 }
