@@ -286,3 +286,45 @@ pub enum ScanMsg {
     /// The planner could not run (a mark still being scanned, every kind down): the line for the footer.
     PreviewFailed(String),
 }
+
+/// What happened to one planned item of an explorer delete (Story 6.6.4 shows these in the result list).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeleteItemOutcome {
+    /// Removed; the measured bytes freed.
+    Removed { bytes: u64 },
+    /// Left alone with a catalogue reason (`changed since the plan`, ...).
+    Skipped { reason: String },
+    /// The delete started and failed.
+    Failed { reason: String },
+}
+
+/// The result line of one item.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteItemResult {
+    pub path: PathBuf,
+    pub outcome: DeleteItemOutcome,
+}
+
+/// How a delete ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DeleteSummary {
+    pub removed: usize,
+    pub bytes: u64,
+    /// A signal stopped it; `run_end` says `interrupted`.
+    pub interrupted: bool,
+}
+
+/// Everything the worker of an explorer delete sends to the UI loop, in this order: `Progress` and `Item` per
+/// item, then exactly one of `Done` or `Refused`. `Refused` means nothing was deleted (the stamp, the lock,
+/// `Changed since you confirmed ...`, an unwritable audit log); its text is the whole message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeleteMsg {
+    /// Item `index` (1-based) of `total` is starting: the title reads `DELETING 1 of 2`.
+    Progress {
+        index: usize,
+        total: usize,
+    },
+    Item(DeleteItemResult),
+    Done(DeleteSummary),
+    Refused(String),
+}

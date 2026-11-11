@@ -11,8 +11,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use disk_cleanup_core::executor::{Executor, Mode, RunOptions, RunReport};
-use disk_cleanup_core::explore::msg::{MarkRefusal, PlanPreview, PreviewRow, ScanMsg};
-use disk_cleanup_core::explore::ports::{ExplorerActions, Handoff, PreviewHandle};
+use disk_cleanup_core::explore::confirm::ConfirmedPlan;
+use disk_cleanup_core::explore::msg::{DeleteMsg, MarkRefusal, PlanPreview, PreviewRow, ScanMsg};
+use disk_cleanup_core::explore::ports::{DeleteHandle, ExplorerActions, Handoff, PreviewHandle};
 use disk_cleanup_core::explore::refusal::RefusalCtx;
 use disk_cleanup_core::outcome::SkipReason;
 use disk_cleanup_core::plan::{OnlyMode, Plan, PlanId, Planned};
@@ -178,6 +179,16 @@ impl ExplorerActions for RealExplorerActions {
                 handle_with(failed(r.text(&cx)), cancel)
             }
         }
+    }
+
+    /// Not wired until Task 6.6.4c: refuses at once, so a confirmed plan cannot delete anything yet.
+    fn delete(&self, confirmed: ConfirmedPlan) -> DeleteHandle {
+        drop(confirmed);
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        let _ = tx.send(DeleteMsg::Refused(
+            "Deleting is not available in this build. Nothing was deleted.".to_string(),
+        ));
+        DeleteHandle::new(rx, Arc::new(AtomicBool::new(false)))
     }
 
     fn finish(&self, marks: &[PathBuf]) -> Handoff {
