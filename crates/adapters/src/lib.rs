@@ -9,6 +9,7 @@ pub mod dirops;
 pub mod discover_build;
 pub mod discover_cache;
 pub mod docker_cli;
+pub mod explore;
 pub mod fiemap;
 pub mod gate_stamp;
 pub mod lock;
@@ -33,6 +34,7 @@ pub use dirops::{
 
 pub use command::RealCommandRunner;
 pub use docker_cli::DockerCli;
+pub use explore::signals::RealTermSignals;
 pub use fiemap::FiemapProbe;
 pub use probe::RealProbe;
 pub use snapshots::{SnapshotInfo, SnapshotLayout};

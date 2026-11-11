@@ -11,6 +11,11 @@ workspace = true
 default = []
 test-support = ["disk-cleanup-core/test-support"]
 
+[[bin]]
+name = "dc-sigprobe"
+path = "src/bin/dc-sigprobe.rs"
+required-features = ["test-support"]
+
 [dependencies]
 disk-cleanup-core = { path = "../core" }
 disk-cleanup-scan = { path = "../scan" }
