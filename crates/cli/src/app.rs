@@ -356,7 +356,7 @@ fn plan_mode(cli: &Cli, sel: &Selection, registered: &[SelectorId], p: &Ports, i
         doc["timings"] = serde_json::json!({
             "discover_ms": report.summary.timings.discover_ms,
             "plan_ms": report.summary.timings.plan_ms,
-            "discover_by_kind_ms": report.discover_by_kind.iter().cloned().collect::<std::collections::BTreeMap<_, _>>(),
+            "discover_by_kind_ms": report.discover_by_kind.iter().copied().collect::<std::collections::BTreeMap<_, _>>(),
         });
         to_text(&doc)
     } else {

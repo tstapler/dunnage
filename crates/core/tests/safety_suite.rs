@@ -77,7 +77,7 @@ fn safety_out_of_root_build_dir_not_deleted() {
         let g = decide_build_dir(&f, &roots(), NOW, Duration::from_secs(300));
         match g {
             BuildGuard::Skip { reason, .. } => {
-                assert_eq!(reason, SkipReason::OutsideRoot, "{path}")
+                assert_eq!(reason, SkipReason::OutsideRoot, "{path}");
             }
             BuildGuard::Allow(_) => {
                 panic!("{path} is outside every scan root and must not be allowed")
@@ -100,7 +100,7 @@ fn safety_out_of_root_worktree_not_removed() {
         c.in_use = Tri::NotRunning;
         c.ignored = Some(IgnoredFiles::default());
         let o = WorktreeOpts {
-            min_age: Duration::from_secs(14 * 86_400),
+            min_age: Duration::from_hours(336),
             discard_ignored: false,
         };
         let ident = Identity { dev: 28, ino: 7 };
