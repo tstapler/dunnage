@@ -1,0 +1,5 @@
+# <first-gate> <last-gate|-> <command>   (Story 1.3.3: the speed protocol's counters mode and the scale smoke run at every gate; the seconds assertions need DC_BENCH_OWNER_MACHINE=1, run by the owner at OWNER WAIT A and again at Gates B and C)
+A - scripts/bench-dry-run.sh --selftest
+A - scripts/bench-dry-run.sh
+A - scripts/scale-check.sh --selftest
+A - scripts/scale-check.sh --smoke
