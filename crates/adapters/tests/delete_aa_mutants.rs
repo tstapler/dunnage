@@ -1054,13 +1054,13 @@ fn plain_stat_child_when_statx_is_blocked() {
         let ops = RealDirOps::confined_to(&base);
         let d = ops.open_root(&base).unwrap();
         block_statx_with_seccomp();
-        // SAFETY: a raw syscall with null pointers; the filter answers before the kernel looks at them.
-        let r = unsafe { libc::syscall(libc::SYS_statx, -1, std::ptr::null::<u8>(), 0, 0, 0) };
-        assert_eq!(r, -1);
-        assert_eq!(
-            io::Error::last_os_error().raw_os_error(),
-            Some(libc::ENOSYS)
+        let r = rustix::fs::statx(
+            rustix::fs::CWD,
+            "/",
+            rustix::fs::AtFlags::empty(),
+            rustix::fs::StatxFlags::BASIC_STATS,
         );
+        assert_eq!(r.err(), Some(rustix::io::Errno::NOSYS));
 
         let st = ops.stat_at(&d, OsStr::new("file")).unwrap();
         assert_eq!(st.mode, 0o640);
