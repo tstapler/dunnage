@@ -52,7 +52,7 @@ impl Probe {
     }
 
     fn pid(&self) -> Pid {
-        Pid::from_raw(i32::try_from(self.child.id()).unwrap()).unwrap()
+        Pid::from_child(&self.child)
     }
 
     fn next_line(&mut self) -> String {
