@@ -243,6 +243,17 @@ pub fn hint_of_node(
     kind_hint(&path, parent, inside, roots, facts)
 }
 
+/// The shape of one tree node, for [`kind_line`]'s `OutsideRoot` text: [`shape_of`] with the parent's marker
+/// flags read from the tree (`None` for a root, whose parent is unknown).
+pub fn shape_of_node(tree: &ExploreTree, id: NodeId, facts: &ClassifyFacts) -> Option<Kind> {
+    let p = tree.parent(id)?;
+    let parent = ParentFacts {
+        has_package_json: tree.has_package_json(p),
+        has_cargo_toml: tree.has_cargo_toml(p),
+    };
+    shape_of(&tree.path_of(id), parent, facts)
+}
+
 fn tier_words(t: Tier) -> &'static str {
     match t {
         Tier::Safe => "safe tier",

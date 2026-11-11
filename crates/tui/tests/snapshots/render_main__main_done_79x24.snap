@@ -1,0 +1,28 @@
+---
+source: crates/tui/tests/render_main.rs
+expression: text
+---
+EXPLORE (d deletes)           SCAN DONE 6.2s (cache warm, 8 dirs, 0 unreadable)
+/ btrfs  avail 70.2 GiB  unalloc 9.8 GiB  slack data 51.2 meta 1.9 GiB  WARN
+/home/u/code/app   33.6 GiB   sort: usage, largest first   filter: none
+       USAGEv   ITEMS SHARE        NAME
+>    21.7 GiB      11 [###..]  65% node_modules/
+      9.0 GiB      12 [#....]  27% target/
+      1.9 GiB      13 [#....]   6% .claude/
+    921.6 MiB      14 [#....]   3% .git/
+     80.0 MiB      15 [#....]  <1% dist/
+     12.0 MiB      16 [#....]  <1% src/
+      4.0 MiB      17 [#....]  <1% docs/
+      4.0 KiB       1 [#....]  <1% (1 files)
+
+
+
+
+
+
+
+
+
+Path: /home/u/code/app/node_modules
+
+l open h back s sort Space mark p plan ? help q quit

@@ -516,6 +516,7 @@ name = "disk-cleanup-tui"
 version = "0.1.0"
 dependencies = [
  "crossterm",
+ "disk-cleanup-adapters",
  "disk-cleanup-core",
  "expectrl",
  "insta",

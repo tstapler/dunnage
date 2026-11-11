@@ -1,0 +1,10 @@
+---
+source: crates/tui/tests/render_main.rs
+expression: text
+---
+
+
+
+   Too small: need 60x12, have 40x10.
+  Resize the window, press q to quit,
+  or run: disk-cleanup explore --text
