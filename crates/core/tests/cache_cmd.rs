@@ -2,6 +2,8 @@
 //! The command table of the command caches (Story 2.3.2): every row is an allowlist row, the root rules, and
 //! the plan-id gate for a non-destructive `cache-apt` run.
 
+mod common;
+
 use disk_cleanup_core::cache_targets::{cache_command, root_decision, CACHE_COMMANDS};
 use disk_cleanup_core::plan::destructive_gate;
 use disk_cleanup_core::ports::{classify, Class, Cmd};
