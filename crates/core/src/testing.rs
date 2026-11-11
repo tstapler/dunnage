@@ -86,6 +86,8 @@ struct RunnerState {
     expect: Vec<(Vec<OsString>, VecDeque<Reply>)>,
     absent: Vec<String>,
     calls: Vec<RecordedCall>,
+    /// Argvs whose `run_mutating_unless_aborted` blocks until the abort flag is set.
+    blocking: Vec<Vec<OsString>>,
 }
 
 /// Scripted command runner. `on(argv, reply)` registers a reply for an exact argv (program first); several
@@ -117,6 +119,15 @@ impl FakeCommandRunner {
             Some((_, q)) => q.push_back(reply),
             None => st.expect.push((key, VecDeque::from([reply]))),
         }
+        self
+    }
+
+    /// Makes `run_mutating_unless_aborted` of `argv` block, as a command running in the kernel does, until the
+    /// abort flag it is given is set; it then returns `Ok(None)`. The call is recorded when it starts.
+    pub fn block_until_aborted(&self, argv: &[&str]) -> &FakeCommandRunner {
+        lock(&self.state)
+            .blocking
+            .push(argv.iter().map(OsString::from).collect());
         self
     }
 
@@ -193,6 +204,41 @@ impl CommandRunner for FakeCommandRunner {
             OsString::from("git"),
             worktree_remove_argv(w),
         )
+    }
+
+    fn run_mutating_unless_aborted(
+        &self,
+        cmd: &Cmd,
+        proof: &ApplyToken,
+        abort: &AbortFlag,
+    ) -> Result<Option<CmdOutput>, DeleteError> {
+        let mut argv = vec![cmd.program.clone()];
+        argv.extend(cmd.args.iter().cloned());
+        let blocks = classify(cmd) == Some(Class::Mutating)
+            && lock(&self.state).blocking.iter().any(|b| *b == argv);
+        if !blocks {
+            return self.run_mutating(cmd, proof).map(Some);
+        }
+        lock(&self.state).calls.push(RecordedCall {
+            kind: CallKind::RunMutating,
+            program: cmd.program.clone(),
+            args: cmd.args.clone(),
+        });
+        note(&self.log, || {
+            format!(
+                "RunMutating {} (blocked)",
+                render_argv(&cmd.program, &cmd.args)
+            )
+        });
+        let give_up = std::time::Instant::now() + Duration::from_secs(30);
+        while !abort.is_set() {
+            assert!(
+                std::time::Instant::now() < give_up,
+                "FakeCommandRunner: a blocked command was never aborted"
+            );
+            std::thread::yield_now();
+        }
+        Ok(None)
     }
 }
 

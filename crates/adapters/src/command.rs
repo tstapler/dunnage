@@ -14,7 +14,7 @@ use crate::state::shell_quote_path;
 use disk_cleanup_core::ports::{
     classify, worktree_remove_argv, Class, Cmd, CmdOutput, CommandRunner,
 };
-use disk_cleanup_core::{first_line_capped, ApplyToken, DeleteError, WorktreeRemoval};
+use disk_cleanup_core::{first_line_capped, AbortFlag, ApplyToken, DeleteError, WorktreeRemoval};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
 /// `git worktree remove` is cut off here even when the runner's own deadline is longer (Story 3.1.3).
@@ -68,7 +68,19 @@ pub(crate) fn spawn_with_deadline(
     args: &[OsString],
     timeout: Duration,
 ) -> Result<CmdOutput, DeleteError> {
-    spawn_inner(program, args, timeout, None)
+    spawn_inner(program, args, timeout, None, None).map(Option::unwrap_or_default)
+}
+
+/// As [`spawn_with_deadline`] for a command that must not be killed (a balance runs in the kernel): there is
+/// no deadline, and when `abort` is set the wait ends with `Ok(None)` and the child is left running in its
+/// own process group, never signalled. It is also not registered as an in-flight child, so a second SIGINT
+/// exits the tool at once.
+pub(crate) fn spawn_until_aborted(
+    program: &OsString,
+    args: &[OsString],
+    abort: &AbortFlag,
+) -> Result<Option<CmdOutput>, DeleteError> {
+    spawn_inner(program, args, Duration::MAX, None, Some(abort))
 }
 
 /// As [`spawn_with_deadline`]. The child runs in its own process group, so the terminal's Ctrl-C never
@@ -78,7 +90,8 @@ fn spawn_inner(
     args: &[OsString],
     timeout: Duration,
     in_flight: Option<String>,
-) -> Result<CmdOutput, DeleteError> {
+    abort: Option<&AbortFlag>,
+) -> Result<Option<CmdOutput>, DeleteError> {
     let mut child = Command::new(program)
         .args(args)
         .process_group(0)
@@ -93,11 +106,15 @@ fn spawn_inner(
     let _in_flight = in_flight.map(ChildInFlight::begin);
     let out = drain(child.stdout.take());
     let err = drain(child.stderr.take());
-    let deadline = Instant::now() + timeout;
+    let deadline = Instant::now().checked_add(timeout);
     let status = loop {
         match child.try_wait() {
             Ok(Some(s)) => break s,
-            Ok(None) if Instant::now() >= deadline => {
+            Ok(None) if abort.is_some_and(AbortFlag::is_set) => {
+                // The child, its pipes and the drain threads are left as they are; the kernel finishes the job.
+                return Ok(None);
+            }
+            Ok(None) if deadline.is_some_and(|d| Instant::now() >= d) => {
                 let _ = child.kill();
                 let _ = child.wait();
                 let _ = out.join();
@@ -111,7 +128,7 @@ fn spawn_inner(
     let stdout = out.join().unwrap_or_default();
     let stderr = err.join().unwrap_or_default();
     if status.success() {
-        return Ok(CmdOutput { stdout, stderr });
+        return Ok(Some(CmdOutput { stdout, stderr }));
     }
     let text = if stderr.iter().any(|b| !b.is_ascii_whitespace()) {
         &stderr
@@ -158,6 +175,18 @@ impl CommandRunner for RealCommandRunner {
         spawn_with_deadline(&cmd.program, &cmd.args, self.timeout)
     }
 
+    fn run_mutating_unless_aborted(
+        &self,
+        cmd: &Cmd,
+        _proof: &ApplyToken,
+        abort: &AbortFlag,
+    ) -> Result<Option<CmdOutput>, DeleteError> {
+        if classify(cmd) != Some(Class::Mutating) {
+            return Err(DeleteError::Refused);
+        }
+        spawn_until_aborted(&cmd.program, &cmd.args, abort)
+    }
+
     /// The one place that builds `git -C <main_repo> worktree remove <path>`; it is not an allowlist row, so
     /// it never goes through `run_mutating`.
     fn remove_worktree(
@@ -171,7 +200,9 @@ impl CommandRunner for RealCommandRunner {
             &worktree_remove_argv(w),
             self.timeout.min(WORKTREE_REMOVE_TIMEOUT),
             Some(desc),
+            None,
         )
+        .map(Option::unwrap_or_default)
     }
 }
 
@@ -190,6 +221,43 @@ mod tests {
         let r = spawn_with_deadline(&"sleep".into(), &os(&["30"]), Duration::from_millis(100));
         assert_eq!(r, Err(DeleteError::Timeout));
         assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[test]
+    fn spawn_until_aborted_should_stop_waiting_and_leave_the_child_running_When_the_flag_is_set() {
+        let flag = std::sync::Arc::new(AbortFlag::new());
+        let pidfile = tempfile::NamedTempFile::new().unwrap();
+        let script = format!("echo $$ > {}; sleep 30", pidfile.path().display());
+        let args = os(&["-c", &script]);
+        let setter = std::sync::Arc::clone(&flag);
+        let path = pidfile.path().to_path_buf();
+        let t = std::thread::spawn(move || {
+            while std::fs::read_to_string(&path).map_or(true, |s| s.trim().is_empty()) {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            setter.set();
+        });
+        let started = Instant::now();
+        let r = spawn_until_aborted(&"sh".into(), &args, &flag);
+        t.join().unwrap();
+        assert_eq!(r, Ok(None));
+        assert!(started.elapsed() < Duration::from_secs(10));
+        let pid: i32 = std::fs::read_to_string(pidfile.path())
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        // signal 0 only tests that the child is still there, then it is cleaned up by the test
+        assert_eq!(unsafe { libc::kill(pid, 0) }, 0, "the child must still run");
+        unsafe { libc::kill(-pid, libc::SIGKILL) };
+    }
+
+    #[test]
+    fn spawn_until_aborted_should_return_the_output_When_the_child_ends_first() {
+        let r = spawn_until_aborted(&"sh".into(), &os(&["-c", "printf done"]), &AbortFlag::new())
+            .unwrap()
+            .unwrap();
+        assert_eq!(r.stdout_lossy(), "done");
     }
 
     #[test]
