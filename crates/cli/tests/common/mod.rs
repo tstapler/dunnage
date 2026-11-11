@@ -76,8 +76,16 @@ impl Fixture {
 
     /// The environment the child gets, as (name, value) pairs. `PATH` and `LANG` come from the test process.
     pub fn env(&self) -> Vec<(&'static str, OsString)> {
+        // A `docker` whose daemon is down comes first, so no fixture run reaches the machine's real daemon
+        // when a build registers the Docker kinds (gate-d). A test that sets its own `PATH` adds its own shim.
+        let shim_dir = self.root().join("docker-down");
+        docker_down_shim(&shim_dir);
+        let path = std::env::join_paths(std::iter::once(shim_dir).chain(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        )))
+        .unwrap();
         vec![
-            ("PATH", std::env::var_os("PATH").unwrap_or_default()),
+            ("PATH", path),
             ("HOME", self.home().into()),
             ("XDG_STATE_HOME", self.xdg("state").into()),
             ("XDG_CACHE_HOME", self.xdg("cache").into()),
@@ -388,4 +396,19 @@ pub fn tree_hash(dir: &Path) -> BTreeMap<PathBuf, String> {
     let mut out = BTreeMap::new();
     walk(dir, dir, &mut out);
     out
+}
+
+/// A `docker` in `bin` whose daemon is down. A test PATH that ends in `/usr/bin` would otherwise reach the
+/// machine's real daemon as soon as a build registers the Docker kinds (gate-d).
+#[allow(dead_code)]
+pub fn docker_down_shim(bin: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(bin).unwrap();
+    let shim = bin.join("docker");
+    std::fs::write(
+        &shim,
+        "#!/bin/sh\necho 'Cannot connect to the Docker daemon (test shim)' >&2\nexit 1\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&shim, std::fs::Permissions::from_mode(0o755)).unwrap();
 }

@@ -11,7 +11,7 @@ use std::os::unix::fs::symlink;
 use std::path::Path;
 use std::process::{Command, Output};
 
-/// PATH with the read-only system tools and nothing that could mutate (no brew, docker, steam).
+/// PATH with the read-only system tools and nothing that could mutate (no brew, steam; `docker` is a shim whose daemon is down).
 const SAFE_PATH: &str = "/usr/bin:/bin";
 
 /// A `go` that answers `go env GOCACHE` with the fixture's cache directory and does nothing else.
@@ -19,6 +19,7 @@ fn stub_go(f: &Fixture, xdg_cache: &Path) -> String {
     use std::os::unix::fs::PermissionsExt;
     let bin = f.root().join("bin");
     std::fs::create_dir_all(&bin).unwrap();
+    common::docker_down_shim(&bin);
     let go = bin.join("go");
     std::fs::write(
         &go,
