@@ -149,6 +149,9 @@ pub struct FileRow {
     pub name: OsString,
     pub allocated_bytes: u64,
     pub size_bytes: u64,
+    /// A second or later link to an inode already seen in this listing: the directory totals counted its
+    /// bytes once, at the first link (N-5).
+    pub second_link: bool,
 }
 
 /// The top N files of a directory by allocated bytes and the totals of the rest.
