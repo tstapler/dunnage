@@ -98,7 +98,8 @@ pub fn required_gate(kinds: &[Kind]) -> char {
             | Kind::SteamShaderCache
             | Kind::SteamRemnant
             | Kind::BtrfsBalance
-            | Kind::BtrfsTrim => 'D',
+            | Kind::BtrfsTrim
+            | Kind::ExplorerSelection => 'D',
             #[cfg(feature = "test-support")]
             Kind::FixtureStale => 'B',
         })

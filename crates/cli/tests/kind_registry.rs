@@ -27,7 +27,19 @@ fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+/// The explorer's hidden kind has a row but is not a `--kinds` id, so the comparisons with `listed()` and with
+/// `kinds --json` leave it out and `the_explorer_selection_kind_...` checks it.
+const HIDDEN: &str = "explorer-selection";
+
 fn table() -> (char, Vec<Row>) {
+    let (active, rows) = full_table();
+    (
+        active,
+        rows.into_iter().filter(|r| r.id != HIDDEN).collect(),
+    )
+}
+
+fn full_table() -> (char, Vec<Row>) {
     let text = std::fs::read_to_string(repo().join("ci/safety/kinds-by-gate.txt")).unwrap();
     let mut lines = text
         .lines()
@@ -200,6 +212,70 @@ fn the_binary_should_list_and_apply_exactly_what_its_build_gate_registers() {
     }
     // The test-only kind is listed here only because this test binary is a `test-support` build.
     assert_eq!(cell("fixture-destructive"), "yes");
+}
+
+#[test]
+fn the_explorer_selection_kind_should_be_registered_from_its_gate_only_and_hidden_everywhere_else()
+{
+    let (_, rows) = full_table();
+    let row = rows.iter().find(|r| r.id == HIDDEN).unwrap();
+    assert_eq!((row.listed, row.apply), ('D', 'D'));
+    let tmp = tempfile::tempdir().unwrap();
+    let (roots, root) = ctx_in(tmp.path());
+    let ops = || RealDirOps::confined_to(&root);
+    let ctx = KindCtx {
+        roots,
+        fs_root: root.clone(),
+        ops: &ops,
+        fixture_mode: false,
+    };
+    for gate in GATES {
+        let reg = KindRegistry::build_for(gate, &ctx);
+        assert_eq!(
+            reg.hidden().contains(&SelectorId::ExplorerSelection),
+            gate >= row.listed,
+            "gate {gate}"
+        );
+        // Never a listed or apply-capable selector: `kinds` and `--apply` cannot reach it.
+        assert!(!reg.listed().contains(&SelectorId::ExplorerSelection));
+        assert!(!reg.apply_capable().contains(&SelectorId::ExplorerSelection));
+    }
+    assert_eq!(
+        disk_cleanup_cli::wiring::kinds::explorer_selection_registered(),
+        build_gate() >= row.listed,
+        "the binary registers it exactly when its build gate reached D"
+    );
+}
+
+#[test]
+fn naming_the_explorer_selection_kind_should_exit_64_and_kinds_should_not_list_it() {
+    let f = Fixture::new();
+    for args in [
+        vec!["--kinds", HIDDEN],
+        vec!["--kinds", "caches,explorer-selection"],
+        vec!["--apply", "--kinds", HIDDEN],
+    ] {
+        let out = f.fixture_cmd().args(&args).output().unwrap();
+        assert_eq!(out.status.code(), Some(64), "{args:?}");
+        assert!(out.stdout.is_empty(), "{args:?}");
+        assert_eq!(
+            String::from_utf8_lossy(&out.stderr).trim_end(),
+            "error: explorer-selection is not a kind you can name; it exists only inside 'disk-cleanup explore'. Nothing was deleted.",
+            "{args:?}"
+        );
+    }
+    for json in [true, false] {
+        let args: Vec<&str> = if json {
+            vec!["kinds", "--json"]
+        } else {
+            vec!["kinds"]
+        };
+        let out = f.fixture_cmd().args(&args).output().unwrap();
+        assert!(
+            !String::from_utf8_lossy(&out.stdout).contains(HIDDEN),
+            "kinds ({args:?}) lists the hidden kind"
+        );
+    }
 }
 
 fn is_root() -> bool {

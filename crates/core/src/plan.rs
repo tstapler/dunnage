@@ -5,9 +5,10 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use crate::candidate::{Candidate, Locator};
+use crate::delete_types::{FileKind, StatInfo};
 use crate::kind::SelectorId;
 use crate::outcome::SkipReason;
-use crate::plan_state::{ItemKey, SavedPlan, SavedSelection};
+use crate::plan_state::{ItemKey, SaveOutcome, SavedPlan, SavedSelection};
 use crate::ports::SAVED_TTL_SECS;
 use crate::selector::Selection;
 use crate::target::{kind_order, Guarded};
@@ -84,11 +85,13 @@ pub fn not_an_item_text(sel: &Selection, only: &Path) -> String {
 pub const NO_PLAN_ID_ONLY_NOTE: &str = "This line needs no plan-id; --only limits it to what you marked. Without --only it would apply to every item of those kinds.";
 
 /// How a planner treats an `--only` value that is no longer an item: the CLI refuses (`Strict`), the
-/// explorer's preview and exit report plan the survivors (`Tolerant`).
+/// explorer's exit report plans the survivors (`Tolerant`), and the explorer's own selection plan keeps a
+/// vanished mark as a `gone` row (`Explorer`, Story 6.6.2: the marks are the items, nothing is discovered).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnlyMode {
     Strict,
     Tolerant,
+    Explorer,
 }
 
 /// A plan restricted to the `--only` values that are items. `selection` is the one the plan was built with:
@@ -115,6 +118,7 @@ pub fn plan_only(
         .into_iter()
         .map(Path::to_path_buf)
         .collect();
+    // `Explorer` is meaningful to `explorer_plan` only; over discovered candidates it plans the survivors.
     if mode == OnlyMode::Strict {
         if let Some(first) = stale.first() {
             return Err(not_an_item_text(sel, first));
@@ -251,6 +255,66 @@ impl Plan {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PlanId(u32);
 
+/// 64-bit FNV-1a, folded to the 32 bits a plan-id shows.
+struct Fnv(u64);
+
+impl Fnv {
+    fn new() -> Fnv {
+        Fnv(0xcbf2_9ce4_8422_2325)
+    }
+
+    fn feed(&mut self, bytes: &[u8]) {
+        for b in bytes {
+            self.0 ^= u64::from(*b);
+            self.0 = self.0.wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+
+    /// A length-prefixed field, so two different lists of fields never feed the same bytes.
+    fn field(&mut self, bytes: &[u8]) {
+        self.feed(&(bytes.len() as u64).to_le_bytes());
+        self.feed(bytes);
+    }
+
+    fn id(&self) -> PlanId {
+        PlanId((self.0 >> 32) as u32 ^ self.0 as u32)
+    }
+}
+
+/// What `lstat` said a marked path is at plan time (Story 6.6.2, UX-T34): the device, the inode and the file
+/// type. A directory removed and recreated under the same name has another inode, so a plan reviewed for the
+/// old one cannot authorise deleting the new one. Sizes and times are left out on purpose: they drift between
+/// the review and the delete and would make every plan-id stale.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ItemIdentity {
+    pub dev: u64,
+    pub ino: u64,
+    pub kind: FileKind,
+}
+
+impl ItemIdentity {
+    pub fn of(st: &StatInfo) -> ItemIdentity {
+        ItemIdentity {
+            dev: st.ident.dev,
+            ino: st.ident.ino,
+            kind: st.kind,
+        }
+    }
+
+    fn kind_tag(self) -> u8 {
+        match self.kind {
+            FileKind::Dir => 1,
+            FileKind::File => 2,
+            FileKind::Symlink => 3,
+            FileKind::Fifo => 4,
+            FileKind::Socket => 5,
+            FileKind::CharDev => 6,
+            FileKind::BlockDev => 7,
+            FileKind::Other => 8,
+        }
+    }
+}
+
 impl PlanId {
     /// Computable for any selection from one discovery: a guard decision does not depend on the selection
     /// except through `KindNotSelected` and the age rule, which `Selection::admits` re-evaluates.
@@ -260,20 +324,41 @@ impl PlanId {
             .map(|i| (i.candidate.kind().id(), i.candidate.id().as_hex()))
             .collect();
         pairs.sort();
-        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-        let mut feed = |bytes: &[u8]| {
-            for b in bytes {
-                h ^= u64::from(*b);
-                h = h.wrapping_mul(0x0100_0000_01b3);
-            }
-        };
+        let mut h = Fnv::new();
         for (kind, id) in &pairs {
-            feed(kind.as_bytes());
-            feed(&[0]);
-            feed(id.as_bytes());
-            feed(&[1]);
+            h.feed(kind.as_bytes());
+            h.feed(&[0]);
+            h.feed(id.as_bytes());
+            h.feed(&[1]);
         }
-        PlanId((h >> 32) as u32 ^ h as u32)
+        h.id()
+    }
+
+    /// The explorer's plan-id (Story 6.6.2): the kind name, the sorted marked paths with their identities and
+    /// the resolved scan roots. Another set, another inode behind a path, another root list or another kind
+    /// (a cleaner plan over the same paths) gives another id; the order the marks were made in does not.
+    pub fn for_explorer<'a>(
+        items: impl IntoIterator<Item = (&'a Path, ItemIdentity)>,
+        roots: &[PathBuf],
+    ) -> PlanId {
+        use std::os::unix::ffi::OsStrExt;
+        let mut items: Vec<(&Path, ItemIdentity)> = items.into_iter().collect();
+        items.sort_by(|a, b| a.0.as_os_str().cmp(b.0.as_os_str()));
+        let mut roots: Vec<&Path> = roots.iter().map(PathBuf::as_path).collect();
+        roots.sort_by(|a, b| a.as_os_str().cmp(b.as_os_str()));
+        let mut h = Fnv::new();
+        h.field(crate::kind::Kind::ExplorerSelection.id().as_bytes());
+        for (path, id) in &items {
+            h.field(path.as_os_str().as_bytes());
+            h.feed(&id.dev.to_le_bytes());
+            h.feed(&id.ino.to_le_bytes());
+            h.feed(&[id.kind_tag()]);
+        }
+        h.feed(&[0xff]);
+        for r in roots {
+            h.field(r.as_os_str().as_bytes());
+        }
+        h.id()
     }
 
     pub fn from_hex(s: &str) -> Option<PlanId> {
@@ -486,6 +571,81 @@ pub fn destructive_gate(
         recomputed,
         cause,
     })
+}
+
+/// Why the explorer's `d` was refused before anything else ran (Story 6.6.2). Every variant means nothing was
+/// deleted; the text always ends with the way forward.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExplorerGateRefusal {
+    /// No saved plan of this user has this id.
+    NoSavedPlan,
+    /// The plan was saved more than 24 h ago.
+    Stale { age_secs: i64 },
+    /// A plan with this id exists, but it was made for other marks, other things behind the marks or other
+    /// roots.
+    Changed,
+    /// The preview could not save its plan (`plan-id NOT usable`), so nothing can authorise a delete.
+    NotUsable,
+}
+
+impl ExplorerGateRefusal {
+    pub fn text(&self) -> String {
+        match self {
+            ExplorerGateRefusal::NoSavedPlan => "error: no saved plan for these marks in the last 24 h. Review the plan, then press d again. Nothing was deleted.".into(),
+            ExplorerGateRefusal::Stale { age_secs } => format!(
+                "error: the plan was made {} and a plan is good for 24 h. Review the plan, then press d again. Nothing was deleted.",
+                age_text(*age_secs)
+            ),
+            ExplorerGateRefusal::Changed => "error: the marks, or the items they point at, changed since the plan was made. Review the plan, then press d again. Nothing was deleted.".into(),
+            ExplorerGateRefusal::NotUsable => "error: the plan could not be saved (plan-id NOT usable), so it cannot authorise a delete. Free space in the state directory, review the plan, then press d again. Nothing was deleted.".into(),
+        }
+    }
+}
+
+/// The explorer's use of the Destructive-tier gate (Story 6.6.2, UX-T34). It is [`destructive_gate`], the
+/// function `--apply` uses, called on the entries of this user only, plus one check the cleaner's gate does
+/// not make: the stored kinds and flags (the exact marked paths) must equal the recomputed ones, so a
+/// collision of the 32-bit id cannot authorise another set.
+///
+/// `saved_as` is what the preview's `save_merged` returned: a plan that was not saved authorises nothing.
+pub fn check_plan_id(
+    sel: &Selection,
+    supplied: PlanId,
+    saved_as: SaveOutcome,
+    saved: Option<&SavedPlan>,
+    euid: u32,
+    recomputed: PlanId,
+    now: i64,
+) -> Result<(), ExplorerGateRefusal> {
+    if matches!(saved_as, SaveOutcome::NotSaved(_)) {
+        return Err(ExplorerGateRefusal::NotUsable);
+    }
+    let own = saved.map(|s| SavedPlan {
+        entries: s
+            .entries
+            .iter()
+            .filter(|e| e.euid == euid)
+            .cloned()
+            .collect(),
+    });
+    match destructive_gate(sel, Some(supplied), own.as_ref(), recomputed, &[], now) {
+        Ok(()) => {}
+        Err(GateRefusal::Stale { age_secs, .. }) => {
+            return Err(ExplorerGateRefusal::Stale { age_secs });
+        }
+        Err(GateRefusal::Changed { .. }) => return Err(ExplorerGateRefusal::Changed),
+        Err(GateRefusal::NoRecentPlan { .. } | GateRefusal::MissingPlanId { .. }) => {
+            return Err(ExplorerGateRefusal::NoSavedPlan);
+        }
+    }
+    let hex = supplied.to_string();
+    let same_set = entry_of(own.as_ref(), &hex)
+        .is_some_and(|e| e.kinds == sel.kinds_resolved() && e.flags == sel.flags());
+    if same_set {
+        Ok(())
+    } else {
+        Err(ExplorerGateRefusal::Changed)
+    }
 }
 
 /// What a refusal text needs besides the refusal itself.

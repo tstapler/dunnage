@@ -1,0 +1,2 @@
+# Story 6.6.2 (the explorer-selection kind): always active; the tests are in crates/core/tests/plan_explorer*.rs.
+safety_explorer_selection_is_destructive_hidden_and_unnameable_When_the_registry_is_read   # Destructive, not in `kinds`, `--kinds explorer-selection` exits 64
