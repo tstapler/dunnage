@@ -19,6 +19,7 @@ use disk_cleanup_cli::render_json::{fatal_doc, to_text};
 use disk_cleanup_cli::terminal;
 use disk_cleanup_cli::wiring::audit::{build_info, real_stamp_gate};
 use disk_cleanup_cli::wiring::cache_target::CacheTarget;
+use disk_cleanup_cli::wiring::confine;
 use disk_cleanup_cli::wiring::dirs::{real_canon, resolve_real_dirs};
 use disk_cleanup_cli::wiring::env::{read_root, Wired};
 use disk_cleanup_core::roots::{RootError, RootSet};
@@ -52,6 +53,10 @@ fn real_main() -> i32 {
     // Read-only and stateless: dispatched before any Env, lock or audit sink exists (Story 1.2.5).
     if let Some(Command::Scan(scan)) = &cli.command {
         return disk_cleanup_cli::scan_cmd::run_wired(scan, cli.json);
+    }
+    if let Some(msg) = confine::startup_refusal(&confine::current_vars(), cli.apply) {
+        eprintln!("{msg}");
+        return EXIT_USAGE;
     }
     let base = match resolve_real_dirs() {
         Ok(d) => d,

@@ -1,4 +1,4 @@
-# <first-gate> <last-gate|-> <command>   (Story 0.1.3; Task 2.1.6a changes the token-site count to 1)
+# <first-gate> <last-gate|-> <command>   (Story 0.1.3; Task 2.1.6a changed the token-site count to 1)
 A - scripts/check-contract-frozen.sh
-A - scripts/check-token-sites.sh --expect-sites 0
+A - scripts/check-token-sites.sh --expect-sites 1
 A - scripts/check-release-features.sh
