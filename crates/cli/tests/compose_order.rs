@@ -473,8 +473,11 @@ fn the_progress_hook_should_print_one_removing_line_per_item_on_stderr_When_stdo
         true,
     );
     assert_eq!(r.code, 0);
+    // Workers start in either order, so the first line names whichever item began first.
     assert!(
-        r.stderr.contains("[1/2] removing /home/u/.npm/_cacache"),
+        r.stderr.contains("[1/2] removing /home/u/.npm/_cacache")
+            || r.stderr
+                .contains("[1/2] removing /home/u/.cargo/registry/src"),
         "{}",
         r.stderr
     );
