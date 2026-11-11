@@ -162,7 +162,8 @@ pub enum ForAllowedError {
     /// The identity the guard just saw is not the identity the plan recorded: the path changed since the
     /// plan (a new inode, another device). Printed as `SKIP changed since the plan`.
     ChangedSincePlan,
-    /// The witness names `$HOME` or an ancestor of it by identity.
+    /// The witness names `$HOME` or an ancestor of it by identity, or is itself a scan root (by path or by
+    /// identity): a target must be strictly below a scan root.
     ProtectedPath,
 }
 
@@ -182,7 +183,7 @@ impl DeletePolicy {
     ///
     /// `root_mnt` is not optional: a root whose mount id could not be read cannot be deleted below (review
     /// C9). No sibling marker is required (the owner may mark any directory); depth and `.git` are checked
-    /// by [`DeletePolicy::validate`]. `$HOME` and its ancestors by identity are refused here too.
+    /// by [`DeletePolicy::validate`]. `$HOME`, its ancestors by identity, and every scan root (by path or identity) are refused here too.
     pub fn for_allowed_roots(
         allowed: &Allowed,
         root_dev: RootDev,
@@ -198,7 +199,10 @@ impl DeletePolicy {
         if (planned.dev, planned.ino) != (seen.dev, seen.ino) {
             return Err(ForAllowedError::ChangedSincePlan);
         }
-        if roots.in_home_chain(seen) {
+        if roots.in_home_chain(seen)
+            || roots.is_scan_root(scope.path())
+            || roots.root_identities().iter().any(|r| r.ident == seen)
+        {
             return Err(ForAllowedError::ProtectedPath);
         }
         Ok(DeletePolicy {
