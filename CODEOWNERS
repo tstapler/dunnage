@@ -1,3 +1,5 @@
+* @tstapler
+
 # Review convention only: a local-only repo enforces nothing from this file. Enforcement of independent
 # authorship is the hash pin plus commit separation (scripts/check-test-authorship.sh).
 /crates/adapters/tests/delete_adversarial.rs   @tstapler

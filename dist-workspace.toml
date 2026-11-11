@@ -1,8 +1,7 @@
-# cargo-dist config. This file is a starting point only — run `dist init`
-# (https://opensource.axo.dev/cargo-dist/) after scaffolding to regenerate it
-# against the cargo-dist version you actually install, then `dist generate`
-# to (re)write .github/workflows/release.yml. Hand-editing this file and not
-# regenerating the workflow is the most common way this drifts.
+# cargo-dist config, written by `dist init` 0.32.0 and edited by hand. After any change here run `dist generate`
+# (rewrites .github/workflows/release.yml) and commit both; `dist plan` fails when the workflow is out of date.
+# No package or crate name appears in this file: dist reads them from the workspace, so the dunnage rename
+# (RENAME.md) needs no edit here beyond the tap name when the Homebrew installer is enabled.
 [workspace]
 members = ["cargo:."]
 
@@ -10,9 +9,20 @@ members = ["cargo:."]
 cargo-dist-version = "0.32.0"
 ci = "github"
 installers = ["shell"]
-# Apple targets, aarch64 Linux and the Homebrew tap publish are re-enabled in
-# Task 5.3.2b / Story 5.3.1, so a tag push cannot publish an unverified deleter.
+# Three targets in v0.1.0: no x86_64-apple-darwin, no musl (RELEASE.md says why).
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
+# Enabled in Task 5.3.4a, after Gate F, the hosted-runner matrix and the crates.io rehearsal, so a tag cannot
+# publish an unverified deleter. Then also run `dist generate`; the publish job needs the HOMEBREW_TAP_TOKEN secret.
 # installers = ["shell", "homebrew"]
 # tap = "tstapler/homebrew-tap"
 # publish-jobs = ["homebrew"]
-targets = ["x86_64-unknown-linux-gnu"]
+# Gates `host` on scripts/check-release-features.sh (workflow: check-release-artifacts.yml).
+local-artifacts-jobs = ["./check-release-artifacts"]
+# Build with `-p <package>`, not `--workspace`, so the shipped binary is built from the cli package alone (Story 5.3.1).
+precise-builds = true
+install-path = "CARGO_HOME"
+install-updater = false
+
+[dist.github-custom-runners]
+aarch64-apple-darwin = "macos-15"
+aarch64-unknown-linux-gnu = "ubuntu-24.04-arm"

@@ -24,7 +24,7 @@ commit_parsers = [
   { message = "^perf", group = "Performance" },
   { message = "^refactor", group = "Refactor" },
   { message = "^ci", group = "CI" },
-  { message = "^chore\\(deps\\)", group = "Dependencies" },
+  { message = "^(chore\\(deps\\)|deps)", group = "Dependencies" },
   { message = "^chore", skip = true },
   { message = "^docs", skip = true },
   { message = "^style", skip = true },
