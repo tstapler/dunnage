@@ -28,6 +28,7 @@ fn document(report: &VerifyReport, code: i32) -> String {
             "run_id": v.run_id, "kind": v.kind, "path": v.path, "reason": v.reason,
         })).collect::<Vec<_>>(),
         "unfinished_runs": report.unfinished,
+        "warnings": report.warnings,
         "errors": [],
     }))
 }
@@ -81,6 +82,9 @@ pub fn run(log: &Path, home: &Path, config_roots: Option<&[PathBuf]>, json: bool
             out,
             "run {r} unfinished: it has no run_end (killed or power loss)"
         );
+    }
+    for w in &report.warnings {
+        let _ = writeln!(out, "warning: {w}");
     }
     out.push_str(&report.summary_line());
     out.push('\n');

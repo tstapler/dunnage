@@ -153,6 +153,9 @@ pub struct VerifyReport {
     pub violations: Vec<Violation>,
     /// Runs with a `run_start` and no `run_end`: listed, never counted as violations.
     pub unfinished: Vec<String>,
+    /// Lines this binary could not judge: not JSON (a torn last line included) or a schema it skips. Each
+    /// names the line; any of them makes the exit code non-zero (Task 6.6.5g, review C13).
+    pub warnings: Vec<String>,
 }
 
 impl VerifyReport {
@@ -165,8 +168,13 @@ impl VerifyReport {
         )
     }
 
+    /// 2 a deletion, partial deletion or intent outside the allowed roots; 1 only unjudged lines.
     pub fn exit_code(&self) -> i32 {
-        i32::from(!self.violations.is_empty()) * 2
+        if !self.violations.is_empty() {
+            2
+        } else {
+            i32::from(!self.warnings.is_empty())
+        }
     }
 }
 
@@ -324,13 +332,24 @@ pub fn verify_audit(log: impl BufRead, inp: &VerifyInputs) -> Result<VerifyRepor
     let mut report = VerifyReport::default();
     let mut recorded: BTreeMap<String, Recorded> = BTreeMap::new();
     let mut open: Vec<String> = Vec::new();
-    for line in log.lines() {
+    for (n, line) in log.lines().enumerate() {
         let line = line.map_err(VerifyError::Io)?;
+        if line.trim().is_empty() {
+            continue;
+        }
         let Ok(v) = serde_json::from_str::<Value>(&line) else {
+            report.warnings.push(format!(
+                "line {}: not valid JSON, so it was not checked",
+                n + 1
+            ));
             continue;
         };
         if let Some(schema) = v.get("schema").and_then(Value::as_u64) {
             if schema == 2 {
+                report.warnings.push(format!(
+                    "line {}: schema 2 is not checked by this binary",
+                    n + 1
+                ));
                 continue;
             }
             if schema != 1 {
@@ -358,11 +377,70 @@ pub fn verify_audit(log: impl BufRead, inp: &VerifyInputs) -> Result<VerifyRepor
             Some("result") if v.get("status").and_then(Value::as_str) == Some("removed") => {
                 check_result(&v, &run_id, inp, recorded.get(&run_id), &mut report);
             }
+            // A failed or interrupted delete may have removed entries below the path before it stopped.
+            Some("result") if !is_skipped(&v) => {
+                check_attempt(
+                    &v,
+                    "partial or failed delete",
+                    &run_id,
+                    inp,
+                    recorded.get(&run_id),
+                    &mut report,
+                );
+            }
+            Some("intent") => {
+                check_attempt(
+                    &v,
+                    "intent",
+                    &run_id,
+                    inp,
+                    recorded.get(&run_id),
+                    &mut report,
+                );
+            }
             _ => {}
         }
     }
     report.unfinished = open;
     Ok(report)
+}
+
+fn is_skipped(v: &Value) -> bool {
+    v.get("status")
+        .is_some_and(|s| s.get("skipped").is_some() || s.as_str() == Some("skipped"))
+}
+
+/// The path of a `result` (`path`) or an `intent` (`locator.path`).
+fn attempt_path(v: &Value) -> Option<&str> {
+    v.get("path").and_then(Value::as_str).or_else(|| {
+        v.get("locator")
+            .and_then(|l| l.get("path"))
+            .and_then(Value::as_str)
+    })
+}
+
+/// A `Partial` result or an `intent` whose path the table does not allow. It is not a counted deletion.
+fn check_attempt(
+    v: &Value,
+    what: &str,
+    run_id: &str,
+    inp: &VerifyInputs,
+    rec: Option<&Recorded>,
+    report: &mut VerifyReport,
+) {
+    let Some(path) = attempt_path(v) else {
+        return;
+    };
+    let kind = v.get("kind").and_then(Value::as_str).unwrap_or("");
+    let none = Recorded::default();
+    if let Verdict::Outside(reason) = judge(kind, path.as_bytes(), inp, rec.unwrap_or(&none)) {
+        report.violations.push(Violation {
+            run_id: run_id.to_string(),
+            kind: kind.to_string(),
+            path: path.to_string(),
+            reason: format!("{what}: {reason}"),
+        });
+    }
 }
 
 fn check_result(
