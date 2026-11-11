@@ -1,0 +1,22 @@
+active-gate B
+# <selector-id> <first-gate-that-lists-it> <first-gate-that-can-delete>   (Story 2.3.4, Task 2.3.4b)
+# Read by crates/cli/tests/kind_registry.rs, which compares it with what wiring/kinds.rs registers.
+# Gate A (v0.1.0): caches and cache-apt are listed (plan only), nothing can delete.
+# Gate B (v0.2.0): caches and cache-apt delete. Gate C (v0.3.0) adds worktrees and build-dirs. Gate D (v0.4.0)
+# adds docker, docker-images, docker-volumes, steam, btrfs and btrfs-trim.
+# Owner decision 2026-11-10: a gate's apply path is built before its owner review but its kinds stay unregistered
+# in the shipped binary until the review; the build registers them only with the cargo feature `gate-<letter>`
+# of the `disk-cleanup` package. The test-only `fixture-destructive` is not in this table: only a `test-support`
+# build registers it, and only under DC_TEST_ROOT.
+# `active-gate` is the gate the checked-in tree has reached: Task 3.2.4b raises it to C with the v0.3.0 tag and
+# Task 4.3.3a to D with the v0.4.0 tag, after the last slot of that gate is filled.
+caches A B
+cache-apt A B
+worktrees C C
+build-dirs C C
+docker D D
+docker-images D D
+docker-volumes D D
+steam D D
+btrfs D D
+btrfs-trim D D

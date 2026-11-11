@@ -97,6 +97,12 @@ pub trait Target: Send + Sync {
         KindGate::Available
     }
 
+    /// The availability of one selector, for the AVAILABLE column of `kinds` only (a family can have a
+    /// selector that needs root while its sibling does not). The run itself asks [`Target::gate`].
+    fn selector_gate(&self, _selector: SelectorId, env: &Env) -> KindGate {
+        self.gate(env)
+    }
+
     /// The `<reason>` of the `SKIPPED` line, for example why the Docker daemon is not reachable.
     fn unavailable_detail(&self, _env: &Env) -> Option<String> {
         None

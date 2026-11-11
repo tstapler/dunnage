@@ -120,7 +120,7 @@ impl Ports<'_> {
     fn available_label(&self, s: SelectorId) -> String {
         match self.targets.iter().find(|t| t.selectors().contains(&s)) {
             Some(t) => {
-                let gate = t.gate(self.env);
+                let gate = t.selector_gate(s, self.env);
                 let listed_only = self.apply_capable.is_some_and(|c| !c.contains(&s));
                 if listed_only && gate == KindGate::Available {
                     return "list only".to_string();

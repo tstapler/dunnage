@@ -17,7 +17,7 @@ use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
 use disk_cleanup_core::ports::{Env, SystemProbe};
 use disk_cleanup_core::roots::RootSet;
 use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::target::{Guarded, Target};
+use disk_cleanup_core::target::{Guarded, KindGate, Target};
 use disk_cleanup_core::{
     AbortFlag, Allowed, AllowedTarget, ApplyToken, CacheFacts, Candidate, CandidateId, DeleteError,
     DeleteFailure, DeletePolicy, Freed, Identity, Kind, KindFacts, Locator, Outcome, RootDev,
@@ -262,6 +262,13 @@ impl<D: DirOps + 'static> Target for CacheTarget<D> {
 
     fn selectors(&self) -> &'static [SelectorId] {
         &[SelectorId::Caches, SelectorId::CacheApt]
+    }
+
+    fn selector_gate(&self, selector: SelectorId, env: &Env) -> KindGate {
+        if selector == SelectorId::CacheApt && env.probe.euid() != 0 {
+            return KindGate::Unavailable(SkipReason::NeedsRoot);
+        }
+        KindGate::Available
     }
 
     fn discover(&self, env: &Env, _selection: &Selection) -> Vec<Candidate> {

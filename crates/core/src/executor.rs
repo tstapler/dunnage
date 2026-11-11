@@ -408,6 +408,9 @@ impl<'a> Executor<'a> {
                 candidates.extend(t.discover(env, sel));
             }
         }
+        if let Some(refused) = only_refusal(sel, &candidates, &avail) {
+            return Err(refused);
+        }
         let discover_ms = millis(discover_start);
         let plan_start = Instant::now();
         let now = env.clock.now_epoch();
@@ -795,6 +798,32 @@ fn availability_of(
         a.gates.push((t.name(), g));
     }
     a
+}
+
+/// `--only PATH` must name, byte for byte, an item of the selected kinds (`design/ux.md` 1.1); anything else
+/// ends the run with exit 64 before a plan-id is computed.
+fn only_refusal(
+    sel: &Selection,
+    candidates: &[Candidate],
+    avail: &Availability,
+) -> Option<Box<Refused>> {
+    let missing = sel.only.iter().find(|o| {
+        !candidates
+            .iter()
+            .any(|c| sel.selects(c.selector()) && path_of(c).as_deref() == Some(o.as_path()))
+    })?;
+    let kinds = sel.kinds_resolved();
+    Some(Box::new(Refused {
+        exit: ExitClass::Usage,
+        notes: avail.notes.clone(),
+        text: format!(
+            "error: --only {} is not an item of the selected kinds ({kinds}). It may be new, under the age floor, kept as the newest duplicate, or not a cleanable item at all, or spelled differently from the path the cleaner prints (no symlinks, no '.' or '..', no trailing slash); dry run without --only to list the items. Nothing was deleted.",
+            crate::shell_quote::shell_quote(missing.as_os_str(), false)
+        ),
+        refusal: None,
+        plan_id: None,
+        fatal: None,
+    }))
 }
 
 fn every_selector_down(sel: &Selection, a: &Availability) -> bool {

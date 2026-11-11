@@ -648,3 +648,88 @@ fn a_refused_apply_should_leave_no_state_file_in_steps_1_to_4() {
     assert_eq!(out.status.code(), Some(64));
     assert!(!state.exists());
 }
+
+#[test]
+fn the_fixture_destructive_flow_should_need_the_plan_id_and_remove_only_the_stale_directory() {
+    let f = Fixture::new();
+    let root = stale_fixture(&f);
+    std::fs::create_dir_all(root.join("keep-me")).unwrap();
+    let id = dry_run_id(&f, &root);
+
+    // One hex digit off: refused as changed/unknown, nothing deleted.
+    let mut wrong: Vec<char> = id.chars().collect();
+    wrong[0] = if wrong[0] == '0' { '1' } else { '0' };
+    let wrong: String = wrong.into_iter().collect();
+    let out = apply_cmd(&f, &root, &wrong).output().unwrap();
+    assert_eq!(out.status.code(), Some(64), "{}", text(&out).1);
+    assert!(out.stdout.is_empty());
+    assert!(root.join("stale-a").is_dir());
+
+    let out = apply_cmd(&f, &root, &id).output().unwrap();
+    let (stdout, stderr) = text(&out);
+    assert_eq!(out.status.code(), Some(0), "{stdout}\n{stderr}");
+    assert!(stdout.contains("APPLY FINISHED - exit 0."), "{stdout}");
+    assert!(
+        !root.join("stale-a").exists(),
+        "the stale directory is gone"
+    );
+    assert!(
+        root.join("keep-me").is_dir(),
+        "only stale-* directories are touched"
+    );
+    // The spent id: the same command again is refused as changed (the item is gone).
+    let again = apply_cmd(&f, &root, &id).output().unwrap();
+    assert_eq!(again.status.code(), Some(64));
+}
+
+#[test]
+fn only_should_name_an_item_of_the_selected_kinds_or_end_the_run_with_exit_64() {
+    let (rig, state, c) = (Rig::new(), FakeState::default(), caches());
+    let r = go(
+        &rig,
+        &state,
+        &[&c],
+        &[
+            "--apply",
+            "--kinds",
+            "caches",
+            "--only",
+            "/home/u/.npm/_cache",
+        ],
+        &ok_stamp,
+        false,
+    );
+    assert_eq!(r.code, 64, "{}", r.stderr);
+    assert!(r.stdout.is_empty(), "{}", r.stdout);
+    assert!(
+        r.stderr.starts_with(
+            "error: --only /home/u/.npm/_cache is not an item of the selected kinds (caches)."
+        ),
+        "{}",
+        r.stderr
+    );
+    assert!(r.stderr.ends_with("Nothing was deleted.\n"), "{}", r.stderr);
+    assert!(c.executed().is_empty());
+    assert_eq!(state.reserves.load(Ordering::SeqCst), 0);
+
+    let ok = go(
+        &rig,
+        &state,
+        &[&c],
+        &[
+            "--apply",
+            "--kinds",
+            "caches",
+            "--only",
+            "/home/u/.npm/_cacache",
+        ],
+        &ok_stamp,
+        false,
+    );
+    assert_eq!(ok.code, 0, "{}", ok.stderr);
+    assert_eq!(
+        c.executed().len(),
+        1,
+        "--only limits the apply to the one item"
+    );
+}

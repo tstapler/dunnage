@@ -18,7 +18,7 @@ use disk_cleanup_cli::app::{self, ApplyMode, Io, Ports};
 use disk_cleanup_cli::args::{self, Cli, Command, Parsed};
 use disk_cleanup_cli::render_json::{fatal_doc, to_text};
 use disk_cleanup_cli::terminal;
-use disk_cleanup_cli::wiring::audit::{build_info, real_stamp_gate};
+use disk_cleanup_cli::wiring::audit::{build_info, StampOutcome};
 use disk_cleanup_cli::wiring::compose;
 use disk_cleanup_cli::wiring::confine;
 use disk_cleanup_cli::wiring::dirs::{real_canon, resolve_real_dirs};
@@ -169,11 +169,8 @@ fn run_wired(cli: &Cli, base: &Dirs, roots: &RootSet, writes_state: bool) -> i32
             eprintln!("warning: could not record the run in outcome.jsonl ({e}).");
         }
     };
-    let ungated = std::env::var("DISK_CLEANUP_UNGATED").ok();
-    let confined = std::env::var_os("DC_TEST_ROOT").is_some();
-    let state_dir = wired.dirs.state.clone();
-    let stamp =
-        |gate: char| real_stamp_gate(&state_dir, &build, gate, confined, ungated.as_deref());
+    // Plan, status and the read-only commands never reach the stamp step; `--apply` is `wiring::compose`.
+    let stamp = |_gate: char| Ok(StampOutcome::Confined);
     let reserves_note = wired
         .state
         .dir

@@ -1,9 +1,8 @@
 //! `build_env` composition of Story 1.2.4 (Task 1.2.4e): the real adapters behind one `Env`, and the read-only
 //! pieces this story needs that no earlier story owns (`RealFs`, `SystemClock`, the inert plan-mode guard).
 //!
-//! The run lock and the signal handling are Story 2.2.2 (`run_guard`), the confinement is Story 2.1.6
-//! (`confine`) and the apply token is `wiring::token`: none of them is built here, so this binary cannot
-//! delete, and an `--apply` ends with the Gate A refusal.
+//! This is the plan-mode and status composition. The apply path, with the run lock, the signal handling, the
+//! confinement and the apply token, is `wiring::compose` (Story 2.3.4).
 
 use std::io;
 use std::os::unix::fs::MetadataExt;
