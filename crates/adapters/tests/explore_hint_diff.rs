@@ -137,7 +137,7 @@ fn grow(
         ".claude",
         "agent-9",
     ];
-    for _ in 0..1 + rng.below(3) {
+    for _ in 0..=rng.below(3) {
         if *budget == 0 {
             return;
         }

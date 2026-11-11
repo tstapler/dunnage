@@ -170,7 +170,7 @@ fn paths_in_texts_should_be_escaped() {
         MarkRefusal::PathTooLong,
         MarkRefusal::Engine(SkipReason::OutsideRoot),
     ] {
-        let t = text(r, &hostile, &[hostile.clone()], Some(&hostile));
+        let t = text(r, &hostile, std::slice::from_ref(&hostile), Some(&hostile));
         assert!(
             !t.chars().any(|c| c.is_control() && c != ' '),
             "{r:?} leaked a control character: {t:?}"
@@ -231,7 +231,7 @@ fn contains_items_should_stop_at_99_within_50_ms_on_a_tree_above_600000_nodes() 
     let seen = std::cell::Cell::new(0usize);
     let every_third = |id: NodeId| {
         seen.set(seen.get() + 1);
-        id.index() % 3 == 0
+        id.index().is_multiple_of(3)
     };
     let start = Instant::now();
     let n = count_items_below(&t, root, &every_third);
