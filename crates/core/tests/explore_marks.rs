@@ -11,6 +11,7 @@ use disk_cleanup_core::explore::input::{
 };
 use disk_cleanup_core::explore::keymap::{Key, KEYMAP};
 use disk_cleanup_core::explore::layout::{cells, Tier};
+use disk_cleanup_core::explore::mark_check::MarkOk;
 use disk_cleanup_core::explore::marks::{Mark, Marks, MARK_LIMIT};
 use disk_cleanup_core::explore::msg::{MarkRefusal, NodeEvent, ScanMode, NO_PARENT};
 use disk_cleanup_core::explore::tree::{ExploreTree, NodeId};
@@ -95,10 +96,10 @@ impl Ctx {
             }
         };
         let refused = self.refused.clone();
-        let check = move |q: &MarkQuery<'_>| -> Result<(), MarkRefusal> {
+        let check = move |q: &MarkQuery<'_>| -> Result<MarkOk, MarkRefusal> {
             match refused.iter().find(|(p, _)| p == q.path) {
-                Some((_, r)) => Err(*r),
-                None => Ok(()),
+                Some((_, r)) => Err(r.clone()),
+                None => Ok(MarkOk::default()),
             }
         };
         let env = KeyEnv {
@@ -517,3 +518,186 @@ Headers   USAGE bytes on disk   APPARENT file sizes   META est. btrfs metadata
           SHARE of parent
 Access    This view is not screen-reader friendly: use 'disk-cleanup explore
           --text'.";
+
+// ---- Story 6.6.1 (Task 6.6.1b): Space reaches the real `mark_check` --------------------------------------
+
+mod real_check {
+    use super::*;
+    use disk_cleanup_core::explore::mark_check::{
+        mark_check, MarkCtx, MarkEnv, MarkFacts, MarkMount, MountTable, OwnState, SymlinkFact,
+    };
+    use disk_cleanup_core::explore::refusal::{RefusalCtx, MARK_LIMIT as LIMIT};
+    use disk_cleanup_core::Dirs;
+
+    struct NoFacts;
+    impl MarkFacts for NoFacts {
+        fn symlink_in(&self, _: &Path) -> Option<SymlinkFact> {
+            None
+        }
+        fn dev_of(&self, p: &Path) -> Option<u64> {
+            Some(if p == Path::new("/r/c02/x") { 7 } else { 1 })
+        }
+        fn is_boundary(&self, _: &Path) -> bool {
+            false
+        }
+        fn scanning(&self, _: &Path) -> bool {
+            false
+        }
+    }
+
+    fn press(st: &mut ExploreState, t: &ExploreTree, key: Key, mounts: &MountTable) -> Outcome {
+        let roots = vec![PathBuf::from("/r")];
+        let own = OwnState::new(
+            &Dirs {
+                home: "/home/u".into(),
+                state: "/home/u/.local/state".into(),
+                cache: "/home/u/.cache".into(),
+                config: "/home/u/.config".into(),
+            },
+            "/bin/dc".into(),
+        );
+        let env_facts = MarkEnv {
+            roots: &roots,
+            home: Path::new("/home/u"),
+            mounts,
+            own_state: &own,
+            facts: &NoFacts,
+            tty: false,
+        };
+        let check = |q: &MarkQuery<'_>| {
+            mark_check(
+                q.path,
+                &MarkCtx {
+                    env: &env_facts,
+                    marks: q.marks,
+                },
+            )
+        };
+        let badge = |_: NodeId| Badge::None;
+        let cfg = PathBuf::from("/etc/dc/config.toml");
+        let env = KeyEnv {
+            now_ms: 5_000,
+            tier: Tier::Compact,
+            page: 10,
+            tty: false,
+            roots: &roots,
+            config_path: &cfg,
+            badge: &badge,
+            mark_check: &check,
+        };
+        handle_key(st, t, key, &env)
+    }
+
+    fn open_dir(t: &ExploreTree) -> ExploreState {
+        let badge = |_: NodeId| Badge::None;
+        let mut v = ViewState::new(Sort::default());
+        v.open_dir(t, t.roots().next().unwrap(), 0, &badge);
+        ExploreState::new(v)
+    }
+
+    #[test]
+    fn space_should_refuse_inside_a_mark_then_above_one_with_the_catalogue_text() {
+        let t = tree_with(4);
+        let none = MountTable::default();
+        let mut st = open_dir(&t);
+        goto(&mut st, "c00/");
+        press(&mut st, &t, Key::Char(' '), &none);
+        assert!(st.marks.contains(Path::new("/r/c00")));
+        // Open c00 and try x inside the marked directory.
+        press(&mut st, &t, Key::Enter, &none);
+        goto(&mut st, "x/");
+        let o = press(&mut st, &t, Key::Char(' '), &none);
+        let m = o.message.unwrap();
+        assert!(
+            m.starts_with("/r/c00/x is inside /r/c00, which is already marked."),
+            "{m}"
+        );
+        assert_eq!(st.marks.len(), 1);
+        // Unmark c00, mark x, then c00 holds one marked item.
+        press(&mut st, &t, Key::Char('h'), &none);
+        goto(&mut st, "c00/");
+        press(&mut st, &t, Key::Char(' '), &none);
+        assert!(st.marks.is_empty());
+        press(&mut st, &t, Key::Enter, &none);
+        goto(&mut st, "x/");
+        press(&mut st, &t, Key::Char(' '), &none);
+        assert!(st.marks.contains(Path::new("/r/c00/x")));
+        press(&mut st, &t, Key::Char('h'), &none);
+        goto(&mut st, "c00/");
+        let o = press(&mut st, &t, Key::Char(' '), &none);
+        assert!(o
+            .message
+            .unwrap()
+            .starts_with("/r/c00 contains 1 marked item. Unmark it first."),);
+        assert_eq!(st.marks.len(), 1);
+    }
+
+    #[test]
+    fn space_should_mark_a_directory_over_another_filesystem_and_say_so_in_the_footer() {
+        let t = tree_with(4);
+        // c02 holds a mount of another device (x has st_dev 7): the directory is markable with a note.
+        let mounts = MountTable::new(vec![MarkMount {
+            point: "/r/c02/x".into(),
+            source: "/dev/sdb1".into(),
+        }]);
+        let mut st = open_dir(&t);
+        goto(&mut st, "c02/");
+        let o = press(&mut st, &t, Key::Char(' '), &mounts);
+        let m = o.message.unwrap();
+        assert!(
+            m.starts_with("marked /r/c02; contains another filesystem (/dev/sdb1); it is not entered and the directory stays"),
+            "{m}"
+        );
+        assert!(st.marks.contains(Path::new("/r/c02")));
+    }
+
+    #[test]
+    fn add_checked_should_change_nothing_on_a_refusal_and_stop_at_the_limit() {
+        let roots = vec![PathBuf::from("/r")];
+        let own = OwnState::new(
+            &Dirs {
+                home: "/home/u".into(),
+                state: "/home/u/.local/state".into(),
+                cache: "/home/u/.cache".into(),
+                config: "/home/u/.config".into(),
+            },
+            "/bin/dc".into(),
+        );
+        let mounts = MountTable::default();
+        let env = MarkEnv {
+            roots: &roots,
+            home: Path::new("/home/u"),
+            mounts: &mounts,
+            own_state: &own,
+            facts: &NoFacts,
+            tty: false,
+        };
+        let m = |p: String| Mark {
+            path: p.into(),
+            est_bytes: 1,
+            cleaner_item: false,
+        };
+        let mut marks = Marks::new();
+        for i in 0..LIMIT {
+            marks.add_checked(m(format!("/r/p{i:02}")), &env).unwrap();
+        }
+        let err = marks.add_checked(m("/r/extra".into()), &env).unwrap_err();
+        assert_eq!(err, MarkRefusal::LimitReached);
+        assert_eq!(marks.len(), LIMIT);
+        let err = marks
+            .add_checked(m("/elsewhere/a".into()), &env)
+            .unwrap_err();
+        assert_eq!(err, MarkRefusal::OutsideRoot);
+        let cx = RefusalCtx {
+            path: Path::new("/r/extra"),
+            roots: &roots,
+            config_path: Path::new("/c"),
+            real_path: None,
+            tty: false,
+        };
+        assert_eq!(
+            MarkRefusal::LimitReached.text(&cx),
+            "20 items are marked, the limit for one plan. Delete these first, then mark more."
+        );
+    }
+}

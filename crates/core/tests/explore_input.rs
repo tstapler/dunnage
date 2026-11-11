@@ -11,6 +11,7 @@ use disk_cleanup_core::explore::input::{
 };
 use disk_cleanup_core::explore::keymap::{all_keys, lookup, Cmd, Key, KEYMAP};
 use disk_cleanup_core::explore::layout::Tier;
+use disk_cleanup_core::explore::mark_check::MarkOk;
 use disk_cleanup_core::explore::msg::{
     FileRow, FileRows, MarkRefusal, NodeEvent, ScanMode, StopCause, NO_PARENT,
 };
@@ -105,10 +106,10 @@ impl Ctx {
             }
         };
         let refused = self.refused.clone();
-        let check = move |q: &MarkQuery<'_>| -> Result<(), MarkRefusal> {
+        let check = move |q: &MarkQuery<'_>| -> Result<MarkOk, MarkRefusal> {
             match refused.iter().find(|(p, _)| p == q.path) {
-                Some((_, r)) => Err(*r),
-                None => Ok(()),
+                Some((_, r)) => Err(r.clone()),
+                None => Ok(MarkOk::default()),
             }
         };
         let env = KeyEnv {

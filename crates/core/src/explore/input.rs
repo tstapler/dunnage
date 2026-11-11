@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use super::keymap::{lookup, Cmd, Key};
 use super::layout::Tier;
+use super::mark_check::MarkOk;
 use super::marks::{Mark, Marks};
 use super::msg::{MarkRefusal, StopCause};
 use super::refusal::{count_items_below, count_text, RefusalCtx};
@@ -147,6 +148,8 @@ impl ExploreState {
 pub struct MarkQuery<'a> {
     pub path: &'a Path,
     pub row: &'a Row,
+    /// The marks so far: rule M6 and the limits of M8 are decided against them.
+    pub marks: &'a Marks,
 }
 
 /// The facts a key needs besides the state. Time is milliseconds on the loop's monotonic clock.
@@ -160,7 +163,8 @@ pub struct KeyEnv<'a> {
     pub roots: &'a [PathBuf],
     pub config_path: &'a Path,
     pub badge: &'a dyn Fn(NodeId) -> Badge,
-    pub mark_check: &'a dyn Fn(&MarkQuery<'_>) -> Result<(), MarkRefusal>,
+    /// Rules M1 to M8 of Story 6.6.1 (`mark_check`); the `Ok` carries a note for the footer.
+    pub mark_check: &'a dyn Fn(&MarkQuery<'_>) -> Result<MarkOk, MarkRefusal>,
 }
 
 /// The action and the footer message of one key.
@@ -437,13 +441,15 @@ fn toggle_mark(st: &mut ExploreState, tree: &ExploreTree, env: &KeyEnv<'_>) {
     let refusal = (env.mark_check)(&MarkQuery {
         path: &path,
         row: &row,
+        marks: &st.marks,
     })
-    .and_then(|()| {
+    .and_then(|ok| {
         st.marks.add(Mark {
             path: path.clone(),
             est_bytes: row.usage,
             cleaner_item: row.badge == Badge::Candidate,
-        })
+        })?;
+        Ok(ok)
     });
     match refusal {
         Err(r) => {
@@ -456,8 +462,11 @@ fn toggle_mark(st: &mut ExploreState, tree: &ExploreTree, env: &KeyEnv<'_>) {
             };
             st.input.message = Some(r.text(&cx));
         }
-        Ok(()) => {
+        Ok(ok) => {
             let mut line = format!("marked {shown}");
+            if let Some(note) = &ok.note {
+                line = format!("{line}; {note}");
+            }
             if let (RowKind::Dir, RowId::Dir(id)) = (row.kind, &row.id) {
                 let below = count_items_below(tree, *id, &|n| (env.badge)(n) != Badge::None);
                 if below > 0 {

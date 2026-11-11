@@ -27,6 +27,26 @@ fn components_below(path: &Path, base: &Path) -> Option<usize> {
     path.strip_prefix(base).ok().map(|r| r.components().count())
 }
 
+/// `/`, `$HOME`, an ancestor of `$HOME` or a scan root: the first floor refusal of [`DeletePolicy::validate`].
+fn is_structurally_protected(target: &Path, home: &Path, scan_roots: &[PathBuf]) -> bool {
+    target == Path::new("/")
+        || target == home
+        || home.starts_with(target)
+        || scan_roots.iter().any(|r| r == target)
+}
+
+/// Fewer than two components below `$HOME`: the last floor refusal of [`DeletePolicy::validate`].
+fn too_shallow_below_home(target: &Path, home: &Path) -> bool {
+    components_below(target, home).is_some_and(|d| d < 2)
+}
+
+/// The position-only part of rule F: true when `validate` would answer `ProtectedPath` for a clean absolute
+/// `target` that its allowed target admits. The explorer's mark rule M2 calls this same function (Story
+/// 6.6.1), so a row can be marked only if the engine's floor would let the delete through.
+pub fn floor_protected(target: &Path, home: &Path, scan_roots: &[PathBuf]) -> bool {
+    is_structurally_protected(target, home, scan_roots) || too_shallow_below_home(target, home)
+}
+
 fn matches_pattern(pattern: NamePattern, base: &OsStr) -> bool {
     let b = base.as_bytes();
     match pattern {
@@ -70,11 +90,7 @@ impl DeletePolicy {
         }
 
         let target = self.target.as_path();
-        if target == Path::new("/")
-            || target == self.home
-            || self.home.starts_with(target)
-            || self.scan_roots.iter().any(|r| r == target)
-        {
+        if is_structurally_protected(target, &self.home, &self.scan_roots) {
             return Err(DeleteError::ProtectedPath);
         }
 
@@ -99,7 +115,7 @@ impl DeletePolicy {
             return Err(DeleteError::OutsideScope);
         }
 
-        if components_below(target, &self.home).is_some_and(|d| d < 2) {
+        if too_shallow_below_home(target, &self.home) {
             return Err(DeleteError::ProtectedPath);
         }
         Ok(())

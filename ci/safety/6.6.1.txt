@@ -1,0 +1,5 @@
+# Story 6.6.1 (mark rules M1 to M8): always active; the tests are in crates/core/tests/explore_mark_check.rs.
+safety_explorer_cannot_mark_home_an_ancestor_of_home_or_slash   # M2: rule F, every ancestor of $HOME
+safety_explorer_cannot_mark_a_mount_point_or_a_directory_holding_a_bind_mount   # M3: mount points and same-device bind mounts below
+safety_explorer_cannot_mark_a_symlink_or_the_tools_own_state   # M4 and M5
+safety_explorer_mark_check_agrees_with_the_engines_floor_rule   # M2 equals DeletePolicy::validate's ProtectedPath

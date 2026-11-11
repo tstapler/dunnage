@@ -26,6 +26,12 @@ pub enum GuardDecision {
     Skip(SkipReason),
 }
 
+/// A `.git` component anywhere in the path: no kind may delete inside or at one. Shared by the explorer's mark
+/// rule M2.
+pub(crate) fn has_git_component(path: &std::path::Path) -> bool {
+    path.components().any(|c| c.as_os_str() == ".git")
+}
+
 /// The checks every path-based kind shares. A returned `Allow` is the only way to obtain an [`Allowed`].
 /// The lexical test runs first: `starts_with(root)` is meaningless on an unclean string (`/h/code/../.ssh`).
 pub fn decide_path_common(facts: &Facts, roots: &RootSet) -> GuardDecision {
@@ -37,7 +43,7 @@ pub fn decide_path_common(facts: &Facts, roots: &RootSet) -> GuardDecision {
     if facts.is_symlink {
         return Skip(SkipReason::Symlink);
     }
-    if roots.is_scan_root(path) || path.components().any(|c| c.as_os_str() == ".git") {
+    if roots.is_scan_root(path) || has_git_component(path) {
         return Skip(SkipReason::ProtectedPath);
     }
     if !facts.ident.on_dev(facts.root_dev) {

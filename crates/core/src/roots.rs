@@ -120,6 +120,14 @@ pub(crate) fn lexically_clean(p: &Path) -> bool {
             .all(|c| !c.is_empty() && c != "." && c != "..")
 }
 
+/// `path` is a strict descendant of `root` (the root itself is not). Lexical; the caller has checked
+/// [`lexically_clean`]. The one definition of "strictly below a root" for [`RootSet::admits`] and the
+/// explorer's mark rule M1.
+pub fn strictly_below(root: &Path, path: &Path) -> bool {
+    path.strip_prefix(root)
+        .is_ok_and(|rel| !rel.as_os_str().is_empty())
+}
+
 fn expand(raw: &Path, home: &Path, cwd: &Path) -> PathBuf {
     if let Ok(rest) = raw.strip_prefix("~") {
         return home.join(rest);
@@ -315,9 +323,12 @@ impl RootSet {
         }
         self.allowed(kind).iter().any(|t| match t {
             AllowedTarget::Exact(p) => p == path,
-            AllowedTarget::Within { root, name } => path
-                .strip_prefix(root)
-                .is_ok_and(|rel| !rel.as_os_str().is_empty() && pattern_matches(*name, rel)),
+            AllowedTarget::Within { root, name } => {
+                strictly_below(root, path)
+                    && path
+                        .strip_prefix(root)
+                        .is_ok_and(|rel| pattern_matches(*name, rel))
+            }
         })
     }
 

@@ -1,10 +1,11 @@
 //! The marked set (Task 6.2.4b; UX-T3): at most [`MARK_LIMIT`] paths in a fixed order, with the facts the quit
-//! prompt and the plan need. Which rows may be marked at all is `mark_check` (Story 6.6.1); this file only
-//! holds the set, its cap and its identity. Marks are paths, not arena ids, so a rescan cannot invalidate them.
+//! prompt and the plan need. Which rows may be marked at all is `mark_check` (Story 6.6.1, reached through
+//! [`Marks::add_checked`]); this file only holds the set, its cap and its identity. Marks are paths, not arena ids, so a rescan cannot invalidate them.
 
 use std::path::{Path, PathBuf};
 
 use super::fmt::fmt_size_cell;
+use super::mark_check::{mark_check, MarkCtx, MarkEnv, MarkOk};
 use super::msg::MarkRefusal;
 use crate::escape::escape_os;
 
@@ -85,6 +86,13 @@ impl Marks {
         }
         self.items.insert(at, mark);
         Ok(())
+    }
+
+    /// Runs `mark_check` (rules M1 to M8) against this set, then adds the mark. Nothing changes on a refusal.
+    pub fn add_checked(&mut self, mark: Mark, env: &MarkEnv<'_>) -> Result<MarkOk, MarkRefusal> {
+        let ok = mark_check(&mark.path, &MarkCtx { env, marks: self })?;
+        self.add(mark)?;
+        Ok(ok)
     }
 
     /// Returns whether the path was marked.

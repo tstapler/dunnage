@@ -97,6 +97,30 @@ impl MarkRefusal {
             MarkRefusal::StillScanning => {
                 "1 marked item is still being scanned. Wait, or Esc to stop the scan.".to_string()
             }
+            MarkRefusal::MountPoint => {
+                format!("{path} is a mount point; the explorer does not delete mount points. \
+                     Mark a folder inside it instead.")
+            }
+            MarkRefusal::BindMountBelow(mount) => format!(
+                "{path} has a bind mount below it ({}); unmount it first. The explorer will not walk into it.",
+                esc(mount.as_os_str(), cx.tty)
+            ),
+            MarkRefusal::OwnState => format!(
+                "{path} holds disk-cleanup's own state (audit log, plans, cache or config). \
+                 It is never deleted from here."
+            ),
+            MarkRefusal::InsideMarked(outer) => {
+                let outer = esc(outer.as_os_str(), cx.tty);
+                format!(
+                    "{path} is inside {outer}, which is already marked. Unmark {outer} first, \
+                     or keep the outer mark."
+                )
+            }
+            MarkRefusal::ContainsMarked(n) => format!(
+                "{path} contains {n} marked {}. Unmark {} first.",
+                if *n == 1 { "item" } else { "items" },
+                if *n == 1 { "it" } else { "them" }
+            ),
             MarkRefusal::Engine(reason) => {
                 format!("{path}: {}. {}", reason.reason_text(), reason.next_action())
             }
