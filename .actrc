@@ -1,0 +1,5 @@
+# Runner image pinned by multi-arch index digest (ghcr.io/catthehacker/ubuntu:act-latest on 2026-11-11);
+# bump deliberately in its own commit: docker buildx imagetools inspect ghcr.io/catthehacker/ubuntu:act-latest
+-P ubuntu-latest=ghcr.io/catthehacker/ubuntu@sha256:0f9811b3b5145364a678ff4d6e8f04ed18e7ffd1784e936f72e7f5d416bb6677
+-P ubuntu-24.04=ghcr.io/catthehacker/ubuntu@sha256:0f9811b3b5145364a678ff4d6e8f04ed18e7ffd1784e936f72e7f5d416bb6677
+--artifact-server-path /tmp/act-artifacts
