@@ -77,6 +77,10 @@ fn real_main() -> i32 {
         Some(Command::Status(_)) => true,
         Some(_) => false,
     };
+    // The explorer has its own composition root and takes no lock, audit sink or outcome line (Story 6.5.4).
+    if let Some(Command::Explore(args)) = &cli.command {
+        return disk_cleanup_cli::explore::run::run_wired(&cli, args, &base, &roots);
+    }
     if compose::is_cleaner_apply(&cli) {
         let argv: Vec<OsString> = std::env::args_os().skip(1).collect();
         return compose::run_apply(argv, &cli, &base, &roots);
@@ -93,7 +97,7 @@ fn print_raw(stdout: &str, stderr: &str) {
 /// The scan roots of the run. Only the cleaner needs them to be valid; the other commands carry the
 /// defaults.
 fn resolve_roots(cli: &Cli, base: &Dirs) -> Result<RootSet, i32> {
-    let cleaner = cli.command.is_none();
+    let cleaner = cli.command.is_none() || matches!(cli.command, Some(Command::Explore(_)));
     let config = match read_config(&config_path(base)) {
         Ok(c) => c,
         Err(e) if cleaner => {
