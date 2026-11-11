@@ -24,14 +24,7 @@ use crate::units;
 
 /// The family id of a kind: what the KIND column shows.
 pub fn family(kind: Kind) -> &'static str {
-    match kind {
-        Kind::Cache => "caches",
-        Kind::Worktree => "worktrees",
-        Kind::NodeModules | Kind::CargoTarget => "build-dirs",
-        Kind::DockerImage | Kind::DockerBuildCache | Kind::DockerVolume => "docker",
-        Kind::SteamPrefix | Kind::SteamShaderCache | Kind::SteamRemnant => "steam",
-        Kind::BtrfsBalance | Kind::BtrfsTrim => "btrfs",
-    }
+    kind.family()
 }
 
 /// The word of the STATUS column (`design/ux.md` 3.2).

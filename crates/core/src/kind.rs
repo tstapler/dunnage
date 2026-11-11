@@ -20,6 +20,10 @@ pub enum Kind {
     SteamRemnant,
     BtrfsBalance,
     BtrfsTrim,
+    /// Test-only (Story 2.3.4): a stale directory removed by the `fixture-destructive` target. The variant
+    /// does not exist in a build without `test-support`, so a release binary cannot name it.
+    #[cfg(feature = "test-support")]
+    FixtureStale,
 }
 
 impl Kind {
@@ -53,6 +57,22 @@ impl Kind {
             Kind::SteamRemnant => "steam-remnant",
             Kind::BtrfsBalance => "btrfs-balance",
             Kind::BtrfsTrim => "btrfs-trim",
+            #[cfg(feature = "test-support")]
+            Kind::FixtureStale => "fixture-stale",
+        }
+    }
+
+    /// The family id the KIND column shows (the `--kinds` id of the family the kind belongs to).
+    pub fn family(self) -> &'static str {
+        match self {
+            Kind::Cache => "caches",
+            Kind::Worktree => "worktrees",
+            Kind::NodeModules | Kind::CargoTarget => "build-dirs",
+            Kind::DockerImage | Kind::DockerBuildCache | Kind::DockerVolume => "docker",
+            Kind::SteamPrefix | Kind::SteamShaderCache | Kind::SteamRemnant => "steam",
+            Kind::BtrfsBalance | Kind::BtrfsTrim => "btrfs",
+            #[cfg(feature = "test-support")]
+            Kind::FixtureStale => "fixture-destructive",
         }
     }
 
@@ -71,6 +91,8 @@ impl Kind {
             | Kind::DockerVolume
             | Kind::SteamPrefix
             | Kind::SteamShaderCache => Risk::Destructive,
+            #[cfg(feature = "test-support")]
+            Kind::FixtureStale => Risk::Destructive,
         }
     }
 }
@@ -99,6 +121,9 @@ pub enum SelectorId {
     Steam,
     Btrfs,
     BtrfsTrim,
+    /// Test-only (Story 2.3.4): drives the destructive flow of the Gate B end-to-end tests.
+    #[cfg(feature = "test-support")]
+    FixtureDestructive,
 }
 
 impl SelectorId {
@@ -115,6 +140,13 @@ impl SelectorId {
         SelectorId::BtrfsTrim,
     ];
 
+    /// The selectors that exist only in a `test-support` build; the registry lists them when
+    /// `DC_TEST_ROOT` is set.
+    #[cfg(feature = "test-support")]
+    pub const TEST_ONLY: [SelectorId; 1] = [SelectorId::FixtureDestructive];
+    #[cfg(not(feature = "test-support"))]
+    pub const TEST_ONLY: [SelectorId; 0] = [];
+
     /// The id as typed after `--kinds`.
     pub fn id(self) -> &'static str {
         match self {
@@ -128,6 +160,26 @@ impl SelectorId {
             SelectorId::Steam => "steam",
             SelectorId::Btrfs => "btrfs",
             SelectorId::BtrfsTrim => "btrfs-trim",
+            #[cfg(feature = "test-support")]
+            SelectorId::FixtureDestructive => "fixture-destructive",
+        }
+    }
+
+    /// What the `kinds` table says the selector touches.
+    pub fn touches(self) -> &'static str {
+        match self {
+        SelectorId::Caches => "npm, go, gradle, pip, cargo, playwright",
+        SelectorId::CacheApt => "/var/cache/apt",
+        SelectorId::Worktrees => ".claude/worktrees/agent-*",
+        SelectorId::BuildDirs => "node_modules, cargo target",
+        SelectorId::Docker => "dangling images, build cache",
+        SelectorId::DockerImages => "unused tagged images pulled from a registry (locally built ones are skipped, LocalOnlyImage)",
+        SelectorId::DockerVolumes => "unreferenced volumes (--docker-volumes anonymous|named)",
+        SelectorId::Steam => "orphan prefixes, shader caches, uninstalled-game remnants",
+        SelectorId::Btrfs => "balance (usage ladder)",
+        SelectorId::BtrfsTrim => "fstrim",
+        #[cfg(feature = "test-support")]
+        SelectorId::FixtureDestructive => "directories named stale-* below --root (test only)",
         }
     }
 
@@ -147,6 +199,8 @@ impl SelectorId {
             ],
             SelectorId::Btrfs => &[Kind::BtrfsBalance],
             SelectorId::BtrfsTrim => &[Kind::BtrfsTrim],
+            #[cfg(feature = "test-support")]
+            SelectorId::FixtureDestructive => &[Kind::FixtureStale],
         }
     }
 
@@ -185,5 +239,7 @@ pub fn selector_of(facts: &KindFacts) -> SelectorId {
         KindFacts::Steam(_) => SelectorId::Steam,
         KindFacts::Btrfs(crate::candidate::BtrfsFacts::Balance { .. }) => SelectorId::Btrfs,
         KindFacts::Btrfs(crate::candidate::BtrfsFacts::Trim) => SelectorId::BtrfsTrim,
+        #[cfg(feature = "test-support")]
+        KindFacts::Fixture(_) => SelectorId::FixtureDestructive,
     }
 }

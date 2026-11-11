@@ -315,25 +315,23 @@ pub struct KindRow {
 }
 
 fn touches(s: SelectorId) -> &'static str {
-    match s {
-        SelectorId::Caches => "npm, go, gradle, pip, cargo, playwright",
-        SelectorId::CacheApt => "/var/cache/apt",
-        SelectorId::Worktrees => ".claude/worktrees/agent-*",
-        SelectorId::BuildDirs => "node_modules, cargo target",
-        SelectorId::Docker => "dangling images, build cache",
-        SelectorId::DockerImages => "unused tagged images pulled from a registry (locally built ones are skipped, LocalOnlyImage)",
-        SelectorId::DockerVolumes => "unreferenced volumes (--docker-volumes anonymous|named)",
-        SelectorId::Steam => "orphan prefixes, shader caches, uninstalled-game remnants",
-        SelectorId::Btrfs => "balance (usage ladder)",
-        SelectorId::BtrfsTrim => "fstrim",
-    }
+    s.touches()
 }
 
 /// The `kinds` table, one row per selector in id order; `available` is the AVAILABLE cell per selector.
 pub fn kind_rows(available: &dyn Fn(SelectorId) -> String) -> Vec<KindRow> {
+    kind_rows_with(available, &[])
+}
+
+/// [`kind_rows`] plus the test-only selectors a `test-support` build registered (`extra`).
+pub fn kind_rows_with(
+    available: &dyn Fn(SelectorId) -> String,
+    extra: &[SelectorId],
+) -> Vec<KindRow> {
     let defaults = KindSelector::default_apply();
     SelectorId::ALL
         .iter()
+        .chain(extra.iter())
         .map(|&s| KindRow {
             id: s.id(),
             family: family(s.kinds()[0]),

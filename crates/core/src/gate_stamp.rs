@@ -99,6 +99,8 @@ pub fn required_gate(kinds: &[Kind]) -> char {
             | Kind::SteamRemnant
             | Kind::BtrfsBalance
             | Kind::BtrfsTrim => 'D',
+            #[cfg(feature = "test-support")]
+            Kind::FixtureStale => 'B',
         })
         .max()
         .unwrap_or('B')

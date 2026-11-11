@@ -13,11 +13,12 @@ use crate::audit_types::{
 use crate::candidate::{Candidate, Locator};
 use crate::delete_types::{DeleteError, DeleteFailure, Freed};
 use crate::ids::CandidateId;
-use crate::kind::SelectorId;
+use crate::kind::{Kind, SelectorId};
 use crate::outcome::{Outcome, SkipReason, Status};
 use crate::plan::{destructive_gate, GateRefusal, GateRenderCtx, Plan, PlanId, PlanItem, Planned};
 use crate::plan_state::{BuildInfo, StampSummary};
 use crate::ports::{Env, ExtentAttribution, ExtentProbe, Unavailable};
+use crate::preflight;
 use crate::reasons::FatalError;
 use crate::selector::Selection;
 use crate::snapshot_types::FsSnapshot;
@@ -25,6 +26,24 @@ use crate::summary::{
     DiskVerdict, FinishInput, PreDeleteSample, RunSummary, StageTimings, WalkerCounters,
 };
 use crate::target::{kind_order, Guarded, KindGate, Target};
+
+/// Fixed points of an apply that the composition root observes (Story 2.3.4). `step` names the point so a
+/// test can assert the order of `design/ux.md` 1.4; `committed` runs once the plan-id gate has passed and may
+/// still end the run; `item_started` feeds the live `[n/m] removing` progress lines.
+pub trait RunHooks: Sync {
+    fn step(&self, _name: &'static str) {}
+
+    fn committed(&self, _plan_id: PlanId) -> Result<(), Box<Refused>> {
+        Ok(())
+    }
+
+    fn item_started(&self, _n: usize, _m: usize, _c: &Candidate) {}
+}
+
+/// The hooks of a run that observes nothing.
+pub struct NoHooks;
+
+impl RunHooks for NoHooks {}
 
 /// `Plan` cannot execute: there is no token in it. `Apply` carries the capability.
 pub enum Mode {
@@ -345,16 +364,6 @@ impl<'a> Executor<'a> {
             .unwrap_or(self.env.dirs.home.as_path())
     }
 
-    fn active_targets<'s>(
-        &'s self,
-        sel: &'s Selection,
-    ) -> impl Iterator<Item = &'a dyn Target> + 's {
-        self.targets
-            .iter()
-            .copied()
-            .filter(move |t| t.selectors().iter().any(|s| sel.selects(*s)))
-    }
-
     /// Runs a plan (`Mode::Plan`) or an apply. In apply, the order is: availability, the plan-id gate, the
     /// run lock, the audit `run_start`, the deletes, settle, `run_end`. Nothing is deleted, locked or logged
     /// before the gate passes.
@@ -364,6 +373,17 @@ impl<'a> Executor<'a> {
         mode: &Mode,
         supplied: Option<PlanId>,
     ) -> Result<RunReport, Box<Refused>> {
+        self.run_hooked(sel, mode, supplied, &NoHooks)
+    }
+
+    /// [`run`](Self::run) with the composition root watching the fixed points of an apply.
+    pub fn run_hooked(
+        &self,
+        sel: &Selection,
+        mode: &Mode,
+        supplied: Option<PlanId>,
+        hooks: &dyn RunHooks,
+    ) -> Result<RunReport, Box<Refused>> {
         let env = self.env;
         let applying = matches!(mode, Mode::Apply(_));
         let discover_start = Instant::now();
@@ -371,17 +391,8 @@ impl<'a> Executor<'a> {
         let t0 = env.clock.now_epoch();
 
         let avail = self.availability(sel, applying);
-        let all_down =
-            !sel.kinds().is_empty() && sel.kinds().ids().all(|s| avail.unavailable.contains(&s));
-        if applying && all_down {
-            return Err(Box::new(Refused {
-                exit: ExitClass::PartialFailure,
-                text: avail.notes.join("\n"),
-                notes: avail.notes,
-                refusal: None,
-                plan_id: None,
-                fatal: None,
-            }));
+        if applying && every_selector_down(sel, &avail) {
+            return Err(all_down_refusal(avail));
         }
 
         let mut candidates: Vec<Candidate> = Vec::new();
@@ -409,8 +420,11 @@ impl<'a> Executor<'a> {
             return Ok(self.plan_report(plan, plan_id, fs_before, avail.notes, stage));
         };
 
+        hooks.step("plan_id_gate");
         self.gate(sel, supplied, &plan, plan_id, &avail)?;
+        hooks.committed(plan_id)?;
         let notes = avail.notes;
+        hooks.step("run_lock");
         if let Err(e) = env.guard.acquire() {
             return Err(refused_fatal(&e, &notes, plan_id));
         }
@@ -428,10 +442,21 @@ impl<'a> Executor<'a> {
             roots: self.opts.meta.roots.clone(),
             verdict_start: self.opts.meta.verdict_start,
         };
+        hooks.step("audit_open");
         if let Err(e) = env.audit.run_start(&start) {
             let fatal = audit_unwritable(env, e.raw_os_error().unwrap_or(5));
             return Err(refused_fatal(&fatal, &notes, plan_id));
         }
+        hooks.step("starvation_preflight");
+        let selected_kinds: Vec<Kind> = sel
+            .kinds()
+            .ids()
+            .flat_map(|s| s.kinds().iter().copied())
+            .collect();
+        if let Some(fatal) = preflight::check(&fs_before, &selected_kinds).fatal() {
+            return Err(refused_fatal(&fatal, &notes, plan_id));
+        }
+        hooks.step("header_rest");
 
         let second = env.space.snapshot(self.meter_path());
         let pre_delete = PreDeleteSamples::new(
@@ -448,7 +473,8 @@ impl<'a> Executor<'a> {
             audit_errno: Mutex::new(None),
             guard_skips: Mutex::new(Vec::new()),
         };
-        let outcomes = self.execute_all(&plan, &shared);
+        hooks.step("execute");
+        let outcomes = self.execute_all(&plan, &shared, hooks);
         let execute_ms = millis(exec_start);
 
         let settle_start = Instant::now();
@@ -500,6 +526,7 @@ impl<'a> Executor<'a> {
             causes: summary.causes.clone(),
             explained: summary.explained,
         };
+        hooks.step("run_end");
         let end_errno = env
             .audit
             .run_end(&end)
@@ -544,25 +571,8 @@ impl<'a> Executor<'a> {
         }
     }
 
-    /// One gate per target that serves a selected selector, the once-per-kind lines, and the selectors
-    /// that are unreachable now.
     fn availability(&self, sel: &Selection, applying: bool) -> Availability {
-        let mut a = Availability {
-            gates: Vec::new(),
-            notes: Vec::new(),
-            unavailable: Vec::new(),
-        };
-        for t in self.active_targets(sel) {
-            let g = t.gate(self.env);
-            let detail = t.unavailable_detail(self.env);
-            if let Some(line) = g.skipped_line(t.name(), detail.as_deref(), applying) {
-                a.notes.push(line);
-                a.unavailable
-                    .extend(t.selectors().iter().copied().filter(|s| sel.selects(*s)));
-            }
-            a.gates.push((t.name(), g));
-        }
-        a
+        availability_of(self.env, &self.targets, sel, applying)
     }
 
     fn gate(
@@ -653,7 +663,7 @@ impl<'a> Executor<'a> {
 
     /// Items run kind by kind, in parallel inside a kind (bounded by `--jobs`); outcomes come back in plan
     /// order. Items the plan already skipped become `Skipped` outcomes without an audit line.
-    fn execute_all(&self, plan: &Plan, shared: &Shared) -> Vec<Outcome> {
+    fn execute_all(&self, plan: &Plan, shared: &Shared, hooks: &dyn RunHooks) -> Vec<Outcome> {
         let slots: Mutex<Vec<Option<Outcome>>> = Mutex::new(vec![None; plan.items.len()]);
         let mut groups: Vec<Vec<usize>> = Vec::new();
         for (idx, item) in plan.items.iter().enumerate() {
@@ -672,6 +682,8 @@ impl<'a> Executor<'a> {
                 }
             }
         }
+        let total: usize = groups.iter().map(Vec::len).sum();
+        let started = AtomicUsize::new(0);
         for group in &groups {
             let next = AtomicUsize::new(0);
             let workers = self.opts.jobs.clamp(1, group.len());
@@ -679,6 +691,8 @@ impl<'a> Executor<'a> {
                 for _ in 0..workers {
                     s.spawn(|| {
                         while let Some(&idx) = group.get(next.fetch_add(1, Ordering::SeqCst)) {
+                            let n = started.fetch_add(1, Ordering::SeqCst) + 1;
+                            hooks.item_started(n, total, &plan.items[idx].candidate);
                             let o = self.run_one(&plan.items[idx], shared);
                             lock(&slots)[idx] = Some(o);
                         }
@@ -751,6 +765,62 @@ impl<'a> Executor<'a> {
         }
         out
     }
+}
+
+/// One gate per target that serves a selected selector, the once-per-kind lines, and the selectors that are
+/// unreachable now.
+fn availability_of(
+    env: &Env,
+    targets: &[&dyn Target],
+    sel: &Selection,
+    applying: bool,
+) -> Availability {
+    let mut a = Availability {
+        gates: Vec::new(),
+        notes: Vec::new(),
+        unavailable: Vec::new(),
+    };
+    for t in targets
+        .iter()
+        .copied()
+        .filter(|t| t.selectors().iter().any(|s| sel.selects(*s)))
+    {
+        let g = t.gate(env);
+        let detail = t.unavailable_detail(env);
+        if let Some(line) = g.skipped_line(t.name(), detail.as_deref(), applying) {
+            a.notes.push(line);
+            a.unavailable
+                .extend(t.selectors().iter().copied().filter(|s| sel.selects(*s)));
+        }
+        a.gates.push((t.name(), g));
+    }
+    a
+}
+
+fn every_selector_down(sel: &Selection, a: &Availability) -> bool {
+    !sel.kinds().is_empty() && sel.kinds().ids().all(|s| a.unavailable.contains(&s))
+}
+
+fn all_down_refusal(a: Availability) -> Box<Refused> {
+    Box::new(Refused {
+        exit: ExitClass::PartialFailure,
+        text: a.notes.join("\n"),
+        notes: a.notes,
+        refusal: None,
+        plan_id: None,
+        fatal: None,
+    })
+}
+
+/// Step 2 of `design/ux.md` 1.4: `Some(refusal)` when every selected selector is unavailable now (exit 1, no
+/// plan-id error, no marker).
+pub fn availability_refusal(
+    env: &Env,
+    targets: &[&dyn Target],
+    sel: &Selection,
+) -> Option<Box<Refused>> {
+    let a = availability_of(env, targets, sel, true);
+    every_selector_down(sel, &a).then(|| all_down_refusal(a))
 }
 
 impl Availability {

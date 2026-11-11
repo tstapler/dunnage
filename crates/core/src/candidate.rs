@@ -79,6 +79,13 @@ pub enum BtrfsFacts {
     Trim,
 }
 
+/// Facts of the test-only `fixture-destructive` kind.
+#[cfg(feature = "test-support")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FixtureFacts {
+    pub name: String,
+}
+
 /// Per-kind facts. The kind of a candidate is derived from these, never stored beside them, so a cache kind
 /// with docker facts does not type-check:
 ///
@@ -95,6 +102,8 @@ pub enum KindFacts {
     Docker(DockerFacts),
     Steam(SteamFacts),
     Btrfs(BtrfsFacts),
+    #[cfg(feature = "test-support")]
+    Fixture(FixtureFacts),
 }
 
 impl KindFacts {
@@ -116,6 +125,8 @@ impl KindFacts {
             KindFacts::Steam(SteamFacts::Remnant { .. }) => Kind::SteamRemnant,
             KindFacts::Btrfs(BtrfsFacts::Balance { .. }) => Kind::BtrfsBalance,
             KindFacts::Btrfs(BtrfsFacts::Trim) => Kind::BtrfsTrim,
+            #[cfg(feature = "test-support")]
+            KindFacts::Fixture(_) => Kind::FixtureStale,
         }
     }
 }

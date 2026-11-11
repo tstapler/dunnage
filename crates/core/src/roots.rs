@@ -300,6 +300,9 @@ impl RootSet {
             | Kind::DockerVolume
             | Kind::BtrfsBalance
             | Kind::BtrfsTrim => Vec::new(),
+            // The test-only target names its own `Exact` paths per item.
+            #[cfg(feature = "test-support")]
+            Kind::FixtureStale => Vec::new(),
         }
     }
 

@@ -111,6 +111,11 @@ pub trait Target: Send + Sync {
     fn execute(&self, c: &Candidate, env: &Env, proof: &ApplyToken)
         -> Result<Freed, DeleteFailure>;
 
+    /// The detail slot of an item's skip text, for example the tool a `ToolMissing` row names (`pip3`).
+    fn detail(&self, _c: &Candidate) -> Option<String> {
+        None
+    }
+
     /// Post-kind hook for whole-kind reporting; returns notes for the report.
     fn finish(&self, _outcomes: &[Outcome], _env: &Env) -> Vec<String> {
         Vec::new()
@@ -126,5 +131,7 @@ pub fn kind_order(kind: Kind) -> u8 {
         Kind::SteamPrefix | Kind::SteamShaderCache | Kind::SteamRemnant => 3,
         Kind::DockerImage | Kind::DockerBuildCache | Kind::DockerVolume => 4,
         Kind::BtrfsBalance | Kind::BtrfsTrim => 5,
+        #[cfg(feature = "test-support")]
+        Kind::FixtureStale => 2,
     }
 }

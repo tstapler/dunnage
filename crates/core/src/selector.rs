@@ -100,9 +100,9 @@ impl KindSelector {
         }
         let mut ids = BTreeSet::new();
         for word in input.split(',') {
-            let Some(id) = SelectorId::ALL.iter().copied().find(|s| s.id() == word) else {
-                let suggestion = SelectorId::ALL
-                    .iter()
+            let known = || SelectorId::ALL.iter().chain(SelectorId::TEST_ONLY.iter());
+            let Some(id) = known().copied().find(|s| s.id() == word) else {
+                let suggestion = known()
                     .map(|s| (edit_distance(word, s.id()), s.id()))
                     .filter(|(d, _)| *d <= 2)
                     .min_by_key(|(d, _)| *d)
@@ -157,6 +157,8 @@ pub fn default_min_age_secs(id: SelectorId) -> Option<u64> {
         | SelectorId::Docker
         | SelectorId::Btrfs
         | SelectorId::BtrfsTrim => None,
+        #[cfg(feature = "test-support")]
+        SelectorId::FixtureDestructive => None,
     }
 }
 
@@ -166,6 +168,22 @@ fn floor_secs(id: SelectorId) -> u64 {
         SelectorId::Worktrees => WORKTREE_FLOOR_SECS,
         _ => 0,
     }
+}
+
+/// Kinds whose items `--root` narrows.
+fn is_rooted(id: SelectorId) -> bool {
+    match id {
+        SelectorId::BuildDirs | SelectorId::Worktrees => true,
+        #[cfg(feature = "test-support")]
+        SelectorId::FixtureDestructive => true,
+        _ => false,
+    }
+}
+
+/// Whether `--keep-newest` has a kind to apply to: build dirs, or the test-only `fixture-destructive`.
+fn selects_keep_newest_kind(kinds: &KindSelector) -> bool {
+    kinds.contains(SelectorId::BuildDirs)
+        || SelectorId::TEST_ONLY.iter().any(|s| kinds.contains(*s))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -288,7 +306,12 @@ impl Selection {
             ),
         ];
         for (given, flag, needs) in checks {
-            if given && !self.selects(needs) {
+            let kind_present = if flag == "--keep-newest" {
+                selects_keep_newest_kind(&self.kinds)
+            } else {
+                self.selects(needs)
+            };
+            if given && !kind_present {
                 return Err(FlagWithoutKind {
                     flag,
                     needs,
@@ -341,7 +364,7 @@ impl Selection {
             Locator::Docker(_) => None,
         };
         if let Some(p) = path {
-            let rooted = matches!(c.selector(), SelectorId::BuildDirs | SelectorId::Worktrees);
+            let rooted = is_rooted(c.selector());
             if rooted && !self.roots.is_empty() && !self.roots.iter().any(|r| p.starts_with(r)) {
                 return false;
             }

@@ -137,7 +137,17 @@ pub fn run(cli: &Cli, p: &Ports, io: &mut Io) -> i32 {
             s.code
         }
         Some(Command::Kinds) => {
-            io.stdout(&kinds::run(&|s| p.available_label(s), cli.json, &p.term));
+            let extra: Vec<SelectorId> = p
+                .registered()
+                .into_iter()
+                .filter(|s| SelectorId::TEST_ONLY.contains(s))
+                .collect();
+            io.stdout(&kinds::run(
+                &|s| p.available_label(s),
+                &extra,
+                cli.json,
+                &p.term,
+            ));
             0
         }
         Some(Command::Steam {
