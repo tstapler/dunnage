@@ -49,6 +49,8 @@ pub struct DockerContainer {
     /// Volume names and bind sources, comma separated as printed (anonymous names are truncated).
     pub mounts: String,
     pub state: String,
+    /// The image reference or id as printed; empty when `ps` did not print it (an extra signal only).
+    pub image: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -188,6 +190,68 @@ pub fn parse_si_size(s: &str) -> Option<u64> {
     Some((n * mult).round() as u64)
 }
 
+/// Seconds since the epoch of a Docker timestamp: `docker images` prints `2026-11-01 18:36:31 -0800 PST`,
+/// `volume inspect` prints RFC 3339 (`2026-11-06T13:35:25-08:00`, `...Z`, optional fraction). `None` for
+/// anything else, which callers treat as "age unknown" and so as too recent.
+pub fn parse_docker_time(s: &str) -> Option<i64> {
+    let s = s.trim();
+    let (date, rest) = s.split_once(['T', ' '])?;
+    let mut d = date.split('-');
+    let (y, m, day): (i64, i64, i64) = (
+        d.next()?.parse().ok()?,
+        d.next()?.parse().ok()?,
+        d.next()?.parse().ok()?,
+    );
+    if d.next().is_some() || !(1..=12).contains(&m) || !(1..=31).contains(&day) {
+        return None;
+    }
+    let clock_end = rest.find(['Z', '+', '-', ' ']).unwrap_or(rest.len());
+    let (clock, zone) = rest.split_at(clock_end);
+    let clock = clock.split('.').next()?;
+    let mut c = clock.split(':');
+    let (hh, mm, ss): (i64, i64, i64) = (
+        c.next()?.parse().ok()?,
+        c.next()?.parse().ok()?,
+        c.next()?.parse().ok()?,
+    );
+    if c.next().is_some() || hh > 23 || mm > 59 || ss > 60 {
+        return None;
+    }
+    let zone = zone.trim_start();
+    let offset = match zone.chars().next() {
+        None | Some('Z') => 0,
+        Some(sign @ ('+' | '-')) => {
+            let digits: String = zone[1..]
+                .chars()
+                .filter(char::is_ascii_digit)
+                .take(4)
+                .collect();
+            if digits.len() != 4 {
+                return None;
+            }
+            let (oh, om): (i64, i64) = (digits[..2].parse().ok()?, digits[2..].parse().ok()?);
+            let secs = oh * 3600 + om * 60;
+            if sign == '-' {
+                -secs
+            } else {
+                secs
+            }
+        }
+        Some(_) => return None,
+    };
+    Some(days_from_civil(y, m, day) * 86_400 + hh * 3600 + mm * 60 + ss - offset)
+}
+
+/// Days since 1970-01-01 of a proleptic Gregorian date (Hinnant's algorithm).
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y.rem_euclid(400);
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
 /// `k=v,k=v` as `volume ls` and `system df -v` print labels; an empty string is no labels. A value that
 /// holds a comma is split wrongly (the format is ambiguous), which can only add keys, never hide
 /// the anonymous marker.
@@ -232,6 +296,26 @@ mod tests {
             KindGate::ListOnly(SkipReason::DockerVersionUntested)
         );
         assert!(version_gate("").is_unavailable());
+    }
+
+    #[test]
+    fn docker_times() {
+        assert_eq!(parse_docker_time("1970-01-02T00:00:00Z"), Some(86_400));
+        assert_eq!(
+            parse_docker_time("2026-11-06T13:35:25-08:00"),
+            parse_docker_time("2026-11-06 21:35:25 +0000 UTC")
+        );
+        assert_eq!(
+            parse_docker_time("2026-11-01 18:36:31 -0800 PST"),
+            Some(1_793_586_991)
+        );
+        assert_eq!(
+            parse_docker_time("2026-11-06T13:35:25.123456789Z"),
+            parse_docker_time("2026-11-06 13:35:25 +0000 UTC")
+        );
+        assert_eq!(parse_docker_time("yesterday"), None);
+        assert_eq!(parse_docker_time(""), None);
+        assert_eq!(parse_docker_time("2026-13-01T00:00:00Z"), None);
     }
 
     #[test]

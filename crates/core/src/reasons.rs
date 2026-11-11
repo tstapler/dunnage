@@ -150,6 +150,17 @@ impl DeleteError {
             DeleteError::ProtectedPath => Some(SkipReason::ProtectedPath),
             DeleteError::OutsideScope => Some(SkipReason::OutsideRoot),
             DeleteError::CrossDevice => Some(SkipReason::CrossDevice),
+            // Docker's own refusals, read by message (the status is 1 for every failure): a container or
+            // child image appeared between the plan and the removal.
+            DeleteError::CommandFailed { message, .. } if message.contains("volume is in use") => {
+                Some(SkipReason::VolumeReferenced)
+            }
+            DeleteError::CommandFailed { message, .. }
+                if message.contains("image is being used")
+                    || message.contains("image has dependent child images") =>
+            {
+                Some(SkipReason::ImageReferenced)
+            }
             _ => None,
         }
     }

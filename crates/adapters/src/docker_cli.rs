@@ -57,6 +57,9 @@ struct PsWire {
     names: String,
     mounts: String,
     state: String,
+    /// Not required: an extra reference signal for images, never the only one.
+    #[serde(default)]
+    image: String,
 }
 
 #[derive(Deserialize)]
@@ -216,6 +219,7 @@ pub fn parse_ps(raw: &str) -> Result<Vec<DockerContainer>, DockerError> {
             names: w.names,
             mounts: w.mounts,
             state: w.state,
+            image: w.image,
         })
         .collect())
 }
