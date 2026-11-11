@@ -44,8 +44,8 @@ jobs:
         run: scripts/check-contract-frozen.sh --selftest
       - name: token sites selftest
         run: scripts/check-token-sites.sh --selftest
-      - name: token sites (Task 2.1.6a changes 0 to 1)
-        run: scripts/check-token-sites.sh --expect-sites 0
+      - name: token sites
+        run: scripts/check-token-sites.sh --expect-sites 1
       - name: release features selftest
         run: scripts/check-release-features.sh --selftest
       - name: release features

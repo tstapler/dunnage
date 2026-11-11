@@ -38,6 +38,10 @@ impl RealCommandRunner {
         RealCommandRunner::default()
     }
 
+    pub(crate) fn timeout(&self) -> Duration {
+        self.timeout
+    }
+
     #[must_use]
     pub fn with_timeout(timeout: Duration) -> RealCommandRunner {
         RealCommandRunner { timeout }

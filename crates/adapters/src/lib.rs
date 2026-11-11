@@ -3,6 +3,7 @@
 pub mod audit;
 pub mod audit_verify;
 pub mod command;
+pub mod command_confined;
 pub mod config;
 pub mod delete;
 pub mod dirops;
