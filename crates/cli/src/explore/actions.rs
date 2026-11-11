@@ -1,1 +1,1 @@
-//! The explorer's planner calls (, ): the only file outside the planner that may name `OnlyMode::Tolerant` (Story 6.4.3).
+//! The explorer's planner calls (`preview`, `finish`): the only file outside the planner that may name the tolerant `--only` mode (Story 6.4.3).

@@ -492,8 +492,8 @@ fn next_lines_should_echo_each_selection_flag_in_the_fixed_order_and_never_the_d
             Box::new(|s| s.worktree_ignored = Some(Discard::Discard)),
         ),
         (
-            "--only /a/node_modules",
-            Box::new(|s| s.only = vec!["/a/node_modules".into()]),
+            "--only /home/tstapler/old-app/node_modules",
+            Box::new(|s| s.only = vec!["/home/tstapler/old-app/node_modules".into()]),
         ),
     ];
     for (flag, apply) in cases {
