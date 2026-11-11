@@ -19,6 +19,7 @@ use disk_cleanup_core::explore::input::{
 };
 use disk_cleanup_core::explore::keymap::Key;
 use disk_cleanup_core::explore::layout::{layout_for_width, Layout, Tier};
+use disk_cleanup_core::explore::mark_check::MarkOk;
 use disk_cleanup_core::explore::msg::{
     ClassifyFacts, FileRows, MarkRefusal, NodeEvent, PlanPreview, ScanMode, ScanMsg, ScanSummary,
     StopCause,
@@ -49,7 +50,7 @@ pub const CLOSED_LINE: &str = "EXPLORE CLOSED - nothing was deleted.";
 pub const CLOSED_PARTIAL_LINE: &str =
     "Closed while scanning; the tree was partial. Nothing was deleted.";
 
-type MarkCheck = dyn Fn(&MarkQuery<'_>) -> Result<(), MarkRefusal> + Send + Sync;
+type MarkCheck = dyn Fn(&MarkQuery<'_>) -> Result<MarkOk, MarkRefusal> + Send + Sync;
 type OwnerOf = dyn Fn(&Path) -> Option<(u32, u32)> + Send + Sync;
 type DeviceLabel = dyn Fn(&Path) -> Option<String> + Send + Sync;
 
@@ -93,7 +94,7 @@ impl ExplorerConfig {
             facts: ClassifyFacts::default(),
             tty: true,
             color: false,
-            mark_check: Arc::new(|_| Ok(())),
+            mark_check: Arc::new(|_| Ok(MarkOk::default())),
             owner_of: None,
             device_label: None,
             now_unix: 0,
