@@ -551,11 +551,16 @@ fn reason_facts(
         else {
             continue;
         };
-        if let Some(detail) = t.detail(&item.candidate) {
+        let detail = t.detail(&item.candidate);
+        let duplicates = t
+            .duplicate_set_size(&item.candidate)
+            .and_then(|n| u32::try_from(n).ok());
+        if detail.is_some() || duplicates.is_some() {
             out.insert(
                 item.candidate.id(),
                 ReasonFacts {
-                    detail: Some(detail),
+                    detail,
+                    duplicates,
                     ..ReasonFacts::default()
                 },
             );

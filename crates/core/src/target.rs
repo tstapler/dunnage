@@ -122,6 +122,24 @@ pub trait Target: Send + Sync {
         None
     }
 
+    /// The guard asked right before `execute` (`Executor::run_one`). It defaults to [`Target::guard`]; a target
+    /// whose plan-time guard is deliberately cheap overrides it with the full, fresh re-check (a tree walk, a
+    /// process scan) so that cost is paid once per item that is really about to be removed.
+    fn guard_before_delete(&self, c: &Candidate, env: &Env) -> Guarded {
+        self.guard(c, env)
+    }
+
+    /// Lines for the `Notes:` block of the plan and the apply, asked once per run for a target that serves a
+    /// selected selector, after `discover` (a flag the floor raised, a warning the selection earns).
+    fn plan_notes(&self, _env: &Env, _selection: &Selection) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// The size of the duplicate set `c` belongs to, for the `kept as newest of N duplicates` text.
+    fn duplicate_set_size(&self, _c: &Candidate) -> Option<usize> {
+        None
+    }
+
     /// Post-kind hook for whole-kind reporting; returns notes for the report.
     fn finish(&self, _outcomes: &[Outcome], _env: &Env) -> Vec<String> {
         Vec::new()

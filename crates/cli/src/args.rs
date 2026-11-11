@@ -87,7 +87,7 @@ pub struct Cli {
     pub keep_newest: Option<u32>,
 
     /// Worker threads for deletes
-    #[arg(long, value_name = "N", default_value_t = 4)]
+    #[arg(long, value_name = "N", default_value_t = disk_cleanup_core::executor::DEFAULT_JOBS)]
     pub jobs: usize,
 
     /// Allow removing that class of unreferenced volume (needs docker-volumes)
