@@ -32,7 +32,10 @@ fn stub_go(f: &Fixture, xdg_cache: &Path) -> String {
 fn plan_cmd(f: &Fixture, xdg_cache: &Path) -> Command {
     let path = stub_go(f, xdg_cache);
     let mut c = f.fixture_cmd();
-    c.env("PATH", path).env("XDG_CACHE_HOME", xdg_cache);
+    // The cwd is a scan-root candidate for the cleaner, so it must be the fixture and not the crate directory.
+    c.env("PATH", path)
+        .env("XDG_CACHE_HOME", xdg_cache)
+        .current_dir(f.home());
     c
 }
 
