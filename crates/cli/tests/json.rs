@@ -4,14 +4,14 @@
 mod support;
 
 use disk_cleanup_cli::render_json::{
-    apply_doc, fatal_doc, fatal_entry, fatal_text, gate_refusal_doc, kind_rows, kinds_doc,
-    plan_doc, reason_id, status_doc, to_text, FatalCtx,
+    apply_doc, fatal_doc, fatal_entry, gate_refusal_doc, kind_rows, kinds_doc, plan_doc, reason_id,
+    status_doc, to_text,
 };
 use disk_cleanup_cli::view::PlanView;
 use disk_cleanup_core::outcome::SkipReason;
 use disk_cleanup_core::plan::{destructive_gate, GateRefusal, GateRenderCtx, PlanId};
 use disk_cleanup_core::reasons::FatalError;
-use disk_cleanup_core::{SelectorId, Starvation};
+use disk_cleanup_core::SelectorId;
 use serde_json::Value;
 use support::*;
 
@@ -103,42 +103,24 @@ fn json_item_should_carry_tier_family_reason_reason_text_and_top_level_exit_code
 
 #[test]
 fn json_should_still_be_one_document_with_errors_and_exit_code_When_fatal_runtime_error() {
-    let ctx = FatalCtx {
-        starvation: Some(Starvation {
-            unallocated_mib: 600,
-            metadata_headroom_mib: 32,
-        }),
-        ..FatalCtx::default()
+    let starved = FatalError::Starved {
+        unallocated_mib: 600,
+        metadata_headroom_mib: 32,
     };
-    let d = parse(&to_text(&fatal_doc(
-        "apply",
-        Some("91be04d7"),
-        &FatalError::Starved,
-        &ctx,
-    )));
+    let d = parse(&to_text(&fatal_doc("apply", Some("91be04d7"), &starved)));
     assert_eq!(d["exit_code"], 3);
     assert_eq!(d["errors"][0]["code"], "starved");
     assert!(d["errors"][0]["message"]
         .as_str()
         .unwrap()
         .contains("unallocated 600 MiB and metadata headroom 32 MiB"));
-    let lock = fatal_doc(
-        "apply",
-        None,
-        &FatalError::LockHeld { pid: 42 },
-        &FatalCtx::default(),
-    );
+    let lock = fatal_doc("apply", None, &FatalError::LockHeld { pid: 42 });
     assert_eq!(lock["exit_code"], 2);
     assert_eq!(lock["errors"][0]["code"], "lock_held");
-    let state = fatal_entry(
-        &FatalError::StateUnreadable {
-            path: "/mnt/x y".into(),
-        },
-        &FatalCtx {
-            reason: Some("permission denied".into()),
-            ..FatalCtx::default()
-        },
-    );
+    let state = fatal_entry(&FatalError::StateUnreadable {
+        path: "/mnt/x y".into(),
+        reason: "permission denied".into(),
+    });
     assert_eq!(state.code, "state_unreadable");
     assert!(
         state.message.contains("df -- '/mnt/x y'")
@@ -146,20 +128,12 @@ fn json_should_still_be_one_document_with_errors_and_exit_code_When_fatal_runtim
         "{}",
         state.message
     );
-    let roots = fatal_text(
-        &FatalError::RootsUnreadable {
-            path: "/nope".into(),
-        },
-        &FatalCtx {
-            errno: Some(2),
-            ..FatalCtx::default()
-        },
-    );
+    let roots = FatalError::RootsUnreadable {
+        path: "/nope".into(),
+        errno: 2,
+    }
+    .text();
     assert!(roots.contains("(no such file or directory)"), "{roots}");
-    assert!(
-        fatal_text(&FatalError::Starved, &FatalCtx::default()).contains("too low"),
-        "falls back to the frozen text without figures"
-    );
 }
 
 #[test]
@@ -204,12 +178,7 @@ fn json_should_emit_exactly_one_document_for_plan_apply_status_kinds_including_f
         to_text(&apply_doc(&fx.input(0))),
         to_text(&status_doc("/".as_ref(), Some(&fs), &[], 1)),
         to_text(&kinds_doc(&kind_rows(&|_| "yes".into()))),
-        to_text(&fatal_doc(
-            "plan",
-            None,
-            &FatalError::LockHeld { pid: 1 },
-            &FatalCtx::default(),
-        )),
+        to_text(&fatal_doc("plan", None, &FatalError::LockHeld { pid: 1 })),
     ];
     for t in docs {
         let d = parse(&t);

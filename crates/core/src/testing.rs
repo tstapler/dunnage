@@ -367,6 +367,8 @@ pub struct FakeSpaceMeter {
     settled: Settled,
     calls: Mutex<Vec<MeterCall>>,
     log: Mutex<Option<EventLog>>,
+    /// `try_snapshot` fails with this errno when set.
+    fail_errno: Mutex<Option<i32>>,
 }
 
 impl FakeSpaceMeter {
@@ -376,7 +378,15 @@ impl FakeSpaceMeter {
             settled,
             calls: Mutex::new(Vec::new()),
             log: Mutex::new(None),
+            fail_errno: Mutex::new(None),
         }
+    }
+
+    /// Makes `try_snapshot` fail with `errno` (`snapshot` keeps answering).
+    #[must_use]
+    pub fn failing(self, errno: i32) -> FakeSpaceMeter {
+        *lock(&self.fail_errno) = Some(errno);
+        self
     }
 
     pub fn with_log(self, log: &EventLog) -> FakeSpaceMeter {
@@ -411,6 +421,13 @@ impl FakeSpaceMeter {
 }
 
 impl SpaceMeter for FakeSpaceMeter {
+    fn try_snapshot(&self, path: &Path) -> std::io::Result<FsSnapshot> {
+        match *lock(&self.fail_errno) {
+            Some(errno) => Err(std::io::Error::from_raw_os_error(errno)),
+            None => Ok(self.snapshot(path)),
+        }
+    }
+
     fn snapshot(&self, path: &Path) -> FsSnapshot {
         lock(&self.calls).push(MeterCall::Snapshot(path.to_path_buf()));
         note(&self.log, || "snapshot".to_string());

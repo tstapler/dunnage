@@ -143,7 +143,19 @@ impl RealSpaceMeter {
     }
 }
 
+/// The allocation of the btrfs filesystem whose sysfs directory is `dir` (`status --fs DIR`).
+pub fn read_fs_dir_allocation(dir: &Path) -> Result<AllocSnapshot, String> {
+    btrfs::read_allocation(dir)
+        .map(|a| map_allocation(&a))
+        .map_err(|e| e.to_string())
+}
+
 impl SpaceMeter for RealSpaceMeter {
+    fn try_snapshot(&self, path: &Path) -> std::io::Result<FsSnapshot> {
+        statvfs::df(path)?;
+        Ok(self.snapshot(path))
+    }
+
     /// A failed `statvfs` yields zero df numbers and fs type `unknown`: the port is infallible, so the
     /// caller prints `n/a` rather than a wrong figure.
     fn snapshot(&self, path: &Path) -> FsSnapshot {

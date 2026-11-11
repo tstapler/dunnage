@@ -7,15 +7,14 @@ use std::path::Path;
 use disk_cleanup_core::kind::SelectorId;
 use disk_cleanup_core::outcome::SkipReason;
 use disk_cleanup_core::plan::{ChangeCause, GateRefusal, GateRenderCtx, BIN};
-use disk_cleanup_core::reasons::{errno_phrase, FatalError};
+use disk_cleanup_core::reasons::FatalError;
 use disk_cleanup_core::selector::{default_min_age_secs, format_age, KindSelector};
 use disk_cleanup_core::snapshot_types::FsSnapshot;
 use disk_cleanup_core::summary::{DiskVerdict, RunSummary};
-use disk_cleanup_core::Starvation;
 use serde_json::{json, Map, Value};
 
 use crate::apply::{apply_rows, freed_total, ApplyInput};
-use crate::escape::{escape_os, path_hex, shell_quote};
+use crate::escape::path_hex;
 use crate::view::{family, ErrorEntry, FsBlock, ItemRow, PlanInput, PlanView, RowStatus};
 
 pub const SCHEMA_VERSION: u32 = 1;
@@ -334,67 +333,33 @@ pub fn kinds_doc(rows: &[KindRow]) -> Value {
     })
 }
 
-/// Figures a run-level text prints that `FatalError` does not carry (Story 1.1.1 froze its fields).
-#[derive(Debug, Clone, Default)]
-pub struct FatalCtx {
-    pub starvation: Option<Starvation>,
-    pub errno: Option<i32>,
-    pub reason: Option<String>,
-}
-
-fn shown(p: &Path) -> String {
-    escape_os(p.as_os_str(), false)
-}
-
-/// The stderr text of a run-level error, with the measured figures of `design/ux.md` 3.5 when the caller
-/// has them, and `FatalError::text()` otherwise.
-pub fn fatal_text(e: &FatalError, ctx: &FatalCtx) -> String {
-    match (e, ctx) {
-        (FatalError::Starved, FatalCtx { starvation: Some(s), .. }) => format!(
-            "error: btrfs unallocated {} MiB and metadata headroom {} MiB: deleting could fail with ENOSPC. Nothing was deleted. Free ~1 GiB by hand (empty trash, remove one known-disposable file), then re-run.",
-            s.unallocated_mib, s.metadata_headroom_mib
-        ),
-        (FatalError::RootsUnreadable { path }, FatalCtx { errno: Some(n), .. }) => format!(
-            "error: root {} does not exist or is unreadable ({}). Nothing scanned. Check the spelling of --root (it must be a directory you can read) or drop --root to use the default roots.",
-            shown(path),
-            errno_phrase(*n)
-        ),
-        (FatalError::StateUnreadable { path }, FatalCtx { reason: Some(r), .. }) => format!(
-            "error: cannot read filesystem state for {}: {r}. Check that the path is mounted ('df -- {}') or run as a user that can read /sys/fs/btrfs.",
-            shown(path),
-            shell_quote(path.as_os_str(), true)
-        ),
-        _ => e.text(),
-    }
-}
-
 fn fatal_code(e: &FatalError) -> &'static str {
     match e {
         FatalError::LockHeld { .. } => "lock_held",
         FatalError::AuditUnwritable { .. } => "audit_unwritable",
         FatalError::RootsUnreadable { .. } => "roots_unreadable",
-        FatalError::Starved => "starved",
+        FatalError::Starved { .. } => "starved",
         FatalError::StateUnreadable { .. } => "state_unreadable",
     }
 }
 
 /// The `errors[]` element of a run-level error.
-pub fn fatal_entry(e: &FatalError, ctx: &FatalCtx) -> ErrorEntry {
+pub fn fatal_entry(e: &FatalError) -> ErrorEntry {
     let path = match e {
         FatalError::AuditUnwritable { path, .. }
-        | FatalError::RootsUnreadable { path }
-        | FatalError::StateUnreadable { path } => Some(path.clone()),
+        | FatalError::RootsUnreadable { path, .. }
+        | FatalError::StateUnreadable { path, .. } => Some(path.clone()),
         _ => None,
     };
     ErrorEntry {
         code: fatal_code(e).into(),
         path,
-        message: fatal_text(e, ctx),
+        message: e.text(),
     }
 }
 
 /// A fatal runtime error: the document of the mode with `items` as far as known and `errors[]` filled.
-pub fn fatal_doc(mode: &str, plan_id: Option<&str>, e: &FatalError, ctx: &FatalCtx) -> Value {
+pub fn fatal_doc(mode: &str, plan_id: Option<&str>, e: &FatalError) -> Value {
     json!({
         "schema_version": SCHEMA_VERSION,
         "mode": mode,
@@ -404,7 +369,7 @@ pub fn fatal_doc(mode: &str, plan_id: Option<&str>, e: &FatalError, ctx: &FatalC
         "items": [],
         "next": [],
         "notes": [],
-        "errors": errors_json(&[fatal_entry(e, ctx)]),
+        "errors": errors_json(&[fatal_entry(e)]),
     })
 }
 

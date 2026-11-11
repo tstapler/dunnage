@@ -158,11 +158,38 @@ impl DeleteError {
 /// A run-level failure that ends the run. Each text ends with its next action.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FatalError {
-    LockHeld { pid: u32 },
-    AuditUnwritable { path: PathBuf, errno: i32 },
-    RootsUnreadable { path: PathBuf },
-    Starved,
-    StateUnreadable { path: PathBuf },
+    LockHeld {
+        pid: u32,
+    },
+    AuditUnwritable {
+        path: PathBuf,
+        errno: i32,
+    },
+    RootsUnreadable {
+        path: PathBuf,
+        errno: i32,
+    },
+    Starved {
+        unallocated_mib: u64,
+        metadata_headroom_mib: u64,
+    },
+    StateUnreadable {
+        path: PathBuf,
+        reason: String,
+    },
+}
+
+/// `'...'` unless the text is made of characters a shell never splits or expands.
+fn sh_quote(p: &Path) -> String {
+    let s = p.to_string_lossy();
+    let plain = !s.is_empty()
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || "_@%+=:,./-".contains(c));
+    if plain {
+        s.into_owned()
+    } else {
+        format!("'{}'", s.replace('\'', "'\\''"))
+    }
 }
 
 impl FatalError {
@@ -185,14 +212,21 @@ impl FatalError {
                     dir.display()
                 )
             }
-            FatalError::RootsUnreadable { path } => format!(
-                "error: root {} does not exist or is unreadable. Nothing scanned. Check the spelling of --root (it must be a directory you can read) or drop --root to use the default roots.",
-                path.display()
+            FatalError::RootsUnreadable { path, errno } => format!(
+                "error: root {} does not exist or is unreadable ({}). Nothing scanned. Check the spelling of --root (it must be a directory you can read) or drop --root to use the default roots.",
+                path.display(),
+                errno_phrase(*errno)
             ),
-            FatalError::Starved => "error: btrfs unallocated space and metadata headroom are too low: deleting could fail with ENOSPC. Nothing was deleted. Free ~1 GiB by hand (empty trash, remove one known-disposable file), then re-run.".into(),
-            FatalError::StateUnreadable { path } => format!(
-                "error: cannot read filesystem state for {p}. Check that the path is mounted ('df {p}') or run as a user that can read /sys/fs/btrfs.",
-                p = path.display()
+            FatalError::Starved {
+                unallocated_mib,
+                metadata_headroom_mib,
+            } => format!(
+                "error: btrfs unallocated {unallocated_mib} MiB and metadata headroom {metadata_headroom_mib} MiB: deleting could fail with ENOSPC. Nothing was deleted. Free ~1 GiB by hand (empty trash, remove one known-disposable file), then re-run."
+            ),
+            FatalError::StateUnreadable { path, reason } => format!(
+                "error: cannot read filesystem state for {}: {reason}. Check that the path is mounted ('df -- {}') or run as a user that can read /sys/fs/btrfs.",
+                path.display(),
+                sh_quote(path)
             ),
         }
     }
@@ -202,7 +236,7 @@ impl FatalError {
             FatalError::LockHeld { .. }
             | FatalError::AuditUnwritable { .. }
             | FatalError::RootsUnreadable { .. } => 2,
-            FatalError::Starved => 3,
+            FatalError::Starved { .. } => 3,
             FatalError::StateUnreadable { .. } => 74,
         }
     }

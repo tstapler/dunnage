@@ -39,7 +39,13 @@ fn preflight_should_refuse_with_exit_3_When_unallocated_600mib_and_headroom_32mi
         })
     );
     let fatal = v.fatal().unwrap();
-    assert_eq!(fatal, FatalError::Starved);
+    assert_eq!(
+        fatal,
+        FatalError::Starved {
+            unallocated_mib: 600,
+            metadata_headroom_mib: 32
+        }
+    );
     assert_eq!(fatal.exit_code(), 3);
     assert_eq!(
         check(&snap(600, 200), &[Kind::Cache]),
