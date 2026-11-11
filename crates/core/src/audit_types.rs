@@ -24,6 +24,8 @@ pub enum AuditRecord {
     Intent(Intent),
     Result(ItemResult),
     RunEnd(RunEnd),
+    /// The explorer's typed count with the planned items (Task 6.6.3c); written before the first `intent`.
+    ExplorerConfirm(ExplorerConfirm),
 }
 
 /// The scan roots, cache table paths, worktree roots and Steam libraries in force; `audit verify` checks
@@ -122,4 +124,35 @@ pub struct RunEnd {
     /// The run was ended by SIGINT or SIGTERM.
     #[serde(default)]
     pub interrupted: bool,
+    /// An explorer run that stopped before the first delete, with the reason (`changed since you confirmed`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refused: Option<String>,
+}
+
+/// One planned item of an `explorer_confirm` line: the path and the identity `lstat` gave it when the owner
+/// reviewed the plan. The path is lossy text; the audit sink adds `path_hex` for a non-UTF-8 name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfirmedItem {
+    pub path: PathBuf,
+    /// The exact bytes of a non-UTF-8 name, filled by the audit sink.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path_hex: Option<String>,
+    pub dev: u64,
+    pub ino: u64,
+}
+
+/// `{"type":"explorer_confirm", ...}`: what the owner typed and what it covered. Written and synced after
+/// `run_start` and before the first `intent`, so the paths survive a power loss that eats the unsynced
+/// `intent` lines (ADR-006 A7, review 2 N6). At most 20 items (the mark limit), so the line stays small.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExplorerConfirm {
+    pub run_id: String,
+    pub ts: i64,
+    pub plan_id: String,
+    pub count: usize,
+    pub bytes: u64,
+    pub typed: String,
+    /// Self-reported by this binary: the count was read from a terminal.
+    pub tty: bool,
+    pub items: Vec<ConfirmedItem>,
 }

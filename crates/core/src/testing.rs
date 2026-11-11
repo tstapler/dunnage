@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use crate::allowed::WorktreeRemoval;
 use crate::apply_token::ApplyToken;
-use crate::audit_types::{AuditRecord, Intent, ItemResult, RunEnd, RunStart};
+use crate::audit_types::{AuditRecord, ExplorerConfirm, Intent, ItemResult, RunEnd, RunStart};
 use crate::delete_types::{AbortFlag, DeleteError, DirEntryInfo, FileKind, StatInfo};
 use crate::ids::Identity;
 use crate::plan_state::{SaveOutcome, SavedPlan, SavedSelection};
@@ -520,6 +520,7 @@ pub enum AuditCall {
     Intent,
     Result,
     RunEnd,
+    ExplorerConfirm,
 }
 
 /// Records every record it is handed; `fail_nth(call, n)` makes the n-th (1-based) call of that method
@@ -587,6 +588,13 @@ impl AuditSink for FakeAuditSink {
 
     fn run_end(&self, rec: &RunEnd) -> io::Result<()> {
         self.take(AuditCall::RunEnd, AuditRecord::RunEnd(rec.clone()))
+    }
+
+    fn explorer_confirm(&self, rec: &ExplorerConfirm) -> io::Result<()> {
+        self.take(
+            AuditCall::ExplorerConfirm,
+            AuditRecord::ExplorerConfirm(rec.clone()),
+        )
     }
 }
 

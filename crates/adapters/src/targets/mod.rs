@@ -10,6 +10,7 @@ pub mod docker_common;
 pub mod docker_images;
 pub mod docker_unused_images;
 pub mod docker_volumes;
+pub mod explorer_selection;
 pub mod fixture_kind;
 pub mod symlink_note;
 pub mod worktree;

@@ -45,7 +45,8 @@ pub mod testing;
 pub use allowed::{Allowed, ExplorerScope, ExplorerScopeWrongKind, WorktreeRemoval, WrongKind};
 pub use apply_token::ApplyToken;
 pub use audit_types::{
-    AuditRecord, BreakGlass, Intent, ItemResult, RunEnd, RunRoots, RunStart, AUDIT_SCHEMA,
+    AuditRecord, BreakGlass, ConfirmedItem, ExplorerConfirm, Intent, ItemResult, RunEnd, RunRoots,
+    RunStart, AUDIT_SCHEMA,
 };
 pub use cache_targets::{
     cache_table, cache_table_with_availability, CacheRow, CacheSource, OsSet, RowAvailability,

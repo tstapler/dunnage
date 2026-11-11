@@ -63,7 +63,7 @@ impl Trace {
         &self.0
     }
 
-    fn push(&mut self, name: &'static str) {
+    pub(crate) fn push(&mut self, name: &'static str) {
         self.0.push(name);
     }
 }

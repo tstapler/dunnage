@@ -606,6 +606,7 @@ impl<'a> Executor<'a> {
                 causes: Vec::new(),
                 explained: false,
                 interrupted: false,
+                refused: None,
             });
             return Err(refused_fatal(&fatal, &notes, plan_id));
         }
@@ -680,6 +681,7 @@ impl<'a> Executor<'a> {
             causes: summary.causes.clone(),
             explained: summary.explained,
             interrupted: matches!(abort, Some(AbortCause::Interrupted(_))),
+            refused: None,
         };
         hooks.step("run_end");
         let end_errno = env
