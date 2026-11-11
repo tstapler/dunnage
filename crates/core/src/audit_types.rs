@@ -5,7 +5,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::candidate::{Candidate, Locator};
+use crate::cache_targets::cache_command;
+use crate::candidate::{Candidate, KindFacts, Locator};
 use crate::ids::CandidateId;
 use crate::kind::{Kind, SelectorId};
 use crate::outcome::Outcome;
@@ -69,6 +70,10 @@ pub struct Intent {
     pub selector: SelectorId,
     pub locator: Locator,
     pub est_bytes: u64,
+    /// The command a tool-cleaned cache will run (`go clean -cache`), empty for a removal by path. For `pip` it
+    /// names the first program of the allowlist; the item's `result` carries the outcome.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub argv: Vec<String>,
 }
 
 impl Intent {
@@ -81,8 +86,18 @@ impl Intent {
             selector: c.selector(),
             locator: c.locator().clone(),
             est_bytes: c.est_bytes().0,
+            argv: intent_argv(c),
         }
     }
+}
+
+fn intent_argv(c: &Candidate) -> Vec<String> {
+    let KindFacts::Cache(f) = c.facts() else {
+        return Vec::new();
+    };
+    cache_command(&f.label)
+        .and_then(|cmd| cmd.programs.first().map(|p| cmd.argv(p)))
+        .unwrap_or_default()
 }
 
 /// An [`Outcome`] as one audit line.

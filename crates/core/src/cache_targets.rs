@@ -3,6 +3,7 @@
 //!
 //! Maven is deliberately absent: `~/.m2/repository` and its `*-SNAPSHOT` directories are not cleaned in v1.
 
+use crate::outcome::SkipReason;
 use crate::platform::Platform;
 use crate::roots::CacheTool;
 
@@ -95,6 +96,81 @@ pub const CACHE_ROWS: &[CacheRow] = &[
     row("Go build cache", Tool(CacheTool::Go), Both),
     row("pip cache", Tool(CacheTool::Pip), Both),
 ];
+
+/// A cache cleaned by running its own tool instead of removing a path (Story 2.3.2). The classify allowlist
+/// of `ports::TABLE` has the matching `Mutating` row for each; `program` is tried in order and the first
+/// installed one runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CacheCommand {
+    /// The `CacheRow` label whose directory is measured before and after.
+    pub label: &'static str,
+    pub programs: &'static [&'static str],
+    pub args: &'static [&'static str],
+    /// Wording for the report row, when the behaviour differs from the old bash tool.
+    pub row_note: Option<&'static str>,
+}
+
+impl CacheCommand {
+    pub fn argv(&self, program: &str) -> Vec<String> {
+        std::iter::once(program)
+            .chain(self.args.iter().copied())
+            .map(str::to_string)
+            .collect()
+    }
+}
+
+/// Label of the simulator row. `xcrun simctl delete unavailable` has no `CACHE_ROWS` row yet: its directory
+/// would be a new line in the owner-pinned `ci/allowed-roots.txt`, which only the owner re-pins.
+pub const SIMCTL_LABEL: &str = "iOS simulators (unavailable)";
+
+pub const CACHE_COMMANDS: &[CacheCommand] = &[
+    CacheCommand {
+        label: "Go build cache",
+        programs: &["go"],
+        args: &["clean", "-cache"],
+        row_note: None,
+    },
+    CacheCommand {
+        label: "pip cache",
+        programs: &["pip", "pip3"],
+        args: &["cache", "purge"],
+        row_note: None,
+    },
+    CacheCommand {
+        label: "Homebrew cache",
+        programs: &["brew"],
+        args: &["cleanup"],
+        row_note: Some("brew cleanup (Homebrew's default prune window; --prune=all is not run)"),
+    },
+    CacheCommand {
+        label: SIMCTL_LABEL,
+        programs: &["xcrun"],
+        args: &["simctl", "delete", "unavailable"],
+        row_note: None,
+    },
+    CacheCommand {
+        label: "apt archives",
+        programs: &["apt-get"],
+        args: &["clean"],
+        row_note: None,
+    },
+];
+
+/// The command that cleans the cache row `label`, if it is cleaned by a tool.
+pub fn cache_command(label: &str) -> Option<&'static CacheCommand> {
+    CACHE_COMMANDS.iter().find(|c| c.label == label)
+}
+
+/// Whether the euid rules out a cache row (`design/ux.md` 3.5, UX-25): the apt cache needs root, and a root
+/// run never touches user-owned caches (the decision is the euid, not `HOME`, which `sudo` may or may not
+/// reset) unless the caller named the root or home explicitly.
+pub fn root_decision(needs_root: bool, euid: u32, explicit_root: bool) -> Option<SkipReason> {
+    match (needs_root, euid == 0) {
+        (true, false) => Some(SkipReason::NeedsRoot),
+        (false, true) if !explicit_root => Some(SkipReason::RootRestricted),
+        _ => None,
+    }
+}
 
 /// The rows that apply on `platform`, in table order.
 pub fn cache_table(platform: Platform) -> Vec<CacheRow> {
