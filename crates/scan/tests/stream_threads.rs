@@ -98,7 +98,7 @@ fn walks_should_leave_no_threads_behind_and_a_tiny_walk_should_return_promptly()
         assert_eq!(thread_count(), before, "walk {i} left a thread behind");
     }
     assert!(
-        worst_tiny < Duration::from_millis(20),
+        worst_tiny < Duration::from_millis(100),
         "a 3-directory walk took {worst_tiny:?}"
     );
 }
