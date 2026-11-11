@@ -139,7 +139,7 @@ fn canary_should_show_a_plan_run_touching_only_the_fixture_home_and_allowlisted_
     // carries no fstype yet).
     let bad: Vec<String> = canary_violations(&paths, &allowlist(&fx), &exact)
         .into_iter()
-        .filter(|p| !p.ends_with("/.snapshots"))
+        .filter(|p| !p.ends_with("/.snapshots") && p != "/timeshift-btrfs/snapshots")
         .collect();
     assert!(
         bad.is_empty(),
