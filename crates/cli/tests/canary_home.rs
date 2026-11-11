@@ -49,6 +49,7 @@ fn allowlist(fx: &Fixture) -> Vec<PathBuf> {
 fn fixture_path(fx: &Fixture) -> std::ffi::OsString {
     let bin = fx.root().join("bin");
     std::fs::create_dir_all(&bin).unwrap();
+    common::docker_down_shim(&bin);
     std::env::join_paths([bin, PathBuf::from("/usr/bin"), PathBuf::from("/bin")]).unwrap()
 }
 

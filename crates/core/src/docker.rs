@@ -49,6 +49,8 @@ pub struct DockerContainer {
     /// Volume names and bind sources, comma separated as printed (anonymous names are truncated).
     pub mounts: String,
     pub state: String,
+    /// The image reference or id as printed; empty when `ps` did not print it (an extra signal only).
+    pub image: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -188,6 +190,68 @@ pub fn parse_si_size(s: &str) -> Option<u64> {
     Some((n * mult).round() as u64)
 }
 
+/// Seconds since the epoch of a Docker timestamp: `docker images` prints `2026-11-01 18:36:31 -0800 PST`,
+/// `volume inspect` prints RFC 3339 (`2026-11-06T13:35:25-08:00`, `...Z`, optional fraction). `None` for
+/// anything else, which callers treat as "age unknown" and so as too recent.
+pub fn parse_docker_time(text: &str) -> Option<i64> {
+    let (date, rest) = text.trim().split_once(['T', ' '])?;
+    let (year, month, day) = three_numbers(date, '-')?;
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    let clock_end = rest.find(['Z', '+', '-', ' ']).unwrap_or(rest.len());
+    let (clock, zone) = rest.split_at(clock_end);
+    let (hours, minutes, seconds) = three_numbers(clock.split('.').next()?, ':')?;
+    if hours > 23 || minutes > 59 || seconds > 60 {
+        return None;
+    }
+    let offset = zone_offset_secs(zone.trim_start())?;
+    Some(
+        days_from_civil(year, month, day) * 86_400 + hours * 3600 + minutes * 60 + seconds - offset,
+    )
+}
+
+fn three_numbers(text: &str, sep: char) -> Option<(i64, i64, i64)> {
+    let mut parts = text.split(sep);
+    let out = (
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+    );
+    parts.next().is_none().then_some(out)
+}
+
+/// `Z`, nothing, `+0000`, `-08:00`; a zone name after it (`PST`) is ignored.
+fn zone_offset_secs(zone: &str) -> Option<i64> {
+    match zone.chars().next() {
+        None | Some('Z') => Some(0),
+        Some(sign @ ('+' | '-')) => {
+            let digits: String = zone[1..]
+                .chars()
+                .filter(char::is_ascii_digit)
+                .take(4)
+                .collect();
+            if digits.len() != 4 {
+                return None;
+            }
+            let secs =
+                digits[..2].parse::<i64>().ok()? * 3600 + digits[2..].parse::<i64>().ok()? * 60;
+            Some(if sign == '-' { -secs } else { secs })
+        }
+        Some(_) => None,
+    }
+}
+
+/// Days since 1970-01-01 of a proleptic Gregorian date (Hinnant's algorithm).
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y.rem_euclid(400);
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
 /// `k=v,k=v` as `volume ls` and `system df -v` print labels; an empty string is no labels. A value that
 /// holds a comma is split wrongly (the format is ambiguous), which can only add keys, never hide
 /// the anonymous marker.
@@ -232,6 +296,26 @@ mod tests {
             KindGate::ListOnly(SkipReason::DockerVersionUntested)
         );
         assert!(version_gate("").is_unavailable());
+    }
+
+    #[test]
+    fn docker_times() {
+        assert_eq!(parse_docker_time("1970-01-02T00:00:00Z"), Some(86_400));
+        assert_eq!(
+            parse_docker_time("2026-11-06T13:35:25-08:00"),
+            parse_docker_time("2026-11-06 21:35:25 +0000 UTC")
+        );
+        assert_eq!(
+            parse_docker_time("2026-11-01 18:36:31 -0800 PST"),
+            Some(1_793_586_991)
+        );
+        assert_eq!(
+            parse_docker_time("2026-11-06T13:35:25.123456789Z"),
+            parse_docker_time("2026-11-06 13:35:25 +0000 UTC")
+        );
+        assert_eq!(parse_docker_time("yesterday"), None);
+        assert_eq!(parse_docker_time(""), None);
+        assert_eq!(parse_docker_time("2026-13-01T00:00:00Z"), None);
     }
 
     #[test]

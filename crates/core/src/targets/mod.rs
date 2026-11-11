@@ -2,6 +2,7 @@
 
 pub mod btrfs_guard;
 pub mod build_dir;
+pub mod docker_image_guard;
 pub mod docker_volume_guard;
 pub mod steam_guard;
 pub mod worktree_guard;

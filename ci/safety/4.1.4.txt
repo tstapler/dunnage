@@ -1,0 +1,4 @@
+# Story 4.1.2 to 4.1.4 (Gate D, Docker): always active; the tests use a FakeCommandRunner and never a daemon.
+safety_docker_never_issues_a_broad_prune        # only `image rm <id>` and the `until=24h` builder prune are issued, never system/image -a/volume prune
+safety_docker_volume_in_use_or_unopted_is_never_removed  # referenced, too recent or not opted in: no `volume rm`, even with --volume
+safety_docker_volume_database_needs_its_exact_name       # a PG_VERSION volume is kept unless --volume names it

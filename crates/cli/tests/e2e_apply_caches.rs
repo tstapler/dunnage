@@ -558,6 +558,7 @@ const SYSTEM_EXACT: [&str; 3] = [
 fn go_shim(f: &Fixture) -> PathBuf {
     let bin = f.root().join("bin");
     std::fs::create_dir_all(&bin).unwrap();
+    common::docker_down_shim(&bin);
     let shim = bin.join("go");
     let script = format!(
         "#!/bin/sh\necho \"$@\" >> '{log}'\n\
