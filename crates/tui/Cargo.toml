@@ -17,6 +17,7 @@ crossterm = "0.29.0"
 unicode-width = "0.2"
 
 [dev-dependencies]
+disk-cleanup-core = { path = "../core", features = ["test-support"] }
 insta = "1"
 proptest = "1"
 expectrl = "0.7"
