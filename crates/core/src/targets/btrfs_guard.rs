@@ -247,3 +247,54 @@ impl StopReason {
         }
     }
 }
+
+/// The argv of the trim: `fstrim -v <mount>` on a mount point (the allowlist row takes nothing else).
+#[must_use]
+pub fn trim_cmd(mount: &Path) -> Cmd {
+    Cmd::new(
+        "fstrim",
+        [OsString::from("-v"), mount.as_os_str().to_owned()],
+        true,
+    )
+}
+
+/// What `fstrim -v` printed, in bytes: `/: 1.2 TiB (1319011106816 bytes) trimmed` (util-linux) or the shorter
+/// `trimmed 120 GiB`. `None` when neither form is there, so the report says the figure is unknown instead of
+/// printing 0.
+#[must_use]
+pub fn parse_trimmed(output: &str) -> Option<u64> {
+    for line in output.lines().filter(|l| l.contains("trimmed")) {
+        if let Some(n) = line
+            .split('(')
+            .skip(1)
+            .find_map(|part| part.split_once(" bytes)")?.0.trim().parse().ok())
+        {
+            return Some(n);
+        }
+        let words: Vec<&str> = line.split_whitespace().collect();
+        for pair in words.windows(2) {
+            let mult = match pair[1].trim_end_matches([',', ')', '.']) {
+                "B" => 1u64,
+                "KiB" => 1 << 10,
+                "MiB" => 1 << 20,
+                "GiB" => 1 << 30,
+                "TiB" => 1 << 40,
+                _ => continue,
+            };
+            if let Ok(v) = pair[0].parse::<f64>() {
+                return Some((v * mult as f64).round() as u64);
+            }
+        }
+    }
+    None
+}
+
+/// Whether the trim may start: a non-root user is told `NeedsRoot` (the tool never calls `sudo`).
+#[must_use]
+pub fn decide_trim(euid: u32) -> Guarded {
+    if euid == 0 {
+        Guarded::Allow
+    } else {
+        Guarded::Skip(SkipReason::NeedsRoot)
+    }
+}

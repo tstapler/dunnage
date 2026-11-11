@@ -250,3 +250,28 @@ fn decide_start_should_say_NeedsRoot_before_anything_else_When_not_root() {
         Guarded::Skip(SkipReason::NeedsRoot)
     );
 }
+
+// ---------------------------------------------------------------------------------------------- trim
+
+#[test]
+fn parse_trimmed_should_read_both_fstrim_forms_and_nothing_else() {
+    use disk_cleanup_core::targets::btrfs_guard::parse_trimmed;
+    assert_eq!(
+        parse_trimmed("/: 1.2 TiB (1319011106816 bytes) trimmed on /dev/x\n"),
+        Some(1_319_011_106_816)
+    );
+    assert_eq!(parse_trimmed("trimmed 120 GiB\n"), Some(120 * GIB));
+    assert_eq!(parse_trimmed("trimmed 1.5 MiB"), Some(MIB + MIB / 2));
+    assert_eq!(parse_trimmed("/: 0 B (0 bytes) trimmed\n"), Some(0));
+    assert_eq!(parse_trimmed("fstrim: /: FITRIM ioctl failed\n"), None);
+    assert_eq!(parse_trimmed(""), None);
+}
+
+#[test]
+fn trim_cmd_should_be_the_allowlisted_fstrim_v_mount_and_decide_trim_should_need_root() {
+    use disk_cleanup_core::targets::btrfs_guard::{decide_trim, trim_cmd};
+    let cmd = trim_cmd(Path::new("/"));
+    assert_eq!(classify(&cmd), Some(Class::Mutating));
+    assert_eq!(decide_trim(0), Guarded::Allow);
+    assert_eq!(decide_trim(1000), Guarded::Skip(SkipReason::NeedsRoot));
+}

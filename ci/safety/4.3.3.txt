@@ -1,0 +1,3 @@
+# Story 4.3.3 (Gate D, btrfs trim): always active; the tests are in crates/adapters/tests/btrfs_trim.rs.
+safety_btrfs_trim_non_root_runs_no_command_and_never_sudo  # euid != 0: Skip(NeedsRoot), no command at all
+safety_btrfs_trim_runs_only_fstrim_v_on_the_mount  # the only argv is `fstrim -v <mount>`; -a, a bare mount and extra flags are refused

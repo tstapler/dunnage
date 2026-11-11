@@ -2,6 +2,7 @@
 
 pub mod btrfs_balance;
 pub mod btrfs_report;
+pub mod btrfs_trim;
 pub mod build_dir;
 pub mod cache;
 pub mod cache_cmd;

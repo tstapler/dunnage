@@ -265,6 +265,7 @@ fn outcome(
         est_bytes: c.est_bytes().0,
         freed,
         elapsed_ms: millis(started),
+        trimmed_bytes: None,
     }
 }
 
@@ -780,7 +781,11 @@ impl<'a> Executor<'a> {
                 }
                 outcome(env, run_id, c, Status::Running, freed, started)
             }
-            Ok(freed) => outcome(env, run_id, c, Status::Removed, freed, started),
+            Ok(freed) => {
+                let mut o = outcome(env, run_id, c, Status::Removed, freed, started);
+                o.trimmed_bytes = target.trimmed_bytes(c);
+                o
+            }
             Err(DeleteFailure { error, freed }) => {
                 if is_no_space(&error) {
                     self.set_abort(shared, AbortCause::NoSpace);

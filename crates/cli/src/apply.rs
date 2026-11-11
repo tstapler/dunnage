@@ -228,6 +228,7 @@ fn attribution_block(out: &mut Out, s: &RunSummary) {
     for l in [
         &s.followup_line,
         &s.docker_line,
+        &s.trimmed_line,
         &s.shared_line,
         &s.snapshot_line,
     ]

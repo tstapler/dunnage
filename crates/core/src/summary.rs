@@ -104,6 +104,10 @@ pub struct RunSummary {
     pub attribution_line: String,
     pub followup_line: Option<String>,
     pub docker_line: Option<String>,
+    /// Sum of the items' `trimmed_bytes` (Story 4.3.3): reported on its own line, never part of "freed".
+    pub trimmed_bytes: u64,
+    /// `trimmed 120.0 GiB (fstrim; discarded blocks, not freed space)`; `None` when nothing was trimmed.
+    pub trimmed_line: Option<String>,
     pub shared_line: Option<String>,
     pub snapshot_line: Option<String>,
     /// False when snapshots hold the space: the `Next:` block then offers no wider `--kinds`.
@@ -278,6 +282,7 @@ impl RunSummary {
             .outcomes
             .iter()
             .any(|o| is_docker(o.kind) && o.status == Status::Removed);
+        let trimmed: u64 = input.outcomes.iter().filter_map(|o| o.trimmed_bytes).sum();
         let drop = measured_drop(&input);
         let measured = drop.map(|(d, _)| d);
         let on_btrfs = drop.is_none_or(|(_, b)| b);
@@ -389,6 +394,13 @@ impl RunSummary {
                 format!(
                     "docker: {} (daemon-side; not in btrfs terms)",
                     gib(docker_delta)
+                )
+            }),
+            trimmed_bytes: trimmed,
+            trimmed_line: (trimmed > 0).then(|| {
+                format!(
+                    "trimmed {} (fstrim; discarded blocks, not freed space)",
+                    gib(trimmed)
                 )
             }),
             shared_line: (shared_est > 0)
