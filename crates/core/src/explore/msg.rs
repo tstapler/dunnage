@@ -200,9 +200,9 @@ pub enum Hint {
     No(NoReason),
 }
 
-/// Why a path cannot be marked. Texts live in `refusal.rs` (Story 6.4.1); the variants added by Story 6.6.1
-/// (`MountPoint`, `OwnState`, `InsideMarked`, `ContainsMarked`) are not here yet.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Why a path cannot be marked. Texts live in `refusal.rs` (Story 6.4.1). The last five variants before
+/// `Engine` are the rules M3, M5 and M6 of Story 6.6.1; `BindMountBelow` is M3's second refusal (ADR-006).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MarkRefusal {
     NotAnItem,
     OutsideRoot,
@@ -212,6 +212,16 @@ pub enum MarkRefusal {
     LimitReached,
     PathTooLong,
     StillScanning,
+    /// M3: the path is a mount point (or the boundary row of another filesystem).
+    MountPoint,
+    /// M3: a same-device bind mount at this path sits below the directory; the engine cannot see it.
+    BindMountBelow(PathBuf),
+    /// M5: the path is, holds or lies inside the tool's own state.
+    OwnState,
+    /// M6: the path lies inside this already marked path.
+    InsideMarked(PathBuf),
+    /// M6: the path holds this many marked items.
+    ContainsMarked(u32),
     Engine(SkipReason),
 }
 

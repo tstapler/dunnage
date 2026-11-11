@@ -1,0 +1,2 @@
+# Story 6.6.1: the explorer mark rules M1 to M8
+crates/core/src/explore/mark_check.rs
