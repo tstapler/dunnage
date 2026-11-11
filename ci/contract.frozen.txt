@@ -204,6 +204,7 @@ scan_roots: Vec<PathBuf>,
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExplorerScope {
     path: PathBuf,
+    ident: Identity,
 }
 ## crates/core/src/apply_token.rs /^pub struct ApplyToken/
 pub struct ApplyToken(());

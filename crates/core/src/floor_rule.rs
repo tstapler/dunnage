@@ -96,6 +96,12 @@ impl DeletePolicy {
         if is_structurally_protected(target, &self.home, &self.scan_roots) {
             return Err(DeleteError::ProtectedPath);
         }
+        // `$HOME` under another spelling (bind mount, alias): the lexical floor cannot see it.
+        if let AllowedTarget::BelowScanRoot(scope) = &self.allowed {
+            if scope.ident() == self.home_id {
+                return Err(DeleteError::ProtectedPath);
+            }
+        }
 
         let permitted = match &self.allowed {
             AllowedTarget::Exact(p) => target == p,
