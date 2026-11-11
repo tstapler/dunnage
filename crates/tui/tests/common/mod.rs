@@ -754,11 +754,68 @@ pub fn buffer_text(buf: &ratatui::buffer::Buffer) -> String {
     (0..a.height)
         .map(|y| {
             let mut line = String::new();
-            for x in 0..a.width {
-                line.push_str(buf[(x, y)].symbol());
+            let mut x = 0;
+            while x < a.width {
+                let sym = buf[(x, y)].symbol();
+                line.push_str(sym);
+                // the cells after a wide character are blank placeholders
+                x += u16::try_from(unicode_width::UnicodeWidthStr::width(sym).max(1)).unwrap();
             }
             line.trim_end().to_string()
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+use disk_cleanup_tui::view::render;
+use ratatui::Terminal;
+
+/// The screen drawn into a `TestBackend` of `w` x `h`; returns the terminal for style checks.
+pub fn draw(s: &Screen<'_>, w: u16, h: u16) -> Terminal<TestBackend> {
+    let mut term = Terminal::new(TestBackend::new(w, h)).unwrap();
+    term.draw(|f| render(f, s)).unwrap();
+    term
+}
+
+pub fn draw_text(s: &Screen<'_>, w: u16, h: u16) -> String {
+    buffer_text(draw(s, w, h).backend().buffer())
+}
+
+use disk_cleanup_core::explore::layout::cells;
+use disk_cleanup_core::explore::marks::Mark;
+use disk_cleanup_core::explore::rows::SortKey;
+
+impl Fixture {
+    /// Re-sorts with a badge function of (tree, node) so rows carry cleaner badges.
+    pub fn with_badge(mut self, badge: impl Fn(&ExploreTree, NodeId) -> Badge) -> Fixture {
+        {
+            let Fixture { tree, state, .. } = &mut self;
+            let tree: &ExploreTree = tree;
+            let b = |id: NodeId| badge(tree, id);
+            state.view.press_sort(SortKey::Usage, tree, 20_000, &b);
+            state.view.press_sort(SortKey::Usage, tree, 20_001, &b);
+        }
+        self
+    }
+
+    pub fn mark(&mut self, path: &str, bytes: u64) {
+        self.state
+            .marks
+            .add(Mark {
+                path: PathBuf::from(path),
+                est_bytes: bytes,
+                cleaner_item: true,
+            })
+            .unwrap();
+    }
+}
+
+pub fn assert_fits(text: &str, w: usize) {
+    for (i, l) in text.lines().enumerate() {
+        assert!(
+            cells(l) <= w,
+            "line {i} is {} cells, terminal is {w}: {l:?}",
+            cells(l)
+        );
+    }
 }

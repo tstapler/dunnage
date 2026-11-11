@@ -85,9 +85,16 @@ fn scan_driven_redraws_are_at_most_four_a_second_and_keys_are_handled_while_batc
             .map_or(usize::MAX, |p| p.2);
         assert!(after > before, "no frame after the key at {t} ms");
     }
-    // the cursor moved down twice while batches were arriving: row 3 of the list carries the cursor
-    let row = out.screen.lines().nth(4 + 2).unwrap();
-    assert!(row.starts_with('>'), "cursor row: {row:?}\n{}", out.screen);
+    // the cursor moved down twice while batches were arriving and keeps its row through the re-sorts
+    let at: Vec<usize> = out
+        .screen
+        .lines()
+        .enumerate()
+        .filter(|(_, l)| l.starts_with('>'))
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(at.len(), 1, "one cursor row: {}", out.screen);
+    assert!(at[0] > 4, "the cursor left the first row: {}", out.screen);
     assert!(
         first_line_with(&out.screen, "SCANNING").is_none(),
         "finished: {}",
@@ -599,7 +606,7 @@ fn enter_on_an_x_row_pushes_a_root_h_pops_it_and_a_fifth_push_is_refused() {
         out.screen
     );
     assert!(
-        first_line_with(&out.screen, "another filesystem").is_none(),
+        first_line_with(&out.screen, "(another filesystem").is_none(),
         "popped: {}",
         out.screen
     );

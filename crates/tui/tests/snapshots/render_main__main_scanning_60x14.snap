@@ -1,0 +1,18 @@
+---
+source: crates/tui/tests/render_main.rs
+expression: text
+---
+EXPLORE (d deletes)                            SCANNING 3.1s
+/ avail 70.2 GiB  unalloc 9.8 GiB  WARN
+/home/u/code/app   at least 33.6 GiB so far
+       USAGEv   ITEMS SHARE        NAME
+>*+  21.7 GiB      11 [###..]  65% node_modules/
+  .   9.0 GiB      12 [#....]  27% target/
+      1.9 GiB      13 [#....]   6% .claude/
+  . 921.6 MiB      14 [#....]   3% .git/
+     80.0 MiB      15 [#....]  <1% dist/
+     12.0 MiB      16 [#....]  <1% src/
+      4.0 MiB      17 [#....]  <1% docs/
+Path: /home/u/code/app/node_modules
+1 marked (21.7 GiB). p previews the plan, d reviews and d...
+l open h back s sort Space mark p plan d delete ? help q ...

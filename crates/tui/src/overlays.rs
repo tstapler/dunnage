@@ -71,7 +71,7 @@ pub fn wrap_plain(text: &str, width: usize) -> Vec<String> {
     lines
 }
 
-const LABEL_WIDTH: usize = 10;
+const LABEL_WIDTH: usize = 8;
 
 /// `Label     body`, the body wrapped under the label.
 pub fn wrap_labeled(label: &str, body: &str, width: usize) -> Vec<String> {
@@ -132,7 +132,10 @@ pub fn info_lines(f: &InfoFacts, width: usize, tty: bool) -> Vec<String> {
     let mut out = wrap_plain(&format!("-- Info: {path} "), width);
     if let Some(last) = out.last_mut() {
         let pad = width.saturating_sub(cells(last));
-        last.push_str(&"-".repeat(pad));
+        if pad > 1 {
+            last.push(' ');
+            last.push_str(&"-".repeat(pad - 1));
+        }
     }
     out.extend(wrap_labeled("Kind", &f.kind, width));
     let meta = f.meta.map_or("n/a (not btrfs)".to_string(), |m| {

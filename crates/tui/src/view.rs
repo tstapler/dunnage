@@ -18,6 +18,7 @@ use disk_cleanup_core::explore::layout::{
 use disk_cleanup_core::explore::msg::{PlanPreview, ScanSummary, StopCause};
 use disk_cleanup_core::explore::rows::{Badge, Row, RowId, RowKind};
 use disk_cleanup_core::explore::tree::{ExploreTree, NodeId, ScanStatus};
+use disk_cleanup_core::shell_quote::shell_quote;
 use disk_cleanup_core::snapshot_types::FsSnapshot;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
@@ -363,8 +364,21 @@ fn scan_state_text(tree: &ExploreTree, row: &Row) -> String {
 }
 
 /// The footer's second line when no key left a message: what the cursor row's state means, or the marks.
-fn row_note(s: &Screen<'_>, row: Option<&Row>) -> Option<String> {
+fn row_note(s: &Screen<'_>, row: Option<&Row>, width: usize) -> Option<String> {
     if let Some(row) = row {
+        if row.boundary {
+            let short = format!(
+                "{} is another filesystem: Enter scans it.",
+                row.display_name()
+            );
+            // A command is printed whole or not at all: a cut command would not paste.
+            let cmd = format!(
+                "disk-cleanup explore {}",
+                shell_quote(row_path(s.tree, row).as_os_str(), !s.tty)
+            );
+            let long = format!("{short} From the shell: {cmd}");
+            return Some(if cells(&long) <= width { long } else { short });
+        }
         if let Some(id) = node_of(row) {
             if s.tree.is_unreadable(id) || s.tree.unreadable_below(id) > 0 {
                 return Some(format!(
@@ -464,51 +478,74 @@ fn main_lines(s: &Screen<'_>, l: &TierLayout, w: usize, h: usize) -> Vec<Line<'s
     let body_h = l.vertical.list_rows;
     let rows = st.view.rows();
     let cursor = st.view.cursor_index();
-    let info_open = st.input.show_info;
-    let cap = if info_open {
-        l.vertical.list_rows_with_info
-    } else {
-        body_h
-    };
-    let top = adjust_scroll(s.scroll_top, cursor, cap, rows.len());
+    let info_open = st.input.show_info && st.view.cursor_row().is_some();
     let parent_usage = st.view.dir().map_or(0, |d| s.tree.total(d).allocated_bytes);
-    let mut body: Vec<Line<'static>> = Vec::new();
-    if !(info_open && l.vertical.info_replaces_list) {
-        for (i, row) in rows.iter().enumerate().skip(top).take(cap) {
-            let is_cursor = i == cursor;
-            let marked = st.marks.contains(&row_path(s.tree, row));
-            let mut text = draw_main_row(
-                l,
-                row,
-                marked,
-                state_char(s.tree, row),
-                is_cursor,
-                parent_usage,
-                st.input.percent_only,
-            );
-            let style = if is_cursor {
-                text.push_str(&" ".repeat(w.saturating_sub(cells(&text))));
-                theme.cursor()
-            } else if row.complete && row.kind == RowKind::Dir {
-                theme.done_row()
-            } else {
-                Style::default()
-            };
-            body.push(Line::styled(clean(&text), style));
+    let info: Vec<String> = match st.view.cursor_row() {
+        Some(row) if info_open => info_lines(&info_facts(s, row, parent_usage), w, s.tty),
+        _ => Vec::new(),
+    };
+    if info_open && l.vertical.info_replaces_list {
+        // Below 20 rows the pane takes the screen between the title and the key hints.
+        let room = h.saturating_sub(2);
+        let mut lines = info;
+        if lines.len() > room {
+            let hidden = lines.len() - room + 1;
+            lines.truncate(room.saturating_sub(1));
+            lines.push(format!("... {hidden} more lines: make the window taller"));
         }
+        out.truncate(1);
+        out.extend(lines.into_iter().map(|t| Line::raw(clean(&t))));
+        while out.len() < h.saturating_sub(1) {
+            out.push(Line::raw(""));
+        }
+        out.push(plain(
+            &key_hints(l.tier, !st.marks.is_empty(), st.input.mode, true),
+            w,
+            Style::default(),
+        ));
+        return out;
+    }
+    // The pane takes what it needs but leaves three list rows; it is at least INFO_LINES tall.
+    let pane_h = if info_open {
+        info.len()
+            .min(body_h.saturating_sub(3))
+            .max(l.vertical.info_lines.min(body_h))
+    } else {
+        0
+    };
+    let cap = body_h - pane_h;
+    let top = adjust_scroll(s.scroll_top, cursor, cap, rows.len());
+    let mut body: Vec<Line<'static>> = Vec::new();
+    for (i, row) in rows.iter().enumerate().skip(top).take(cap) {
+        let is_cursor = i == cursor;
+        let marked = st.marks.contains(&row_path(s.tree, row));
+        let mut text = draw_main_row(
+            l,
+            row,
+            marked,
+            state_char(s.tree, row),
+            is_cursor,
+            parent_usage,
+            st.input.percent_only,
+        );
+        let style = if is_cursor {
+            text.push_str(&" ".repeat(w.saturating_sub(cells(&text))));
+            theme.cursor()
+        } else if row.complete && row.kind == RowKind::Dir {
+            theme.done_row()
+        } else {
+            Style::default()
+        };
+        body.push(Line::styled(clean(&text), style));
     }
     if info_open {
-        if let Some(row) = st.view.cursor_row() {
-            let facts = info_facts(s, row, parent_usage);
-            let room = if l.vertical.info_replaces_list {
-                body_h
-            } else {
-                body_h.saturating_sub(body.len())
-            };
-            for line in info_lines(&facts, w, s.tty).into_iter().take(room) {
-                body.push(Line::raw(clean(&line)));
-            }
+        let mut lines = info;
+        if lines.len() > pane_h {
+            let hidden = lines.len() - pane_h + 1;
+            lines.truncate(pane_h.saturating_sub(1));
+            lines.push(format!("... {hidden} more lines: make the window taller"));
         }
+        body.extend(lines.into_iter().map(|t| Line::raw(clean(&t))));
     }
     body.truncate(body_h);
     while body.len() < body_h {
@@ -532,7 +569,7 @@ fn main_lines(s: &Screen<'_>, l: &TierLayout, w: usize, h: usize) -> Vec<Line<'s
         st.footer()
             .or_else(|| st.view.footer_note())
             .or_else(|| s.notice.map(str::to_string))
-            .or_else(|| row_note(s, cursor_row))
+            .or_else(|| row_note(s, cursor_row, w))
     };
     out.push(plain(&message.unwrap_or_default(), w, Style::default()));
     out.push(plain(

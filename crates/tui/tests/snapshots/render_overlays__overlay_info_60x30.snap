@@ -1,0 +1,34 @@
+---
+source: crates/tui/tests/render_overlays.rs
+expression: text
+---
+EXPLORE (d deletes)                           SCAN DONE 3.1s
+/ avail 70.2 GiB  unalloc 9.8 GiB  WARN
+/home/u/code/app   33.6 GiB   sort: usage, largest first
+       USAGEv   ITEMS SHARE        NAME
+>    21.7 GiB      11 [###..]  65% node_modules/
+      9.0 GiB      12 [#....]  27% target/
+      1.9 GiB      13 [#....]   6% .claude/
+    921.6 MiB      14 [#....]   3% .git/
+     80.0 MiB      15 [#....]  <1% dist/
+     12.0 MiB      16 [#....]  <1% src/
+      4.0 MiB      17 [#....]  <1% docs/
+      4.0 KiB       1 [#....]  <1% (1 files)
+-- Info: /home/u/code/app/node_modules ---------------------
+Kind    build-dirs (destructive tier): the cleaner lists it
+Usage   21.7 GiB on disk Apparent 24.9 GiB Metadata 21.7 MiB
+        (est.)
+Shared  est. 1.2 GiB of the 10 largest files (38% of usage)
+        also referenced elsewhere; a delete may free less
+Items   11 (files 10, dirs 0) Share of parent 65%
+Age     63d ago (newest directory mtime below) uid 1000 gid
+        1000
+Scan    complete, 0 unreadable
+Guards  not checked here; p runs them
+
+
+
+
+Path: /home/u/code/app/node_modules
+
+i close info  Space mark  p plan  ? help  q quit

@@ -1,0 +1,28 @@
+---
+source: crates/tui/tests/render_main.rs
+expression: text
+---
+EXPLORE - nothing is deleted until you confirm.                                       SCANNING 3.1s
+/ btrfs  avail 70.2 GiB  unallocated 9.8 GiB  data slack 51.2 GiB  meta slack 1.9 GiB  WARN
+/home/u/code/app   at least 33.6 GiB so far   sort: usage, largest first   filter: none
+       USAGEv  APPARENT      META   ITEMS SHARE        NAME
+>*+  21.7 GiB  24.9 GiB  21.7 MiB      11 [###..]  65% node_modules/
+  .   9.0 GiB   9.4 GiB   9.0 MiB      12 [#....]  27% target/
+      1.9 GiB   2.0 GiB   1.9 MiB      13 [#....]   6% .claude/
+  . 921.6 MiB   1.0 GiB 926.1 KiB      14 [#....]   3% .git/
+     80.0 MiB  82.0 MiB  84.8 KiB      15 [#....]  <1% dist/
+     12.0 MiB  12.0 MiB  17.2 KiB      16 [#....]  <1% src/
+      4.0 MiB   4.0 MiB   9.5 KiB      17 [#....]  <1% docs/
+      4.0 KiB     400 B       n/a       1 [#....]  <1% (1 files)
+
+
+
+
+
+
+
+
+
+Path: /home/u/code/app/node_modules
+1 marked (21.7 GiB). p previews the plan, d reviews and deletes it.
+l open  h back  s/a/m/c/n sort  Space mark  p plan  d delete  ? help  q quit
