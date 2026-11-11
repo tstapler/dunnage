@@ -31,6 +31,7 @@ fn full_facts() -> ReasonFacts {
         referrer: Some("pg-compose".into()),
         process: Some(("nvim".into(), 4242)),
         ignored: Some((12, 3 << 20)),
+        discards: None,
         duplicates: Some(3),
         name: Some("my volume".into()),
         path: Some(PathBuf::from("/h/x /etc")),

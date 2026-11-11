@@ -76,6 +76,20 @@ pub enum Guarded {
     Skip(SkipReason),
 }
 
+/// Per-item facts a target's probe produced, for the placeholders of the reason texts and the plan row
+/// (Story 3.1.3). Every field is optional; an absent fact drops its clause.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ItemFacts {
+    /// Unpushed commits (`UnpushedCommits`).
+    pub unpushed: Option<u32>,
+    /// First holder of the item, process name and pid (`InUse`).
+    pub process: Option<(String, u32)>,
+    /// Count and `treestat` size of the ignored files git would delete (`HasIgnoredFiles`).
+    pub ignored: Option<(u64, u64)>,
+    /// Count and size of the ignored files an allowed item will discard (`--worktree-ignored discard`).
+    pub discards: Option<(u64, u64)>,
+}
+
 /// One family of cleanable things.
 ///
 /// `execute` cannot be called without a token value:
@@ -120,6 +134,11 @@ pub trait Target: Send + Sync {
     /// The detail slot of an item's skip text, for example the tool a `ToolMissing` row names (`pip3`).
     fn detail(&self, _c: &Candidate) -> Option<String> {
         None
+    }
+
+    /// The probe facts behind an item's skip text and plan row; empty unless the target keeps them.
+    fn item_facts(&self, _c: &Candidate) -> ItemFacts {
+        ItemFacts::default()
     }
 
     /// Post-kind hook for whole-kind reporting; returns notes for the report.

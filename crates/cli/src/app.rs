@@ -319,6 +319,7 @@ fn plan_mode(cli: &Cli, sel: &Selection, registered: &[SelectorId], p: &Ports, i
         not_built: unbuilt(registered),
         notes: [
             report.notes.clone(),
+            floor_notes(p, sel),
             symlinked_root_notes_real(p.env.fs, &p.env.dirs.home, &report.plan.items),
             report_notes(p.env, &p.env.dirs.home),
         ]
@@ -537,7 +538,24 @@ pub fn apply_flow(
     exit
 }
 
-/// The detail slot of each skip text a target knows (`pip3` for a missing tool).
+/// The plan-header line when `--min-age` was below the 24 h worktree floor (only when `worktrees` is
+/// selected and registered in this build).
+fn floor_notes(p: &Ports, sel: &Selection) -> Vec<String> {
+    let served = p
+        .targets
+        .iter()
+        .any(|t| t.selectors().contains(&SelectorId::Worktrees));
+    let raised = sel.min_age_secs.is_some_and(|s| {
+        disk_cleanup_core::targets::worktree_guard::floor_raised(std::time::Duration::from_secs(s))
+    });
+    if served && raised && sel.selects(SelectorId::Worktrees) {
+        vec![disk_cleanup_core::targets::worktree_guard::FLOOR_RAISED_NOTE.to_string()]
+    } else {
+        Vec::new()
+    }
+}
+
+/// The probe facts and the detail slot of each skip text a target knows (`pip3` for a missing tool).
 fn reason_facts(
     p: &Ports,
     plan: &disk_cleanup_core::plan::Plan,
@@ -551,11 +569,17 @@ fn reason_facts(
         else {
             continue;
         };
-        if let Some(detail) = t.detail(&item.candidate) {
+        let detail = t.detail(&item.candidate);
+        let f = t.item_facts(&item.candidate);
+        if detail.is_some() || f != disk_cleanup_core::target::ItemFacts::default() {
             out.insert(
                 item.candidate.id(),
                 ReasonFacts {
-                    detail: Some(detail),
+                    detail,
+                    unpushed: f.unpushed,
+                    process: f.process,
+                    ignored: f.ignored,
+                    discards: f.discards,
                     ..ReasonFacts::default()
                 },
             );
