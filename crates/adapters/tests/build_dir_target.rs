@@ -2,6 +2,7 @@
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::too_many_lines,
+    clippy::many_single_char_names,
     non_snake_case
 )]
 //! The `build-dirs` target (Story 3.2.4): discovery with keep-newest, the running-build check, the full
@@ -131,8 +132,8 @@ fn options(jobs: usize) -> RunOptions {
 /// A `node_modules` of `days` age with a lockfile holding `lock`.
 fn stale_node(f: &Fixture, name: &str, lock: Option<&str>, days: u64) -> PathBuf {
     let nm = node_checkout(&f.code.join(name), lock);
-    set_age(&nm.join("x"), Duration::from_secs(days * 86_400));
-    set_age(&nm, Duration::from_secs(days * 86_400));
+    set_age(&nm.join("x"), Duration::from_hours(days * 24));
+    set_age(&nm, Duration::from_hours(days * 24));
     nm
 }
 
@@ -459,7 +460,7 @@ fn guard_before_delete_should_skip_too_recent_When_a_nested_file_is_young_though
     fs::write(nm.join("pkg/lib/fresh"), "x").unwrap();
     set_age(&nm.join("pkg/lib/fresh"), 2 * HOUR);
     for d in [nm.join("pkg/lib"), nm.join("pkg"), nm.clone()] {
-        set_age(&d, Duration::from_secs(30 * 86_400));
+        set_age(&d, Duration::from_hours(30 * 24));
     }
 
     assert_eq!(
@@ -469,7 +470,7 @@ fn guard_before_delete_should_skip_too_recent_When_a_nested_file_is_young_though
     );
     set_age(&nm.join("pkg/lib/fresh"), 5 * HOUR);
     for d in [nm.join("pkg/lib"), nm.join("pkg"), nm.clone()] {
-        set_age(&d, Duration::from_secs(30 * 86_400));
+        set_age(&d, Duration::from_hours(30 * 24));
     }
     assert_eq!(
         t.guard_before_delete(c, &env),
@@ -495,7 +496,7 @@ fn guard_before_delete_should_apply_the_min_age_flag_and_not_only_the_floor_When
     // After the plan a day-old file appears: past the 60 minute floor, inside the 60 day flag.
     fs::write(nm.join("recent"), "x").unwrap();
     set_age(&nm.join("recent"), DAY);
-    set_age(&nm, Duration::from_secs(90 * 86_400));
+    set_age(&nm, Duration::from_hours(90 * 24));
 
     assert_eq!(
         t.guard_before_delete(c, &env),
@@ -709,7 +710,7 @@ fn apply_should_count_a_hardlinked_file_once_When_target_has_debug_deps_foo_link
         proj.join("target/debug"),
         proj.join("target"),
     ] {
-        set_age(&p, Duration::from_secs(30 * 86_400));
+        set_age(&p, Duration::from_hours(30 * 24));
     }
     let t = target(&f);
     let rig = Rig::new(&f);

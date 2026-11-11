@@ -559,8 +559,8 @@ fn reason_facts(
             out.insert(
                 item.candidate.id(),
                 ReasonFacts {
-                    detail,
                     duplicates,
+                    detail,
                     ..ReasonFacts::default()
                 },
             );
