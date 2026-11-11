@@ -810,6 +810,8 @@ impl WalkerBackend {
         };
         if req.paint_from_cache {
             paint(&ctx, req, &shared);
+            // Painted events sit in slot 0's batch; flush so live workers' batches cannot overtake the remainder.
+            shared.flush(Duration::ZERO);
         }
         let q = Queue {
             pending: AtomicUsize::new(seeds.len()),
