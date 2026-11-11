@@ -209,6 +209,8 @@ pub struct RunReport {
     pub pre_delete: PreDeleteSamples,
     /// Items whose guard failed at delete time: counted as `skipped by guard`, not as errors.
     pub skipped_by_guard: Vec<CandidateId>,
+    /// Wall ms of discovery per selector id, plus `availability` (the gate probes); the dominant phase of a slow run.
+    pub discover_by_kind: Vec<(&'static str, u64)>,
 }
 
 pub struct Executor<'a> {
@@ -408,15 +410,23 @@ impl<'a> Executor<'a> {
         let applying = matches!(mode, Mode::Apply(_));
         let discover_start = Instant::now();
         let fs_before = env.space.snapshot(self.meter_path());
+        let fs_snapshot_ms = millis(discover_start);
         let t0 = env.clock.now_epoch();
 
+        let avail_start = Instant::now();
         let mut avail = self.availability(sel, applying);
+        let mut by_kind: Vec<(&'static str, u64)> = vec![
+            ("fs_snapshot", fs_snapshot_ms),
+            ("availability", millis(avail_start)),
+        ];
         if applying && every_selector_down(sel, &avail) {
             return Err(all_down_refusal(avail));
         }
 
         let mut candidates: Vec<Candidate> = Vec::new();
         for t in self.targets.iter().copied() {
+            // Gate probe and discovery together: an unselected kind's gate can be the slow part (e.g. a process scan).
+            let t_start = Instant::now();
             let selected = t.selectors().iter().any(|s| sel.selects(*s));
             let down = if selected {
                 avail.is_unavailable(t)
@@ -427,16 +437,21 @@ impl<'a> Executor<'a> {
             if !down {
                 candidates.extend(t.discover(env, sel));
             }
+            if let Some(id) = t.selectors().first() {
+                by_kind.push((id.id(), millis(t_start)));
+            }
         }
         if let Some(refused) = only_refusal(sel, &candidates, &avail) {
             return Err(refused);
         }
+        let notes_start = Instant::now();
         for t in self.targets.iter().copied() {
             let selected = t.selectors().iter().any(|s| sel.selects(*s));
             if selected && !avail.is_unavailable(t) {
                 avail.notes.extend(t.plan_notes(env, sel));
             }
         }
+        by_kind.push(("plan_notes", millis(notes_start)));
         let discover_ms = millis(discover_start);
         let plan_start = Instant::now();
         let now = env.clock.now_epoch();
@@ -446,7 +461,7 @@ impl<'a> Executor<'a> {
 
         let Mode::Apply(token) = mode else {
             let stage = (discover_ms, plan_ms);
-            return Ok(self.plan_report(plan, plan_id, fs_before, avail.notes, stage));
+            return Ok(self.plan_report(plan, plan_id, fs_before, avail.notes, stage, by_kind));
         };
 
         hooks.step("plan_id_gate");
@@ -602,6 +617,7 @@ impl<'a> Executor<'a> {
             fatal,
             pre_delete,
             skipped_by_guard,
+            discover_by_kind: by_kind,
         })
     }
 
@@ -661,6 +677,7 @@ impl<'a> Executor<'a> {
         fs_before: FsSnapshot,
         notes: Vec<String>,
         (discover_ms, plan_ms): (u64, u64),
+        discover_by_kind: Vec<(&'static str, u64)>,
     ) -> RunReport {
         let run_id = &self.opts.meta.run_id;
         let outcomes: Vec<Outcome> = plan
@@ -702,6 +719,7 @@ impl<'a> Executor<'a> {
             fatal: None,
             pre_delete: PreDeleteSamples::new(None, None, 0),
             skipped_by_guard: Vec::new(),
+            discover_by_kind,
         }
     }
 

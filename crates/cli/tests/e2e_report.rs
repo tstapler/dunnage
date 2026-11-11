@@ -111,6 +111,9 @@ fn report_should_carry_discover_and_plan_timings_in_the_plan_document_When_json(
     for k in ["discover_ms", "plan_ms"] {
         assert!(doc["timings"][k].is_u64(), "timings.{k} missing: {doc}");
     }
+    let by_kind = doc["timings"]["discover_by_kind_ms"].as_object().unwrap();
+    assert!(by_kind.contains_key("caches"), "{doc}");
+    assert!(by_kind.values().all(serde_json::Value::is_u64), "{doc}");
 }
 
 #[test]

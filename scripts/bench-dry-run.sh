@@ -14,15 +14,15 @@
 #                             With DC_BENCH_FEATURE=gate-d (Story 4.3.3, Task 4.3.3a) the binary registers the Docker, Steam
 #                             and btrfs kinds, so the daemon must be up: with it down the script prints
 #                             `INCONCLUSIVE: docker down` and exits 77 rather than pass without the Docker kinds. A miss
-#                             prints the wall time of each kind alone (the plan document carries no per-kind timings).
+#                             prints discover_ms/plan_ms and the per-kind discovery ms from the plan document's `timings`, slowest first.
 #   Story 5.1.1 (owner machine, full kind set): the binary is the Gate D build (DC_BENCH_FEATURE defaults to gate-d here), run bare
 #                             as the protocol says, so every registered kind is discovered; `disk-cleanup kinds` is printed first.
 #                             `docker` on PATH is a front that passes only read-only subcommands to the real daemon and logs every
 #                             call; a mutating one is refused and fails the run. With the daemon down: `INCONCLUSIVE: docker down`,
 #                             exit 77. The bash baseline (`stapler-scripts/disk-cleanup -n`, never without -n; DC_BENCH_BASELINE_SCRIPT
 #                             overrides the path, DC_BENCH_SKIP_BASELINE=1 skips it) is re-timed once per run and the ratio printed,
-#                             so the 127 s reference is this session's figure. A miss prints discover_ms/plan_ms (the plan
-#                             document's `timings`) and the wall time of each kind alone.
+#                             so the 127 s reference is this session's figure. A miss prints discover_ms/plan_ms and the per-kind
+#                             discovery ms (the plan document's `timings`), slowest first.
 # Both modes need the report to be one JSON document with the npm and go caches in it: a binary that prints {}
 # instantly is not "10x". Exit 0 pass, 1 fail, 77 INCONCLUSIVE (load), 64 usage.
 # Overrides for the selftest and for a noisy machine: DC_BENCH_BIN, DC_BENCH_BUDGET_MS, DC_BENCH_RESCAN_BUDGET_MS,
@@ -41,7 +41,6 @@ MAX_LOAD=${DC_BENCH_MAX_LOAD:-$(( $(nproc) / 2 ))}
 OUTER=${DC_BENCH_DIRS_OUTER:-100}
 INNER=${DC_BENCH_DIRS_INNER:-200}
 RACY_SLEEP=${DC_BENCH_RACY_SLEEP:-3}
-KINDS='caches worktrees build-dirs docker docker-images docker-volumes steam btrfs btrfs-trim'
 FEATURE=${DC_BENCH_FEATURE:-}
 
 now_ms() { echo $(( $(date +%s%N) / 1000000 )); }
@@ -74,7 +73,8 @@ load_check() {
 print_phases() {
   local f=$1
   if jq -e '.timings.discover_ms != null' "$f" >/dev/null 2>&1; then
-    say "  discover_ms/plan_ms: $(jq -c '.timings' "$f")"
+    say "  discover_ms/plan_ms: $(jq -c '{discover_ms: .timings.discover_ms, plan_ms: .timings.plan_ms}' "$f")"
+    jq -r '(.timings.discover_by_kind_ms // {}) | to_entries | sort_by(-.value)[] | "  kind \(.key): \(.value) ms (gate probe + discovery, in the one run)"' "$f"
   else
     say "  discover_ms/plan_ms: missing from the plan document (a build older than Story 5.1.1)"
   fi
@@ -127,7 +127,7 @@ print_ratio() { # <median_ms>
 }
 
 owner_mode() {
-  local bin=$1 tmp=$2 t0 ms i walls=() med cold rescan_ms walk krc dlog
+  local bin=$1 tmp=$2 t0 ms i walls=() med cold rescan_ms walk dlog
   dlog=$tmp/docker-calls.log
   load_check
   docker_check
@@ -165,10 +165,6 @@ owner_mode() {
   local bad=0
   if [ "$med" -gt "$BUDGET_MS" ]; then
     say "MISS: median ${med} ms > ${BUDGET_MS} ms"; print_phases "$tmp/warm.json"
-    for k in $KINDS; do
-      t0=$(now_ms); "$bin" --json --no-progress --kinds "$k" >/dev/null 2>&1; krc=$?
-      say "  kind $k: $(( $(now_ms) - t0 )) ms (discover + plan, wall; exit $krc)"
-    done
     bad=1
   fi
   if [ "$rescan_ms" -gt "$RESCAN_BUDGET_MS" ]; then say "MISS: --rescan ${rescan_ms} ms > ${RESCAN_BUDGET_MS} ms"; bad=1; fi
@@ -225,17 +221,6 @@ docker_check() {
   fi
 }
 
-# On a miss: each kind alone, wall ms of a dry run (the plan document carries no per-kind discover_ms/plan_ms).
-print_kind_times() {
-  local root=$1 bin=$2 k t0
-  for k in $KINDS; do
-    t0=$(now_ms)
-    env -i PATH="$root/bin:/usr/bin:/bin" HOME="$root/home" XDG_STATE_HOME="$root/xdg/state" XDG_CACHE_HOME="$root/xdg/cache" \
-      XDG_CONFIG_HOME="$root/xdg/config" DC_TEST_ROOT="$root" LANG=C "$bin" --json --no-progress --kinds "$k" >/dev/null 2>&1
-    say "  kind $k: $(( $(now_ms) - t0 )) ms (discover + plan, wall)"
-  done
-}
-
 budget_mode() {
   local bin=$1 tmp=$2 root i t0 ms walls=() med
   root=$tmp/fx
@@ -260,7 +245,6 @@ budget_mode() {
   say "median warm: ${med} ms (budget ${BUDGET_MS} ms, headroom $(( BUDGET_MS - med )) ms)"
   if [ "$med" -gt "$BUDGET_MS" ]; then
     say "MISS: median ${med} ms > ${BUDGET_MS} ms"; print_phases "$tmp/warm.json"
-    [ "$FEATURE" = gate-d ] && print_kind_times "$root" "$bin"
     exit 1
   fi
   [ "$FEATURE" != gate-d ] || docker_audit "$tmp/docker-calls.log" || exit 1
@@ -300,7 +284,7 @@ docker ps >/dev/null 2>&1
 if [ "\$mode" = dockmut ]; then docker volume rm x >/dev/null 2>&1; fi
 [ "\$mode" = slow ] && sleep 0.3
 if [ "\$mode" = empty ]; then echo '{}'; exit 0; fi
-echo '{"mode":"plan","exit_code":0,"timings":{"discover_ms":1,"plan_ms":2},"items":[{"family":"caches","status":"would_free","path":"/h/.npm/_cacache"},{"family":"caches","status":"skipped","path":"/h/.cache/go-build"}]}'
+echo '{"mode":"plan","exit_code":0,"timings":{"discover_ms":1,"plan_ms":2,"discover_by_kind_ms":{"docker-volumes":5,"worktrees":9}},"items":[{"family":"caches","status":"would_free","path":"/h/.npm/_cacache"},{"family":"caches","status":"skipped","path":"/h/.cache/go-build"}]}'
 STUB
     chmod +x "$path"; echo "$path"
   }
@@ -326,7 +310,7 @@ STUB
   expect 0 "owner mode: a baseline that is not the legacy bash tool is not timed" "not the legacy bash tool" env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 DC_BENCH_BASELINE_SCRIPT=/bin/true "$self" --bin "$(stub good)"
   expect 77 "owner mode: a down daemon is INCONCLUSIVE, not a pass without the Docker kinds" "INCONCLUSIVE: docker down" env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 DC_BENCH_DOCKER_CMD=false "$self" --bin "$(stub good)"
   expect 1 "owner mode: a mutating docker command is refused by the front and fails the run" "mutating or unlisted docker command" env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 "$self" --bin "$(stub dockmut)"
-  expect 1 "owner mode: a miss prints the plan document's timings and each kind" "kind docker-volumes: .* ms" env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 DC_BENCH_BUDGET_MS=100 "$self" --bin "$(stub slow)"
+  expect 1 "owner mode: a miss prints the plan document's timings and each kind" "kind worktrees: 9 ms" env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 DC_BENCH_BUDGET_MS=100 "$self" --bin "$(stub slow)"
   expect 1 "owner mode: a miss prints discover_ms/plan_ms" 'discover_ms/plan_ms: {"discover_ms":1,"plan_ms":2}' env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 DC_BENCH_BUDGET_MS=100 "$self" --bin "$(stub slow)"
   : > "$d/calls-good"; DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 "$self" --bin "$(stub good)" >/dev/null 2>&1
   if [ "$(wc -l < "$d/calls-good")" = 9 ]; then n=$((n+1)); echo "ok: owner mode ran 1 cold + 7 warm + 1 rescan report runs"; else echo "SELFTEST BAD: report runs: $(wc -l < "$d/calls-good")"; bad=$((bad+1)); fi
@@ -341,7 +325,7 @@ STUB
   expect 77 "gate-d budget: a down daemon is INCONCLUSIVE, not a pass" "INCONCLUSIVE: docker down" env DC_BENCH_FEATURE=gate-d DC_BENCH_DOCKER_CMD=false "$self" --budget --bin "$(stub good)"
   expect 0 "gate-d budget: a daemon that answers lets the budget pass" "PASS (budget)" env DC_BENCH_FEATURE=gate-d DC_BENCH_DOCKER_CMD=true "$self" --budget --bin "$(stub good)"
   expect 1 "gate-d budget: a mutating docker command fails the run" "mutating or unlisted docker command" env DC_BENCH_FEATURE=gate-d "$self" --budget --bin "$(stub dockmut)"
-  expect 1 "gate-d budget: a miss prints the time of each kind" "kind docker-volumes:" env DC_BENCH_FEATURE=gate-d DC_BENCH_DOCKER_CMD=true DC_BENCH_BUDGET_MS=100 "$self" --budget --bin "$(stub slow)"
+  expect 1 "gate-d budget: a miss prints the time of each kind" "kind docker-volumes: 5 ms" env DC_BENCH_FEATURE=gate-d DC_BENCH_DOCKER_CMD=true DC_BENCH_BUDGET_MS=100 "$self" --budget --bin "$(stub slow)"
   [ "$bad" = 0 ] || { echo "bench-dry-run selftest: $bad failed"; exit 1; }
   echo "bench-dry-run selftest: $n ok"
 }
