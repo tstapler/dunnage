@@ -121,7 +121,7 @@ impl CommandRunner for ConfinedCommandRunner {
 mod tests {
     use super::*;
 
-    fn runner(root: &Path) -> ConfinedCommandRunner<RealCommandRunner> {
+    fn runner(root: &Path) -> ConfinedCommandRunner {
         ConfinedCommandRunner::with_path(
             RealCommandRunner::new(),
             std::fs::canonicalize(root).unwrap(),

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 //! Story 2.1.6 fixture-HOME canary. A sentinel file cannot catch a `getpwuid` regression; the syscall trace
 //! can, because the passwd lookup opens `/etc/passwd` or `/etc/nsswitch.conf`.
 

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 //! Story 2.1.6: binary-level confinement. The table test drives the pure `confine_mode`; the spawn tests run
 //! the real binary under `cargo test` (and `cargo test --release`, which `make safety` also runs).
 
