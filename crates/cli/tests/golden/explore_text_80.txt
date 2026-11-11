@@ -1,0 +1,27 @@
+EXPLORE (text) - read-only. Nothing was deleted.
+Scanned ~/code in 6.2s (cache cold, walker backend, 8 dirs, 1 unreadable)
+
+Filesystem /  (btrfs)    verdict: WARN
+  df             avail 70.0 GiB
+  unallocated    9.0 GiB
+  data slack     50.0 GiB   (allocated, not used)
+  metadata slack 2.0 GiB
+
+~/code  usage 92.0 GiB  items 1347256
+Sorted by usage, largest first. 8 of 8 entries. Sizes marked 'at least' are
+lower bounds.
+
+    USAGE   APPARENT  META(est)    ITEMS  SHARE  NAME
+ 54.0 GiB   60.8 GiB  211.9 MiB   894801    59%  app/  [build-dirs inside]
+ 22.0 GiB   24.8 GiB   94.7 MiB   412331    24%  old-app/
+  9.0 GiB   10.1 GiB   14.5 MiB    31003    10%  caf\u{e9}/
+  7.0 GiB    7.9 GiB    8.6 MiB     9121     8%  bad\xffname/
+  4.0 KiB    4.5 KiB        n/a        0    <1%  (2 files)
+      0 B        0 B        0 B        1    <1%
+  mnt/  [other filesystem: not scanned]
+      0 B        0 B        0 B        1    <1%
+  root-owned/  [unreadable: EACCES, at least]
+
+Next: disk-cleanup explore /h/code/app
+Next: disk-cleanup --kinds build-dirs
+EXPLORE CLOSED - nothing was deleted.
