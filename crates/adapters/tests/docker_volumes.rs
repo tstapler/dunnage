@@ -195,7 +195,7 @@ fn volume_referenced_by_a_stopped_container_or_compose_project_should_be_kept_an
 }
 
 #[test]
-fn volume_created_3_days_ago_should_be_TooRecent_with_the_default_floor() {
+fn safety_docker_volume_younger_than_30d_not_removed() {
     let s = Scene {
         volumes: vec![Vol::anon(3)],
         ..Scene::default()
@@ -213,7 +213,7 @@ fn volume_created_3_days_ago_should_be_TooRecent_with_the_default_floor() {
 }
 
 #[test]
-fn database_like_and_unreadable_volumes_should_be_skipped_unless_named_with_volume() {
+fn safety_docker_volume_database_like_or_unreadable_not_removed() {
     let mut pg = Vol::anon(60);
     pg.name = "b".repeat(63) + "2";
     pg.files = Some(vec!["PG_VERSION".into(), "base".into()]);

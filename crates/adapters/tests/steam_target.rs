@@ -379,7 +379,7 @@ fn discover_should_not_list_compatibilitytools_workshop_or_downloading_When_they
 // ------------------------------------------------------------------ age is the newest file inside
 
 #[test]
-fn guard_should_skip_too_recent_When_the_dir_is_90_days_old_but_a_file_inside_is_2_days_old() {
+fn safety_proton_prefix_with_a_recent_file_inside_not_removed() {
     let s = steam(&[]);
     manifest(&s.libs[0], 620, "Portal 2");
     let prefix = entry(&s.libs[0], "compatdata", "99999", 100, 90);
@@ -627,7 +627,7 @@ fn discover_should_match_installdir_case_insensitively_When_the_folder_differs_i
 }
 
 #[test]
-fn gate_should_be_library_unmounted_for_the_whole_kind_When_any_listed_library_is_missing() {
+fn safety_steam_remnant_not_offered_while_any_library_unmounted() {
     let s = remnant_fixture();
     fs::remove_dir_all(&s.libs[1]).unwrap();
     let (t, rig) = (target(&s), Rig::new(&s));

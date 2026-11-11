@@ -24,7 +24,10 @@ never uses `~`, thousands separators or unit suffixes: bytes are exact integers,
 
 `plan_id` (8 hex), `partial_scan`, `items[]`, `totals`, `next[]`, `fs{before,after}`, `notes[]`, `errors[]`.
 A plan document also has `selection` (`only[]`: the `--only` values, sorted, lossy UTF-8; `only_hex[]`, parallel,
-only when one is not valid UTF-8) and `plan_saved` (false when `last_plan` could not be saved; the destructive `next[]`
+only when one is not valid UTF-8), `timings` (`{discover_ms, plan_ms, discover_by_kind_ms}`, the two stages of the run
+and, per selector id plus `fs_snapshot`, `availability` and `plan_notes`, the milliseconds spent in each part of
+discovery; `scripts/bench-dry-run.sh` prints them on a budget miss) and `plan_saved` (false when `last_plan` could not
+be saved; the destructive `next[]`
 entries are then absent).
 
 An item: `kind` (exact, kebab-case), `selector`, `family`, `id`, `path` (lossy UTF-8; `null` for docker and

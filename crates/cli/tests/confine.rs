@@ -254,7 +254,7 @@ fn shim(dir: &Path, name: &str, marker: &Path) {
 }
 
 #[test]
-fn confined_runner_should_run_a_shim_under_the_fixture_bin_and_refuse_a_tool_outside_it() {
+fn safety_confined_runner_refuses_brew_cleanup_outside_the_fixture() {
     let fx = Fixture::new();
     let root = canon(fx.root());
     let token = ApplyToken::for_tests();
@@ -298,7 +298,7 @@ fn binary() -> Command {
 }
 
 #[test]
-fn spawn_without_fixture_cmd_should_exit_64_with_and_without_the_cargo_environment() {
+fn safety_unconfined_apply_refused_with_and_without_the_cargo_environment() {
     for scrub in [false, true] {
         let tmp = tempfile::tempdir().unwrap();
         let mut c = binary();
