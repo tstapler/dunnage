@@ -1,0 +1,2 @@
+# Story 6.4.1: the explorer hint (the pure decision of which rows the cleaner lists)
+crates/core/src/explore/hint.rs
