@@ -15,6 +15,7 @@ use std::time::Duration;
 use disk_cleanup_adapters::state::OutcomeMode;
 use disk_cleanup_adapters::status::assess;
 use disk_cleanup_adapters::targets::btrfs_report::report_notes;
+use disk_cleanup_adapters::targets::symlink_note::symlinked_root_notes_real;
 use disk_cleanup_core::executor::{Mode, Refused, RunMeta, RunOptions, RunReport};
 use disk_cleanup_core::plan::{GateRenderCtx, PlanId, Planned};
 use disk_cleanup_core::ports::Env;
@@ -260,7 +261,12 @@ fn plan_mode(cli: &Cli, sel: &Selection, registered: &[SelectorId], p: &Ports, i
         fs: Some(fs.clone()),
         partial_scan: None,
         not_built: unbuilt(registered),
-        notes: [report.notes.clone(), report_notes(p.env, &p.env.dirs.home)].concat(),
+        notes: [
+            report.notes.clone(),
+            symlinked_root_notes_real(p.env.fs, &p.env.dirs.home, &report.plan.items),
+            report_notes(p.env, &p.env.dirs.home),
+        ]
+        .concat(),
         wrapper_note: wrapper_note(p.via.as_deref(), cli.dry_run),
         exe: p.exe.clone(),
         euid,
