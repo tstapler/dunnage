@@ -43,7 +43,7 @@ run_gate() {
   line="GATE $gate commit $sha tree clean checks $((ok+fails)) ok $ok failed $fails"
   mkdir -p "$(git rev-parse --git-dir)/gate-reports"; echo "$line" > "$(git rev-parse --git-dir)/gate-reports/$gate-$sha.txt"; echo "$line"
   # Gate stamp (Task 0.1.1d, consumed by Task 2.2.1d): only an all-green gate on a clean tree stamps the release binary it built.
-  bin=${DC_GATE_BINARY:-target/release/disk-cleanup}
+  bin=${DC_GATE_BINARY:-${CARGO_TARGET_DIR:-target}/release/disk-cleanup}
   rm -f "$(git rev-parse --git-dir)/gate-reports/stamp-$gate.json"
   if [ $fails = 0 ] && [ -f "$bin" ]; then
     printf '{"schema":1,"gate":"%s","commit":"%s","binary_sha256":"%s"}\n' "$gate" "$(git rev-parse HEAD)" "$(sha256sum "$bin" | cut -d' ' -f1)" \
