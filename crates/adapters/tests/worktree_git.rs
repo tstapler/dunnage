@@ -290,7 +290,7 @@ fn repo_with(n: usize) -> (Repo, Vec<PathBuf>) {
 }
 
 #[test]
-fn execute_should_remove_three_worktrees_with_git_alone_and_leave_no_admin_entry_or_prune() {
+fn safety_worktree_removal_never_uses_force_or_prune() {
     let (repo, wts) = repo_with(3);
     let t = target(&repo.f);
     let rig = Rig::new(&repo.f);
@@ -345,7 +345,7 @@ fn execute_should_report_the_pre_delete_size_including_the_ignored_target_direct
 }
 
 #[test]
-fn guard_should_skip_dirty_when_a_file_appears_after_planning_and_nothing_is_removed() {
+fn safety_dirty_worktree_not_removed_when_a_file_appears_after_planning() {
     let (repo, wts) = repo_with(1);
     let wt = &wts[0];
     let t = target(&repo.f);
@@ -367,7 +367,7 @@ fn guard_should_skip_dirty_when_a_file_appears_after_planning_and_nothing_is_rem
 }
 
 #[test]
-fn guard_should_skip_locked_when_the_worktree_is_locked_after_planning() {
+fn safety_locked_worktree_not_removed_when_locked_after_planning() {
     let (repo, wts) = repo_with(1);
     let wt = &wts[0];
     let t = target(&repo.f);
@@ -449,7 +449,7 @@ fn guard_should_skip_in_use_for_a_live_process_even_with_discard() {
 }
 
 #[test]
-fn execute_should_refuse_a_worktree_that_became_a_symlink_and_leave_the_target_alone() {
+fn safety_symlinked_worktree_dir_not_removed_and_target_untouched() {
     let (repo, wts) = repo_with(1);
     let wt = &wts[0];
     let t = target(&repo.f);
