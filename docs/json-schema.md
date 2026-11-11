@@ -52,6 +52,20 @@ and 2 are ok, warn and crit; 74 is an unreadable state (`verdict: "unknown"`, `e
 `audit verify --json`: `deletions`, `runs`, `violations[]` of `{run_id, kind, path, reason}`, `unfinished_runs[]`. `kinds`: `kinds[]` of `{id, family, tier,
 default, available, min_age, touches}`.
 
+## `explore --json`
+
+One document after the scan ran to completion (a partial scan still exits 0 and sets `partial: true`):
+`schema_version` 1, `mode: "explore"`, `roots[]` (`path`, `path_hex` only for a non-UTF-8 name, `usage_bytes`,
+`apparent_bytes`, `items`, `at_least`), `filesystem` (`verdict`, `avail_bytes`, and `unallocated_bytes`,
+`data_slack_bytes`, `meta_slack_bytes`, which are `null` off btrfs), `entries[]`, `exit_code`, `errors[]`.
+An entry is `path`, `path_hex`, `usage_bytes`, `apparent_bytes`, `meta_est_bytes` (`null` off btrfs),
+`shared_est_bytes` (always `null`: the shared-extent estimate exists only in the interactive view),
+`newest_dir_mtime` (Unix seconds or `null`), `items`, `share_of_parent` (float or `null`),
+`state` (`done|at_least|unreadable|other_fs`), `kind` (a cleaner kind id or `null`) and `errors[]` of `{errno}`.
+The rows the text view prints and the rows of the interactive view carry the same numbers. A synthetic row
+(`(N files)`, `(N smaller entries)`, `(empty directory)`) adds `synthetic` and `name`. Additive keys never bump
+the version. A SIGINT during the scan prints no document and exits 130.
+
 ## Reading the report by column
 
 ```

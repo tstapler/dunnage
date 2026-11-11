@@ -1,0 +1,123 @@
+{
+  "entries": [
+    {
+      "apparent_bytes": 65229815808,
+      "errors": [],
+      "items": 894801,
+      "kind": null,
+      "meta_est_bytes": 222161104,
+      "newest_dir_mtime": 1700000002,
+      "path": "/h/code/app",
+      "share_of_parent": 0.5869564974015071,
+      "shared_est_bytes": null,
+      "state": "done",
+      "usage_bytes": 57982058496
+    },
+    {
+      "apparent_bytes": 26575110144,
+      "errors": [],
+      "items": 412331,
+      "kind": null,
+      "meta_est_bytes": 99349722,
+      "newest_dir_mtime": 1700000003,
+      "path": "/h/code/old-app",
+      "share_of_parent": 0.23913042486728067,
+      "shared_est_bytes": null,
+      "state": "done",
+      "usage_bytes": 23622320128
+    },
+    {
+      "apparent_bytes": 10871635968,
+      "errors": [],
+      "items": 31003,
+      "kind": null,
+      "meta_est_bytes": 15172554,
+      "newest_dir_mtime": 1700000004,
+      "path": "/h/code/café",
+      "share_of_parent": 0.09782608290025119,
+      "shared_est_bytes": null,
+      "state": "done",
+      "usage_bytes": 9663676416
+    },
+    {
+      "apparent_bytes": 8455716864,
+      "errors": [],
+      "items": 9121,
+      "kind": null,
+      "meta_est_bytes": 9027232,
+      "newest_dir_mtime": 1700000005,
+      "path": "/h/code/bad�name",
+      "path_hex": "2f682f636f64652f626164ff6e616d65",
+      "share_of_parent": 0.07608695336686204,
+      "shared_est_bytes": null,
+      "state": "done",
+      "usage_bytes": 7516192768
+    },
+    {
+      "apparent_bytes": 4608,
+      "errors": [],
+      "items": 0,
+      "kind": null,
+      "meta_est_bytes": null,
+      "name": "(2 files)",
+      "newest_dir_mtime": null,
+      "path": "/h/code",
+      "share_of_parent": 4.146409899404364e-8,
+      "shared_est_bytes": null,
+      "state": "done",
+      "synthetic": "files",
+      "usage_bytes": 4096
+    },
+    {
+      "apparent_bytes": 0,
+      "errors": [],
+      "items": 1,
+      "kind": null,
+      "meta_est_bytes": 0,
+      "newest_dir_mtime": null,
+      "path": "/h/code/mnt",
+      "share_of_parent": 0.0,
+      "shared_est_bytes": null,
+      "state": "other_fs",
+      "usage_bytes": 0
+    },
+    {
+      "apparent_bytes": 0,
+      "errors": [
+        {
+          "errno": 13
+        }
+      ],
+      "items": 1,
+      "kind": null,
+      "meta_est_bytes": 0,
+      "newest_dir_mtime": null,
+      "path": "/h/code/root-owned",
+      "share_of_parent": 0.0,
+      "shared_est_bytes": null,
+      "state": "unreadable",
+      "usage_bytes": 0
+    }
+  ],
+  "errors": [],
+  "exit_code": 0,
+  "filesystem": {
+    "avail_bytes": 75161927680,
+    "data_slack_bytes": 53687091200,
+    "meta_slack_bytes": 2147483648,
+    "unallocated_bytes": 9663676416,
+    "verdict": "warn"
+  },
+  "mode": "explore",
+  "partial": false,
+  "roots": [
+    {
+      "apparent_bytes": 111132283392,
+      "at_least": false,
+      "items": 1347256,
+      "path": "/h/code",
+      "usage_bytes": 98784251904
+    }
+  ],
+  "schema_version": 1
+}

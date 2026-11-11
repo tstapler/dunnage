@@ -364,6 +364,10 @@ impl App {
                 self.planning = None;
                 self.plan = Some(p);
             }
+            ScanMsg::PreviewFailed(text) => {
+                self.planning = None;
+                self.state.input.message = Some(text);
+            }
         }
     }
 
@@ -456,9 +460,16 @@ impl App {
             return;
         };
         let Some(h) = p.handle.as_ref() else { return };
-        if let Ok(ScanMsg::Preview(plan)) = h.rx.try_recv() {
-            self.planning = None;
-            self.plan = Some(plan);
+        match h.rx.try_recv() {
+            Ok(ScanMsg::Preview(plan)) => {
+                self.planning = None;
+                self.plan = Some(plan);
+            }
+            Ok(ScanMsg::PreviewFailed(text)) => {
+                self.planning = None;
+                self.state.input.message = Some(text);
+            }
+            _ => {}
         }
     }
 

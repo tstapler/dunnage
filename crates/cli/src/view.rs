@@ -599,10 +599,14 @@ pub fn commands(input: &PlanInput) -> Vec<NextCmd> {
 /// The entries plan mode hands to `PlanStore::save_merged`: its own selection and every `Next:` line that
 /// carries an id.
 pub fn saved_entries(input: &PlanInput) -> Vec<SavedSelection> {
+    saved_entries_for(input, commands(input))
+}
+
+/// [`saved_entries`] for `Next:` commands the caller built itself (the explorer's per-tier lines).
+pub fn saved_entries_for(input: &PlanInput, next: Vec<NextCmd>) -> Vec<SavedSelection> {
     let mut sels = vec![input.selection.clone()];
     sels.extend(
-        commands(input)
-            .into_iter()
+        next.into_iter()
             .filter(|c| c.plan_id.is_some())
             .map(|c| c.selection),
     );
@@ -615,6 +619,11 @@ pub fn saved_entries(input: &PlanInput) -> Vec<SavedSelection> {
 
 impl PlanView {
     pub fn build(input: &PlanInput) -> PlanView {
+        PlanView::build_with(input, commands(input))
+    }
+
+    /// [`PlanView::build`] with the `Next:` commands supplied (before any NOT-saved filtering).
+    pub fn build_with(input: &PlanInput, mut next: Vec<NextCmd>) -> PlanView {
         let mut rows = build_rows(input);
         sort_rows(&mut rows, input.opts.sort);
         let by = |pred: &dyn Fn(&ItemRow) -> bool| -> Vec<&ItemRow> {
@@ -627,7 +636,6 @@ impl PlanView {
         let needs_g = (!needs.is_empty()).then(|| Group::of(&needs));
 
         let plan_saved = !matches!(input.saved, SaveOutcome::NotSaved(_));
-        let mut next = commands(input);
         let mut not_usable = None;
         if let SaveOutcome::NotSaved(errno) = input.saved {
             let before = next.len();
