@@ -106,8 +106,8 @@ pub struct Cli {
     #[arg(long, value_enum, value_name = "discard")]
     pub worktree_ignored: Option<DiscardArg>,
 
-    /// Restrict to this absolute canonical path, an item of the selected kinds (repeatable)
-    #[arg(long, value_name = "PATH")]
+    /// repeatable, absolute, canonical; each must be an item of the selected kinds; at most 20, 512 bytes each
+    #[arg(long, value_name = "PATH", value_parser = only_value)]
     pub only: Vec<PathBuf>,
 
     /// Rows printed (0 prints every row)
@@ -456,6 +456,12 @@ impl Cli {
         registered: &[SelectorId],
         default_kinds: &KindSelector,
     ) -> Result<Selection, UsageError> {
+        // Value errors of --only come before every other check (Story 6.4.2).
+        let mut only_sel = Selection::new(KindSelector::default(), KindSelector::default());
+        only_sel.only.clone_from(&self.only);
+        only_sel
+            .validate_only()
+            .map_err(|e| UsageError(e.to_string()))?;
         let kinds = match &self.kinds {
             Some(list) => parse_kinds(list)?,
             None => default_kinds.clone(),
@@ -518,4 +524,11 @@ fn parse_kinds(list: &str) -> Result<KindSelector, UsageError> {
             format!("error: {text}")
         })
     })
+}
+
+/// `--only` takes any value, the empty string included: `Selection::validate_only` reports it as a value
+/// error (exit 64), not clap (which would exit with its own usage code and text).
+#[allow(clippy::unnecessary_wraps)] // clap's value_parser needs the Result
+fn only_value(s: &str) -> Result<PathBuf, std::convert::Infallible> {
+    Ok(PathBuf::from(s))
 }

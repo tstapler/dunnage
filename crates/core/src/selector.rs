@@ -16,6 +16,52 @@ pub const BUILD_DIR_FLOOR_SECS: u64 = 60 * 60;
 /// A worktree is never removed below this age (`WORKTREE_MIN_AGE`, Story 3.1.2).
 pub const WORKTREE_FLOOR_SECS: u64 = 24 * 60 * 60;
 const DAY: u64 = 86_400;
+/// `--only` limits (Story 6.4.2): distinct values, bytes per value, and the quoted text of all of them.
+pub const ONLY_MAX_VALUES: usize = 20;
+pub const ONLY_MAX_BYTES: usize = 512;
+pub const ONLY_QUOTED_MAX_BYTES: usize = 24 * 1024;
+
+/// An `--only` value that is not an absolute canonical path within the limits (exit 64).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OnlyValueError(pub String);
+
+impl std::fmt::Display for OnlyValueError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for OnlyValueError {}
+
+/// Why one `--only` value is not in canonical lexical form, if it is not.
+fn only_form_problem(p: &Path) -> Option<&'static str> {
+    use std::os::unix::ffi::OsStrExt;
+    let b = p.as_os_str().as_bytes();
+    if b.is_empty() {
+        return Some("it is empty");
+    }
+    if b.len() > ONLY_MAX_BYTES {
+        return Some("it is longer than 512 bytes");
+    }
+    if b[0] != b'/' {
+        return Some("it is not an absolute path");
+    }
+    if b.len() == 1 {
+        return Some("it names the root directory");
+    }
+    if b[b.len() - 1] == b'/' {
+        return Some("it ends with a slash");
+    }
+    for comp in b[1..].split(|c| *c == b'/') {
+        match comp {
+            [] => return Some("it has an empty component ('//')"),
+            b"." => return Some("it has a '.' component"),
+            b".." => return Some("it has a '..' component"),
+            _ => {}
+        }
+    }
+    None
+}
 
 /// Why `--kinds` (or `--except`) did not parse.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -240,6 +286,56 @@ pub struct Selection {
 }
 
 impl Selection {
+    /// The `--only` values as `flags()` prints them: sorted, deduplicated.
+    pub fn only_sorted(&self) -> Vec<&Path> {
+        let mut only: Vec<&Path> = self.only.iter().map(PathBuf::as_path).collect();
+        // `Path` equality and order are per component (`/a/b/` equals `/a/b`); the values are compared as bytes.
+        only.sort_by(|a, b| a.as_os_str().cmp(b.as_os_str()));
+        only.dedup_by(|a, b| a.as_os_str() == b.as_os_str());
+        only
+    }
+
+    /// Value errors of `--only` (Story 6.4.2): absolute canonical form, at most 512 bytes each, at most 20
+    /// distinct values, and at most 24 KiB of quoted flag text (what binds the plan-id and `last_plan` keeps).
+    /// Item membership is checked after discovery, not here.
+    pub fn validate_only(&self) -> Result<(), OnlyValueError> {
+        let only = self.only_sorted();
+        for p in &only {
+            if let Some(why) = only_form_problem(p) {
+                let shown = if p.as_os_str().len() > ONLY_MAX_BYTES {
+                    format!("<{} bytes>", p.as_os_str().len())
+                } else {
+                    shell_quote(p.as_os_str(), false)
+                };
+                return Err(OnlyValueError(format!(
+                    "error: invalid value '{shown}' for '--only <PATH>': {why}. Give the absolute path exactly as the cleaner prints it (no '.', '..', '//' or trailing slash). Nothing was deleted."
+                )));
+            }
+        }
+        if only.len() > ONLY_MAX_VALUES {
+            return Err(OnlyValueError(format!(
+                "error: too many values for '--only <PATH>': {} given, at most {ONLY_MAX_VALUES} are allowed. Run the cleaner in several steps. Nothing was deleted.",
+                only.len()
+            )));
+        }
+        let quoted = self.only_flags_len();
+        if quoted > ONLY_QUOTED_MAX_BYTES {
+            return Err(OnlyValueError(format!(
+                "error: the '--only <PATH>' values need {quoted} bytes once quoted for the shell, over the {ONLY_QUOTED_MAX_BYTES} byte limit. Give fewer or shorter paths. Nothing was deleted."
+            )));
+        }
+        Ok(())
+    }
+
+    /// Length of the quoted `--only ...` flag text, as `flags()` prints it.
+    pub fn only_flags_len(&self) -> usize {
+        self.only_sorted()
+            .iter()
+            .map(|p| "--only ".len() + shell_quote(p.as_os_str(), false).len() + 1)
+            .sum::<usize>()
+            .saturating_sub(1)
+    }
+
     /// `kinds` minus `except`.
     pub fn new(kinds: KindSelector, except: KindSelector) -> Selection {
         Selection {
@@ -368,11 +464,8 @@ impl Selection {
             if rooted && !self.roots.is_empty() && !self.roots.iter().any(|r| p.starts_with(r)) {
                 return false;
             }
-            if !self.only.is_empty() && !self.only.iter().any(|o| o == p) {
-                return false;
-            }
         }
-        true
+        crate::plan::only_keeps(&self.only, c)
     }
 
     /// Whether a kept item is selected (`KindNotSelected` otherwise) and old enough (`TooRecent`). An item
@@ -431,10 +524,7 @@ impl Selection {
         if self.worktree_ignored.is_some() {
             out.push("--worktree-ignored discard".into());
         }
-        let mut only: Vec<&Path> = self.only.iter().map(PathBuf::as_path).collect();
-        only.sort();
-        only.dedup();
-        for p in only {
+        for p in self.only_sorted() {
             out.push(format!("--only {}", shell_quote(p.as_os_str(), false)));
         }
         out.join(" ")

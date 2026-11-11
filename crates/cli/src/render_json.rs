@@ -153,6 +153,22 @@ fn row_errors(rows: &[ItemRow]) -> Vec<ErrorEntry> {
         .collect()
 }
 
+/// `selection`: the `--only` values as `flags()` orders them (lossy UTF-8), and `only_hex` (parallel, `null`
+/// for a valid name) only when one is not valid UTF-8.
+fn selection_json(sel: &disk_cleanup_core::selector::Selection) -> Value {
+    let only = sel.only_sorted();
+    let mut m = Map::new();
+    m.insert(
+        "only".into(),
+        json!(only.iter().map(|p| lossy(p)).collect::<Vec<_>>()),
+    );
+    let hex: Vec<Option<String>> = only.iter().map(|p| path_hex(p.as_os_str())).collect();
+    if hex.iter().any(Option::is_some) {
+        m.insert("only_hex".into(), json!(hex));
+    }
+    Value::Object(m)
+}
+
 /// The plan document (`mode: "plan"`).
 pub fn plan_doc(input: &PlanInput, view: &PlanView, exit_code: i32) -> Value {
     let mut notes: Vec<String> = input.notes.clone();
@@ -174,6 +190,7 @@ pub fn plan_doc(input: &PlanInput, view: &PlanView, exit_code: i32) -> Value {
         "exit_code": exit_code,
         "plan_id": view.header_id.to_string(),
         "plan_saved": view.plan_saved,
+        "selection": selection_json(input.selection),
         "partial_scan": input.partial_scan.is_some(),
         "items": view.rows.iter().map(item_json).collect::<Vec<_>>(),
         "totals": {

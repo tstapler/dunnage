@@ -2,7 +2,7 @@
 //! impure part (asking a target's guard) is passed in as a closure, and the saved plans arrive as data.
 
 use std::fmt::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::candidate::{Candidate, Locator};
 use crate::kind::SelectorId;
@@ -37,6 +37,116 @@ pub struct Plan {
     pub items: Vec<PlanItem>,
     /// Unix seconds the plan was built at: the age rule is evaluated against it.
     pub now: i64,
+}
+
+/// `Path` equality is per component (`/a/b/` equals `/a/b`), `--only` matches bytes.
+fn same_bytes(a: &Path, b: &Path) -> bool {
+    a.as_os_str() == b.as_os_str()
+}
+
+/// The `--only` filter (Story 6.4.2): with no values every candidate stays; otherwise a candidate stays only
+/// when its path equals a value byte for byte (no `realpath`, no prefix, no case folding, no normalisation).
+/// A Docker object has no path, so it never matches a value.
+pub fn only_keeps(only: &[PathBuf], c: &Candidate) -> bool {
+    if only.is_empty() {
+        return true;
+    }
+    match c.locator() {
+        Locator::Path(p) | Locator::Steam(_, p) => only.iter().any(|o| same_bytes(o, p)),
+        Locator::Docker(_) => false,
+    }
+}
+
+/// The `--only` values that are not an item of the selected kinds among `candidates`, in sorted order.
+pub fn non_items<'a>(sel: &'a Selection, candidates: &[Candidate]) -> Vec<&'a Path> {
+    sel.only_sorted()
+        .into_iter()
+        .filter(|o| {
+            !candidates.iter().any(|c| {
+                sel.selects(c.selector())
+                    && matches!(c.locator(), Locator::Path(p) | Locator::Steam(_, p) if same_bytes(p, o))
+            })
+        })
+        .collect()
+}
+
+/// The exit-64 text for an `--only` value that is not an item (`design/ux.md` 1.1).
+pub fn not_an_item_text(sel: &Selection, only: &Path) -> String {
+    format!(
+        "error: --only {} is not an item of the selected kinds ({}). It may be new, under the age floor, kept as the newest duplicate, or not a cleanable item at all, or spelled differently from the path the cleaner prints (no symlinks, no '.' or '..', no trailing slash); dry run without --only to list the items. Nothing was deleted.",
+        crate::shell_quote::shell_quote(only.as_os_str(), false),
+        sel.kinds_resolved()
+    )
+}
+
+/// Printed after an `--apply ... --only` line that needs no plan-id (Safe tier, worktrees without
+/// `--worktree-ignored discard`): there `--only` is a filter and nothing more (UX-T6).
+pub const NO_PLAN_ID_ONLY_NOTE: &str = "This line needs no plan-id; --only limits it to what you marked. Without --only it would apply to every item of those kinds.";
+
+/// How a planner treats an `--only` value that is no longer an item: the CLI refuses (`Strict`), the
+/// explorer's preview and exit report plan the survivors (`Tolerant`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnlyMode {
+    Strict,
+    Tolerant,
+}
+
+/// A plan restricted to the `--only` values that are items. `selection` is the one the plan was built with:
+/// under `Tolerant` its `only` holds the survivors alone, so its flags and `PlanId` cover exactly them.
+#[derive(Debug, Clone)]
+pub struct OnlyPlan {
+    pub plan: Plan,
+    pub selection: Selection,
+    /// Values that were not items (always empty under `Strict`, which refuses instead).
+    pub stale: Vec<PathBuf>,
+}
+
+/// Plan `sel` after discovery. Strict: the first value that is not an item is an `Err` carrying the
+/// exit-64 text. Tolerant: such values are returned in `stale`; with no survivor the plan holds no item
+/// (an empty `only` would mean "everything").
+pub fn plan_only(
+    sel: &Selection,
+    now: i64,
+    candidates: Vec<Candidate>,
+    guard: &dyn Fn(&Candidate) -> Guarded,
+    mode: OnlyMode,
+) -> Result<OnlyPlan, String> {
+    let stale: Vec<PathBuf> = non_items(sel, &candidates)
+        .into_iter()
+        .map(Path::to_path_buf)
+        .collect();
+    if mode == OnlyMode::Strict {
+        if let Some(first) = stale.first() {
+            return Err(not_an_item_text(sel, first));
+        }
+        let plan = Plan::build(sel, now, candidates, guard);
+        return Ok(OnlyPlan {
+            plan,
+            selection: sel.clone(),
+            stale,
+        });
+    }
+    let mut narrowed = sel.clone();
+    narrowed
+        .only
+        .retain(|o| !stale.iter().any(|s| same_bytes(s, o)));
+    let any_asked = !sel.only.is_empty();
+    if any_asked && narrowed.only.is_empty() {
+        return Ok(OnlyPlan {
+            plan: Plan {
+                items: Vec::new(),
+                now,
+            },
+            selection: narrowed,
+            stale,
+        });
+    }
+    let plan = Plan::build(&narrowed, now, candidates, guard);
+    Ok(OnlyPlan {
+        plan,
+        selection: narrowed,
+        stale,
+    })
 }
 
 fn decide(sel: &Selection, c: &Candidate, guard: Guarded, now: i64) -> Planned {

@@ -58,6 +58,26 @@ pub fn build_dir(i: u64, bytes: u64, age_days: i64) -> Candidate {
     )
 }
 
+/// A build dir at an exact path, old enough for any rule.
+pub fn build_dir_at(path: &str) -> Candidate {
+    let p = PathBuf::from(path);
+    Candidate::new(
+        Locator::Path(p.clone()),
+        KindFacts::BuildDir(BuildDirFacts {
+            flavor: BuildDirFlavor::NodeModules,
+            group: p.parent().map(PathBuf::from).unwrap_or_default(),
+            age_secs: (70 * DAY) as u64,
+            lockfile_hash: None,
+        }),
+        AllocatedBytes(4096),
+        Some(NOW - 70 * DAY),
+        Identity {
+            dev: 1,
+            ino: 5000 + path.len() as u64,
+        },
+    )
+}
+
 pub fn docker_cache(i: u64, bytes: u64) -> Candidate {
     Candidate::new(
         Locator::Docker(DockerId(format!("bc{i}"))),

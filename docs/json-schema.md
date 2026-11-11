@@ -23,7 +23,8 @@ never uses `~`, thousands separators or unit suffixes: bytes are exact integers,
 ## `plan` and `apply`
 
 `plan_id` (8 hex), `partial_scan`, `items[]`, `totals`, `next[]`, `fs{before,after}`, `notes[]`, `errors[]`.
-A plan document also has `plan_saved` (false when `last_plan` could not be saved; the destructive `next[]`
+A plan document also has `selection` (`only[]`: the `--only` values, sorted, lossy UTF-8; `only_hex[]`, parallel,
+only when one is not valid UTF-8) and `plan_saved` (false when `last_plan` could not be saved; the destructive `next[]`
 entries are then absent).
 
 An item: `kind` (exact, kebab-case), `selector`, `family`, `id`, `path` (lossy UTF-8; `null` for docker and
@@ -36,7 +37,8 @@ btrfs objects, which carry `name`), `path_hex` (only when the name is not valid 
 `attribution_pct`. The last three are `null` in plan mode and whenever the drop was not measured; an apply
 document adds `freed_bytes` and a `summary` object.
 
-`next[]`: `{command, plan_id, explain}`. `plan_id` is set exactly when the command carries `--plan-id`.
+`next[]`: `{command, plan_id, explain}`. `plan_id` is set exactly when the command carries `--plan-id`; a command
+that echoes `--only` carries it last, shell-quoted.
 
 ## `status` and `kinds`
 
