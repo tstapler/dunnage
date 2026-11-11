@@ -132,11 +132,22 @@ impl NodeEvent {
     }
 }
 
+/// Why a truncated walk stopped, so the title can say `(hit --max-seconds N)` or `(stopped by you)`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum StopCause {
+    /// The walk was not truncated.
+    #[default]
+    None,
+    Deadline,
+    Cancelled,
+}
+
 /// What a source reports at the end of a walk (every event was already delivered).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ScanSummary {
     pub generation: u32,
     pub truncated: bool,
+    pub stop: StopCause,
     pub errors: u64,
     pub dirs_listed: u64,
     pub dirs_cached: u64,

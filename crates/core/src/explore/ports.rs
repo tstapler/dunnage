@@ -18,6 +18,8 @@ pub struct ScanOpts {
     pub cross_fs: bool,
     pub threads: usize,
     pub paint_from_cache: bool,
+    /// `--max-seconds`: the walk's deadline, counted from `start`.
+    pub max_seconds: Option<u64>,
 }
 
 impl Default for ScanOpts {
@@ -27,6 +29,7 @@ impl Default for ScanOpts {
             cross_fs: false,
             threads: 4,
             paint_from_cache: false,
+            max_seconds: None,
         }
     }
 }

@@ -74,7 +74,7 @@ fn tool_cmd(t: CacheTool, program: &str) -> Cmd {
 }
 
 /// The path the tool reported: its first non-empty stdout line, trimmed.
-fn ask_tool(runner: &dyn CommandRunner, t: CacheTool) -> Option<PathBuf> {
+pub(crate) fn ask_tool(runner: &dyn CommandRunner, t: CacheTool) -> Option<PathBuf> {
     let program = match t {
         CacheTool::Go => "go",
         CacheTool::Pip if runner.exists("pip") => "pip",
