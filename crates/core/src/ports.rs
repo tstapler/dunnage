@@ -378,11 +378,10 @@ impl SharedEstimate {
         else {
             return None;
         };
-        let share = if dir_usage == 0 {
-            0
-        } else {
-            probed_usage.saturating_mul(100) / dir_usage
-        };
+        let share = probed_usage
+            .saturating_mul(100)
+            .checked_div(dir_usage)
+            .unwrap_or(0);
         let scope = if files_probed == 1 {
             "the largest file".to_string()
         } else {
@@ -562,6 +561,7 @@ pub fn render_argv(program: &OsStr, args: &[OsString]) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod shared_estimate_text {
     use super::{SharedEstimate, Unavailable};
 

@@ -173,7 +173,7 @@ mod linux {
             }
         }
         let mut largest: Vec<(u64, PathBuf)> = heap.into_iter().map(|Reverse(x)| x).collect();
-        largest.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        largest.sort_unstable_by_key(|a| Reverse(a.0));
         let (mut bytes, mut files_probed, mut unreadable, mut probed_usage) =
             (0_u64, 0_u64, 0_u64, 0_u64);
         for (size, path) in largest {
