@@ -457,6 +457,7 @@ dependencies = [
  "clap",
  "disk-cleanup-adapters",
  "disk-cleanup-core",
+ "disk-cleanup-scan",
  "disk-cleanup-tui",
  "rustix",
  "serde",

@@ -23,6 +23,7 @@ explore = ["dep:disk-cleanup-tui"]
 [dependencies]
 disk-cleanup-tui = { path = "../tui", optional = true }
 disk-cleanup-core = { path = "../core" }
+disk-cleanup-scan = { path = "../scan" }
 disk-cleanup-adapters = { path = "../adapters" }
 clap.workspace = true
 anyhow.workspace = true

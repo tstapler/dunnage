@@ -149,6 +149,7 @@ pub fn run(cli: &Cli, p: &Ports, io: &mut Io) -> i32 {
             io.stderr(&a.stderr);
             a.code
         }
+        Some(Command::Scan(args)) => crate::scan_cmd::run_process(args, cli.json, io),
         None => cleaner(cli, p, io),
     }
 }
