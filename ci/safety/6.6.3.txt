@@ -37,3 +37,6 @@ safety_apply_should_stop_at_the_next_entry_and_exit_143_When_sighup_arrives_mid_
 safety_apply_should_stop_at_the_next_entry_and_exit_143_When_sigquit_arrives_mid_item   # 6.6.3b
 safety_explorer_apply_should_add_no_second_mint_site_and_keep_tui_and_unlink_checks_green   # 6.6.3b
 safety_default_build_should_refuse_d_and_register_no_explorer_apply   # 6.6.3b
+# Task 6.6.3c: the explorer checks of audit verify.
+safety_audit_verify_should_read_back_a_real_explorer_run_written_by_the_real_audit_sink_as_clean   # 6.6.3c
+safety_explorer_confirm_should_be_synced_to_disk_when_it_is_written   # 6.6.3c

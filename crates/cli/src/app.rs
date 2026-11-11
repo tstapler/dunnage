@@ -179,7 +179,7 @@ pub fn run(cli: &Cli, p: &Ports, io: &mut Io) -> i32 {
             let log = log
                 .clone()
                 .unwrap_or_else(|| p.env.dirs.state.join("audit.jsonl"));
-            let a = audit_cmd::run(&log, &p.env.dirs.home, p.config_roots.as_deref(), cli.json);
+            let a = audit_cmd::run(&log, &p.env.dirs, p.config_roots.as_deref(), cli.json);
             io.stdout(&a.stdout);
             io.stderr(&a.stderr);
             a.code

@@ -2,6 +2,8 @@
 
 pub mod audit;
 pub mod audit_verify;
+mod audit_verify_explorer;
+pub use audit_verify_explorer::own_dirs;
 pub mod command;
 pub mod command_confined;
 pub mod config;

@@ -4,7 +4,9 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_adapters::audit_verify::{verify_file, AllowedTable, VerifyInputs, VerifyReport};
+use disk_cleanup_adapters::audit_verify::{
+    verify_file_with, AllowedTable, VerifyExtras, VerifyInputs, VerifyReport,
+};
 use serde_json::json;
 
 use crate::render_json::{to_text, SCHEMA_VERSION};
@@ -29,18 +31,29 @@ fn document(report: &VerifyReport, code: i32) -> String {
         })).collect::<Vec<_>>(),
         "unfinished_runs": report.unfinished,
         "warnings": report.warnings,
+        "notes": report.notes,
         "errors": [],
     }))
 }
 
-pub fn run(log: &Path, home: &Path, config_roots: Option<&[PathBuf]>, json: bool) -> AuditRun {
+pub fn run(
+    log: &Path,
+    dirs: &disk_cleanup_core::Dirs,
+    config_roots: Option<&[PathBuf]>,
+    json: bool,
+) -> AuditRun {
+    let home = dirs.home.as_path();
     let table = AllowedTable::embedded();
     let inputs = VerifyInputs {
         table: &table,
         home,
         config_roots,
     };
-    let report = match verify_file(log, &inputs) {
+    // The tool's own directories come from this machine now, never from the log (review 2 N6).
+    let extras = VerifyExtras {
+        own_dirs: disk_cleanup_adapters::own_dirs(&dirs.state, &dirs.cache, &dirs.config),
+    };
+    let report = match verify_file_with(log, &inputs, &extras) {
         Ok(r) => r,
         Err(e) => {
             let text = format!(
@@ -85,6 +98,9 @@ pub fn run(log: &Path, home: &Path, config_roots: Option<&[PathBuf]>, json: bool
     }
     for w in &report.warnings {
         let _ = writeln!(out, "warning: {w}");
+    }
+    for n in &report.notes {
+        let _ = writeln!(out, "note: {n}");
     }
     out.push_str(&report.summary_line());
     out.push('\n');
