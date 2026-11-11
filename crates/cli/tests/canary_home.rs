@@ -49,6 +49,14 @@ fn allowlist(fx: &Fixture) -> Vec<PathBuf> {
 fn fixture_path(fx: &Fixture) -> std::ffi::OsString {
     let bin = fx.root().join("bin");
     std::fs::create_dir_all(&bin).unwrap();
+    // A Gate D build asks the daemon about Docker; the canary must not reach the machine's real one.
+    let shim = bin.join("docker");
+    std::fs::write(
+        &shim,
+        "#!/bin/sh\necho 'Cannot connect to the Docker daemon (canary shim)' >&2\nexit 1\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&shim, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
     std::env::join_paths([bin, PathBuf::from("/usr/bin"), PathBuf::from("/bin")]).unwrap()
 }
 
