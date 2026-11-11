@@ -94,6 +94,11 @@ fn kinds_should_list_caches_as_available_and_the_other_gates_as_not_available_Wh
             // Gate D registers it (Story 4.2.2); `e2e_apply_steam.rs` covers it.
             continue;
         }
+        if cfg!(feature = "gate-d") && id.starts_with("docker") {
+            // Gate D registers the Docker kinds (Stories 4.1.2 to 4.1.4); the test shim makes the daemon
+            // "down", and `docker_*.rs` cover them.
+            continue;
+        }
         assert_eq!(cell(id), "not available in this build", "{id}");
         for apply in [false, true] {
             let mut args = vec!["--kinds", id];

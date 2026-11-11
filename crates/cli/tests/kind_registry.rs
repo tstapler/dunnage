@@ -180,6 +180,13 @@ fn the_binary_should_list_and_apply_exactly_what_its_build_gate_registers() {
             assert_eq!(got, "needs root", "cache-apt at build gate {built}");
         } else if r.apply > built {
             assert_eq!(got, "list only", "{} at build gate {built}", r.id);
+        } else if r.id.starts_with("docker") {
+            // The test shim puts a daemon-down `docker` ahead of the real one (Stories 4.1.2 to 4.1.4).
+            assert!(
+                got == "yes" || got == "daemon down",
+                "{} at build gate {built}: {got}",
+                r.id
+            );
         } else {
             assert_eq!(got, "yes", "{} at build gate {built}", r.id);
         }
