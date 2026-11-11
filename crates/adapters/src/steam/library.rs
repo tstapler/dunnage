@@ -7,6 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use disk_cleanup_core::ports::SystemProbe;
+use disk_cleanup_core::roots::SteamLibraryRoot;
 use disk_cleanup_core::{Platform, SkipReason, Tri};
 use steamlocate::{Error as SteamError, SteamDir};
 
@@ -43,7 +44,7 @@ impl SteamInstall {
         if paths.is_empty() {
             return Err(unrecognised);
         }
-        let mut libraries = Vec::new();
+        let mut libraries: Vec<PathBuf> = Vec::new();
         let mut installed = Vec::new();
         for lib in dir.libraries().map_err(|_| unrecognised.clone())? {
             let lib = match lib {
@@ -55,15 +56,25 @@ impl SteamInstall {
                 }
                 Err(_) => return Err(unrecognised),
             };
+            // Canonical, so the delete engine's lexical rules see the path the kernel does; a library
+            // listed twice (`~/.steam/steam` and the real directory) is read once.
+            let path = fs::canonicalize(lib.path()).unwrap_or_else(|_| lib.path().to_path_buf());
+            if libraries.contains(&path) {
+                continue;
+            }
+            // A mount point left behind by an unmounted drive has no `steamapps` inside.
+            if !path.join("steamapps").is_dir() {
+                return Err(SteamGate::Skip(SkipReason::LibraryUnmounted));
+            }
             for app in lib.apps() {
                 let app = app.map_err(|_| unrecognised.clone())?;
                 installed.push(InstalledApp {
                     appid: app.app_id,
                     installdir: app.install_dir,
-                    library: lib.path().to_path_buf(),
+                    library: path.clone(),
                 });
             }
-            libraries.push(lib.path().to_path_buf());
+            libraries.push(path);
         }
         installed.sort_by(|a, b| (a.appid, &a.library).cmp(&(b.appid, &b.library)));
         Ok(SteamInstall {
@@ -93,6 +104,54 @@ impl SteamInstall {
         }
         Ok(())
     }
+
+    /// The same rule over everything a Steam kind could offer: the entries of `compatdata`, `shadercache`
+    /// and `common` of every library.
+    pub fn check_installed_set(&self) -> Result<(), SteamGate> {
+        let entries = self
+            .libraries
+            .iter()
+            .flat_map(|l| {
+                ["compatdata", "shadercache", "common"]
+                    .map(|sub| count_entries(&l.join("steamapps").join(sub)))
+            })
+            .sum();
+        self.check_against_compatdata(entries)
+    }
+}
+
+fn count_entries(dir: &Path) -> usize {
+    fs::read_dir(dir).map_or(0, Iterator::count)
+}
+
+/// The libraries `libraryfolders.vdf` lists that are missing or hold no `steamapps` (an unmounted drive).
+pub fn unmounted_libraries(root: &Path) -> Vec<PathBuf> {
+    let Ok(dir) = SteamDir::from_dir(root) else {
+        return Vec::new();
+    };
+    dir.library_paths()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|p| !p.join("steamapps").is_dir())
+        .collect()
+}
+
+/// Every library of the install at `root` as a delete bound: canonical, `mounted` when it holds `steamapps`.
+/// Nothing is parsed beyond the library list, so this works when `SteamInstall::load` fails closed.
+pub fn library_roots(root: &Path) -> Vec<SteamLibraryRoot> {
+    let Ok(dir) = SteamDir::from_dir(root) else {
+        return Vec::new();
+    };
+    let mut out: Vec<SteamLibraryRoot> = Vec::new();
+    for p in dir.library_paths().unwrap_or_default() {
+        let path = fs::canonicalize(&p).unwrap_or(p);
+        if out.iter().any(|l| l.path == path) {
+            continue;
+        }
+        let mounted = path.join("steamapps").is_dir();
+        out.push(SteamLibraryRoot { path, mounted });
+    }
+    out
 }
 
 /// True when any library's `steamapps/downloading` holds an entry, or cannot be read.

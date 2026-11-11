@@ -3,7 +3,11 @@
 
 pub mod library;
 pub mod list;
+pub mod orphans;
+pub mod remnants;
+pub mod target;
 
 pub use library::{
-    default_steam_roots, downloading_nonempty, plan_gate, InstalledApp, SteamGate, SteamInstall,
+    default_steam_roots, downloading_nonempty, library_roots, plan_gate, unmounted_libraries,
+    InstalledApp, SteamGate, SteamInstall,
 };

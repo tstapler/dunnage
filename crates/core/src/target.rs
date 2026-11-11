@@ -61,7 +61,13 @@ impl KindGate {
                 detail.map_or(String::new(), |d| format!(": {d}"))
             )
         } else {
-            reason.reason_text().to_string()
+            // The slots a whole-kind skip can fill from the detail (the unmounted library, the tool).
+            let text = reason.reason_text();
+            match (reason, detail) {
+                (SkipReason::LibraryUnmounted, Some(d)) => text.replace("<path>", d),
+                (SkipReason::UnrecognisedOutput, Some(d)) => text.replace("<tool>", d),
+                _ => text.to_string(),
+            }
         };
         let verb = if applying { "could not run" } else { "SKIPPED" };
         Some(format!("{family}: {verb} ({what})"))

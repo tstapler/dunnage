@@ -86,6 +86,10 @@ fn kinds_should_list_caches_as_available_and_the_other_gates_as_not_available_Wh
             // `e2e_apply_build_dirs.rs` cover them.
             continue;
         }
+        if cfg!(feature = "gate-d") && id == "steam" {
+            // Gate D registers it (Story 4.2.2); `e2e_apply_steam.rs` covers it.
+            continue;
+        }
         assert_eq!(cell(id), "not available in this build", "{id}");
         for apply in [false, true] {
             let mut args = vec!["--kinds", id];

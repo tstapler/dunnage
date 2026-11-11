@@ -1,0 +1,5 @@
+# Story 4.2.2: the Steam guard and the target that removes through delete_tree
+crates/core/src/targets/steam_guard.rs
+crates/adapters/src/steam/target.rs
+crates/adapters/src/steam/orphans.rs
+crates/adapters/src/steam/remnants.rs
