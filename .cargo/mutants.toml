@@ -14,4 +14,12 @@ exclude_re = [
   # so every frame below an evicted one is evicted too and both forms stop at the same `s`; no input of the
   # engine reaches a state where they differ (the window mutants at delete.rs:293 are killed instead).
   'delete\.rs:305:38: replace - with / in Engine<.+>::ensure_handle',
+  # `check_read` refuses only when `refuse_all` is set, and `confined_to` sets it only for an unclean root, where a
+  # debug build panics on its `debug_assert!` first; mutation runs are debug builds, so the state is unreachable
+  # there. `confined_to_should_not_accept_an_unclean_root` covers it in `cargo test --release` (`make safety`).
+  'dirops\.rs:203:9: replace RealDirOps::check_read -> io::Result<\(\)> with Ok\(\(\)\)',
+  # `target == home` is subsumed by `home.starts_with(target)` on the next line, so `||` -> `&&` after it
+  # changes no result; `target == "/"` never reaches this check because `/` has no file name and fails the
+  # basename comparison before it.
+  'floor_rule\.rs:74:13: replace \|\| with && in DeletePolicy::validate',
 ]
