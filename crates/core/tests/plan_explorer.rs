@@ -374,3 +374,39 @@ fn explorer_plan_should_hold_no_delete_capability_When_its_source_is_read() {
         assert!(!src.contains(banned), "explorer_plan.rs names {banned}");
     }
 }
+
+#[test]
+fn explorer_plan_should_call_a_replaced_parent_gone_and_keep_an_unreadable_mark_as_a_skip_row() {
+    let w = World::new();
+    w.fs.dir("/home/u/code/a", 10)
+        .dir("/home/u/code/b", 10)
+        .dir("/home/u/code/c", 10);
+    w.fs.fail("/home/u/code/a", 13).fail("/home/u/code/b", 20);
+    let marks = vec![
+        p("/home/u/code/a"),
+        p("/home/u/code/b"),
+        p("/home/u/code/c"),
+    ];
+    // ENOTDIR (a parent became a file) is gone; EACCES is not, and fails closed.
+    for mode in [OnlyMode::Explorer, OnlyMode::Tolerant] {
+        let plan = with_ctx(&w, &none(), |ctx| explorer_plan(&marks, mode, ctx).unwrap());
+        let a = plan.rows.iter().find(|r| r.path.ends_with("a")).unwrap();
+        assert_eq!(a.planned, will_not(SkipReason::ProtectedPath), "{mode:?}");
+        let b = plan.rows.iter().find(|r| r.path.ends_with("b"));
+        assert_eq!(b.is_some(), mode == OnlyMode::Explorer, "{mode:?}");
+        if let Some(b) = b {
+            assert_eq!(b.planned, will_not(SkipReason::Gone));
+        }
+    }
+    let err = with_ctx(&w, &none(), |ctx| {
+        explorer_plan(&marks, OnlyMode::Strict, ctx).unwrap_err()
+    });
+    assert!(err.text().contains("/home/u/code/b"), "{}", err.text());
+    // The saved entry keeps the keys of the rows that would be removed only.
+    let plan = with_ctx(&w, &none(), |ctx| {
+        explorer_plan(&marks, OnlyMode::Explorer, ctx).unwrap()
+    });
+    let saved = plan.saved_selection(1, 2);
+    let keys: Vec<&str> = saved.items.iter().map(|k| k.as_str()).collect();
+    assert_eq!(keys, ["explorer-selection:/home/u/code/c"]);
+}

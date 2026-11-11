@@ -1,2 +1,3 @@
 # Story 6.6.2 (the explorer-selection kind): always active; the tests are in crates/core/tests/plan_explorer*.rs.
 safety_explorer_selection_is_destructive_hidden_and_unnameable_When_the_registry_is_read   # Destructive, not in `kinds`, `--kinds explorer-selection` exits 64
+safety_explorer_plan_id_binds_marks_identities_and_kind_When_any_of_them_changes   # the plan-id changes with the marked set, an inode, the kind and the roots

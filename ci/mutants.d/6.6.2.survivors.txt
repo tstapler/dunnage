@@ -1,0 +1,4 @@
+# Equivalent mutants (explorer_plan.rs skip_of): decide_path_common runs first and already answers OutsideRoot and
+# the floor rule's ProtectedPath, so mark_check cannot return those two refusals here and the wildcard arm gives the same answer.
+crates/core/src/explorer_plan.rs:202:9: delete match arm MarkRefusal::OutsideRoot in skip_of
+crates/core/src/explorer_plan.rs:205:9: delete match arm MarkRefusal::Engine(s) in skip_of

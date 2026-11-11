@@ -31,6 +31,7 @@ pub struct XFs {
     nodes: Mutex<HashMap<PathBuf, Node>>,
     next_ino: Mutex<u64>,
     pub lstats: Mutex<Vec<PathBuf>>,
+    faults: Mutex<HashMap<PathBuf, i32>>,
 }
 
 impl XFs {
@@ -90,6 +91,12 @@ impl XFs {
         self
     }
 
+    /// `lstat` of `p` fails with this errno.
+    pub fn fail(&self, p: &str, errno: i32) -> &XFs {
+        self.faults.lock().unwrap().insert(p.into(), errno);
+        self
+    }
+
     pub fn has(&self, p: &str) -> bool {
         self.nodes.lock().unwrap().contains_key(Path::new(p))
     }
@@ -112,6 +119,9 @@ impl XFs {
 impl Fs for XFs {
     fn lstat(&self, path: &Path) -> io::Result<StatInfo> {
         self.lstats.lock().unwrap().push(path.to_path_buf());
+        if let Some(e) = self.faults.lock().unwrap().get(path) {
+            return Err(io::Error::from_raw_os_error(*e));
+        }
         let n = self.nodes.lock().unwrap().get(path).cloned();
         let n = n.ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))?;
         Ok(StatInfo {
