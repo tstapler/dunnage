@@ -162,6 +162,17 @@ const TABLE: &[(&str, Class, &[T])] = &[
             L("--untracked-files=normal"),
         ],
     ),
+    // Story 3.1.2: the ignored files `git worktree remove` would delete (`!! path` lines)
+    (
+        "git",
+        R,
+        &[
+            L("status"),
+            L("--porcelain=v1"),
+            L("--ignored=matching"),
+            L("--untracked-files=normal"),
+        ],
+    ),
     ("git", R, &[L("rev-parse"), L("--git-common-dir")]),
     ("git", R, &[L("branch"), L("-r"), L("--contains"), V]),
     ("git", R, &[L("log"), L("-1"), L("--format=%ct")]),

@@ -62,6 +62,7 @@ fn classify_should_accept_the_read_only_commands_When_each_argv_given() {
         "git -C /r worktree list --porcelain",
         "git worktree list --porcelain -z",
         "git -C /r status --porcelain=v1 --untracked-files=normal",
+        "git -C /r status --porcelain=v1 --ignored=matching --untracked-files=normal",
         "git -C /r rev-parse --git-common-dir",
         "git -C /r branch -r --contains abc123",
         "git -C /r log -1 --format=%ct",
@@ -324,8 +325,8 @@ fn check_refuse_the_remove_worktree_argv_in_both_classes() {
 }
 
 #[test]
-fn classify_should_accept_exactly_the_15_mutating_and_26_read_only_rows() {
-    assert_eq!(allowlist_row_counts(), (15, 26));
+fn classify_should_accept_exactly_the_15_mutating_and_27_read_only_rows() {
+    assert_eq!(allowlist_row_counts(), (15, 27));
 }
 
 #[test]

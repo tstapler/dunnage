@@ -80,6 +80,9 @@ fn spawn_inner(
     let mut child = Command::new(program)
         .args(args)
         .process_group(0)
+        // `git status` otherwise takes and drops index.lock, which moves the admin entry's mtime that the
+        // worktree age floor reads (Story 3.1.2); harmless to every other program
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
