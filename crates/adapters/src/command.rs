@@ -4,10 +4,13 @@
 use std::ffi::OsString;
 use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
+use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use crate::signals::ChildInFlight;
+use crate::state::shell_quote_path;
 use disk_cleanup_core::ports::{
     classify, worktree_remove_argv, Class, Cmd, CmdOutput, CommandRunner,
 };
@@ -59,13 +62,26 @@ pub(crate) fn spawn_with_deadline(
     args: &[OsString],
     timeout: Duration,
 ) -> Result<CmdOutput, DeleteError> {
+    spawn_inner(program, args, timeout, None)
+}
+
+/// As [`spawn_with_deadline`]. The child runs in its own process group, so the terminal's Ctrl-C never
+/// reaches it; with `in_flight` set, a second SIGINT is acknowledged and ignored until it ends (Story 2.2.2).
+fn spawn_inner(
+    program: &OsString,
+    args: &[OsString],
+    timeout: Duration,
+    in_flight: Option<String>,
+) -> Result<CmdOutput, DeleteError> {
     let mut child = Command::new(program)
         .args(args)
+        .process_group(0)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| DeleteError::Io(e.raw_os_error().unwrap_or(EIO)))?;
+    let _in_flight = in_flight.map(ChildInFlight::begin);
     let out = drain(child.stdout.take());
     let err = drain(child.stderr.take());
     let deadline = Instant::now() + timeout;
@@ -140,10 +156,12 @@ impl CommandRunner for RealCommandRunner {
         w: &WorktreeRemoval,
         _proof: &ApplyToken,
     ) -> Result<CmdOutput, DeleteError> {
-        spawn_with_deadline(
+        let desc = format!("git worktree remove {}", shell_quote_path(w.path()));
+        spawn_inner(
             &OsString::from("git"),
             &worktree_remove_argv(w),
             self.timeout,
+            Some(desc),
         )
     }
 }
