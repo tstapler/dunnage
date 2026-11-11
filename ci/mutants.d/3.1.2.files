@@ -1,0 +1,2 @@
+# Story 3.1.2: the worktree guard (24 h floor, precedence)
+crates/core/src/targets/worktree_guard.rs
