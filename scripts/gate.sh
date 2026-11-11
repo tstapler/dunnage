@@ -22,7 +22,7 @@ run_gate() {
     [ "$(rank "$first")" -le "$(rank "$gate")" ] || continue
     [ "$last" = - ] || [ "$(rank "$gate")" -le "$(rank "$last")" ] || continue
     script=${cmd%% *}
-    if [ ! -e "$script" ]; then fails=$((fails+1)); echo "FAIL: required check missing: $script (needed from gate $first)"; continue; fi
+    if [ ! -e "$script" ] && ! command -v "$script" >/dev/null 2>&1; then fails=$((fails+1)); echo "FAIL: required check missing: $script (needed from gate $first)"; continue; fi
     step "$cmd" bash -c "$cmd"
   done < <(cat ci/gate.d/*.required)
   for script in scripts/check-*.sh; do
