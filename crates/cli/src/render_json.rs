@@ -2,7 +2,7 @@
 //! documents. Each is exactly one document with `schema_version`, `mode`, `exit_code` and `errors[]`; bytes
 //! are exact integers, paths are absolute, and nothing is coloured, truncated or locale-formatted.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use disk_cleanup_core::kind::SelectorId;
 use disk_cleanup_core::outcome::SkipReason;
@@ -251,20 +251,51 @@ pub fn apply_doc(input: &ApplyInput) -> Value {
     })
 }
 
-/// The `status` document.
+/// What the `status` document carries besides the filesystem snapshot: the six keys of the old
+/// `metascope status --json` (`fs`, `allocation`, `unallocated_bytes`, `metadata_headroom_bytes`, `verdict`,
+/// `findings`) take their old values.
+#[derive(Debug, Clone, Default)]
+pub struct StatusExtra {
+    /// The `/sys/fs/btrfs/<uuid>` directory.
+    pub fs_dir: Option<PathBuf>,
+    /// The old `allocation` object.
+    pub allocation: Option<Value>,
+    pub findings: Vec<(String, String)>,
+}
+
+/// The `status` document: a superset of the old `metascope status --json`. `fs` is the sysfs directory
+/// as before (null when not btrfs), the df snapshot is `filesystem`.
 pub fn status_doc(
     path: &Path,
     fs: Option<&FsBlock>,
     errors: &[ErrorEntry],
     exit_code: i32,
 ) -> Value {
+    status_doc_with(path, fs, errors, exit_code, &StatusExtra::default())
+}
+
+pub fn status_doc_with(
+    path: &Path,
+    fs: Option<&FsBlock>,
+    errors: &[ErrorEntry],
+    exit_code: i32,
+    extra: &StatusExtra,
+) -> Value {
+    let alloc = fs.and_then(|f| f.snapshot.btrfs);
     json!({
         "schema_version": SCHEMA_VERSION,
         "mode": "status",
         "exit_code": exit_code,
         "path": lossy(path),
         "verdict": verdict_id(fs.map_or(DiskVerdict::Unknown, |f| f.verdict)),
-        "fs": {"before": fs.map(|f| snapshot_json(&f.snapshot)), "after": null},
+        "fs": extra.fs_dir.as_deref().map(lossy),
+        "allocation": extra.allocation,
+        "unallocated_bytes": alloc.map(|a| a.unallocated),
+        "metadata_headroom_bytes": alloc.map(|a| a.metadata_headroom_bytes()),
+        "findings": extra.findings.iter()
+            .map(|(sev, msg)| json!({"severity": sev, "message": msg}))
+            .collect::<Vec<_>>(),
+        "filesystem": {"before": fs.map(|f| snapshot_json(&f.snapshot)), "after": null},
         "notes": [],
         "errors": errors_json(errors),
     })
@@ -373,13 +404,31 @@ pub fn fatal_doc(mode: &str, plan_id: Option<&str>, e: &FatalError) -> Value {
     })
 }
 
+fn recent_saved(ctx: &GateRenderCtx) -> Value {
+    let mut entries: Vec<&disk_cleanup_core::SavedSelection> = ctx
+        .saved
+        .map(|s| s.entries.iter().collect())
+        .unwrap_or_default();
+    entries.sort_by_key(|e| std::cmp::Reverse(e.saved_at));
+    entries
+        .into_iter()
+        .take(3)
+        .map(|e| {
+            json!({
+                "plan_id": e.plan_id,
+                "kinds": e.kinds,
+                "flags": e.flags,
+                "saved_at": e.saved_at,
+            })
+        })
+        .collect()
+}
+
 /// A gate refusal under `--json` is data: one document with the refusal in `errors[]` (UX-55).
 pub fn gate_refusal_doc(r: &GateRefusal, ctx: &GateRenderCtx) -> Value {
-    let recent_of = |v: &[disk_cleanup_core::plan::RecentPlan]| -> Value {
-        v.iter()
-            .map(|p| json!({"plan_id": p.plan_id, "args": p.args, "age_secs": p.age_secs}))
-            .collect()
-    };
+    // The three newest saved dry runs, as `design/ux.md` S7 shows them (`plan_id`, `kinds`, `flags`,
+    // `saved_at`); the refusal's own `recent` list carries only ids and ages.
+    let recent_of = |_v: &[disk_cleanup_core::plan::RecentPlan]| -> Value { recent_saved(ctx) };
     let dry = format!("{BIN} {}", ctx.selection.dry_run_args());
     let (code, supplied, detail) = match r {
         GateRefusal::MissingPlanId { recent } => (
@@ -419,6 +468,7 @@ pub fn gate_refusal_doc(r: &GateRefusal, ctx: &GateRenderCtx) -> Value {
                         "vanished": vanished.iter().map(disk_cleanup_core::ItemKey::as_str).collect::<Vec<_>>(),
                         "appeared": appeared.iter().map(disk_cleanup_core::ItemKey::as_str).collect::<Vec<_>>(),
                         "incomplete": incomplete,
+                        "recent": recent_saved(ctx),
                         "dry_run_command": dry,
                     }),
                 ),
@@ -434,6 +484,7 @@ pub fn gate_refusal_doc(r: &GateRefusal, ctx: &GateRenderCtx) -> Value {
                         "recomputed": recomputed.to_string(),
                         "saved": {"kinds": saved_kinds, "flags": saved_flags},
                         "now": {"kinds": now_kinds, "flags": now_flags},
+                        "recent": recent_saved(ctx),
                         "dry_run_command": dry,
                     }),
                 ),

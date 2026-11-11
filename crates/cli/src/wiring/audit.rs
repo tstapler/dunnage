@@ -220,13 +220,13 @@ mod tests {
             StampOutcome::Verified(v) if v.verified
         ));
         let e = stamp_gate(&inputs(&b, None, None, false), &no_tty).unwrap_err();
-        assert_eq!(e.json_code, "gate_stamp");
+        assert_eq!(e.json_code, "stamp_refused");
         assert!(
             e.text.contains("no stamp was installed") && e.text.ends_with("Nothing was deleted.")
         );
         // An empty variable is as if unset: the stamp refusal, not the terminal.
         let e = stamp_gate(&inputs(&b, None, Some(""), false), &no_tty).unwrap_err();
-        assert_eq!(e.json_code, "gate_stamp");
+        assert_eq!(e.json_code, "stamp_refused");
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod tests {
         assert_eq!(warning, "WARNING: gate check bypassed (full disk)");
         let e =
             stamp_gate(&inputs(&b, None, Some("full disk"), false), &typed("yes\n")).unwrap_err();
-        assert_eq!(e.json_code, "gate_stamp");
+        assert_eq!(e.json_code, "stamp_refused");
     }
 
     #[test]
