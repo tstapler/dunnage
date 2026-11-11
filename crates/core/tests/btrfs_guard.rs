@@ -97,7 +97,7 @@ fn non_zero_dusage_should_not_run_and_say_why_When_unallocated_400mib() {
 
 #[test]
 fn non_zero_dusage_should_become_possible_When_dusage_0_freed_chunks_above_the_threshold() {
-    let (steps, _) = drive(400 * MIB, |_| 1, |u| if u == 0 { 2 * GIB } else { 2 * GIB });
+    let (steps, _) = drive(400 * MIB, |_| 1, |_| 2 * GIB);
     assert_eq!(steps[..2], [0, 5]);
 }
 

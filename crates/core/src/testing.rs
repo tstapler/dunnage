@@ -214,8 +214,8 @@ impl CommandRunner for FakeCommandRunner {
     ) -> Result<Option<CmdOutput>, DeleteError> {
         let mut argv = vec![cmd.program.clone()];
         argv.extend(cmd.args.iter().cloned());
-        let blocks = classify(cmd) == Some(Class::Mutating)
-            && lock(&self.state).blocking.iter().any(|b| *b == argv);
+        let blocks =
+            classify(cmd) == Some(Class::Mutating) && lock(&self.state).blocking.contains(&argv);
         if !blocks {
             return self.run_mutating(cmd, proof).map(Some);
         }

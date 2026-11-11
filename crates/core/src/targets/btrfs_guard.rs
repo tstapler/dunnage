@@ -197,7 +197,7 @@ pub fn next_step(done: &[StepResult], unallocated: Option<u64>) -> Next {
             None => return Next::Stop(StopReason::Finished),
         },
     };
-    if next != 0 && !unallocated.is_some_and(|u| u >= MIN_UNALLOCATED_FOR_MOVE) {
+    if next != 0 && unallocated.is_none_or(|u| u < MIN_UNALLOCATED_FOR_MOVE) {
         return Next::Stop(StopReason::TooLittleUnallocated { next, unallocated });
     }
     Next::Run(next)

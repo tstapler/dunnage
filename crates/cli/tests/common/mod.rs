@@ -308,7 +308,11 @@ pub fn next_commands(stdout: &str) -> Vec<String> {
             break;
         }
         let is_command = line.starts_with("  disk-cleanup ") || line.starts_with("  sudo ");
-        if is_command && !line.starts_with("   ") {
+        // The balance hint appears only when the fixture HOME is on btrfs (TMPDIR on a btrfs volume), so it
+        // is not part of what these flows count (Story 4.3.2).
+        let host_btrfs_hint =
+            line.starts_with("  sudo ") && line.ends_with(" --apply --kinds btrfs");
+        if is_command && !line.starts_with("   ") && !host_btrfs_hint {
             out.push(line.trim().to_string());
         }
     }

@@ -110,3 +110,33 @@ Build dirs (Story 3.2.4) are built but not registered in the shipped binary: `ga
 5. Pick `--jobs` from the table in `research/spikes.md` (Story 3.2.4) if the default does not suit this disk.
 6. On accept (build dirs and worktrees): add `"gate-c"` to `default` in `crates/cli/Cargo.toml`, set `active-gate C`
    in `ci/safety/kinds-by-gate.txt` and `ci/safety/manifest.txt`, commit, cut `v0.3.0` from that commit.
+
+## OWNER WAIT D, btrfs balance (Story 4.3.2)
+
+The balance is built but not registered in the shipped binary: `gate-d` is not a default feature of `crates/cli`.
+Your root filesystem is the one it is for, and it starts almost full of chunks, so read this before the first run.
+The tool never calls `sudo` and never cancels a balance.
+
+1. Save the "before" state, as you, then as root: `disk-cleanup status`, `sudo btrfs filesystem usage /`,
+   `sudo btrfs balance status /` (must say `No balance found`), `sudo btrfs scrub status /` and
+   `systemctl is-active btrfs-balance.timer` (must not say `active`; a balance that starts on its own is why the
+   tool refuses to start one). Run `snapper list` too if you use snapper.
+2. Read how the tool sees it: `disk-cleanup --kinds btrfs`. As a user the row is `SKIP needs root` and the
+   `Next:` line is `sudo <absolute path of the binary> --apply --kinds btrfs`. The binary prints that line and
+   never runs `sudo` itself. If quotas are on, a `qgroups enabled: balance may be slow` note is printed.
+3. The first live run is `-dusage=0` only. Below 1 GiB of unallocated space (`unallocated` in `status`; yours was
+   1.0 MiB) the tool runs `-dusage=0` and nothing else, and prints why. Run the printed line:
+   `sudo /path/to/disk-cleanup --apply --kinds btrfs`. Nothing but `btrfs balance start -dusage=0 /` runs.
+4. Read the numbers. The Notes block lists each step (`-dusage=N relocated K chunks; unallocated now X`) and ends
+   with `btrfs unallocated: A before, B after`. B is read back from the filesystem after the last step, not
+   computed. Check it against `sudo btrfs filesystem usage /` ("Device unallocated"); `disk-cleanup status`
+   must now show the same figure. If B did not grow, `-dusage=0` found no empty chunk, which is a real answer;
+   free some data (a cache apply) so unallocated passes 1 GiB, then run the line again to let `-dusage=5`
+   and the larger steps run. Every non-zero step moves at most 8 chunks (`limit=8`) and the ladder stops when a
+   step moves 0 chunks, when unallocated reaches 10 GiB, or on ENOSPC (exit 2, with the state printed).
+5. Ctrl-C during a step does not stop the balance: the kernel finishes it. The tool stops waiting, starts no
+   further step, prints `INTERRUPTED: a btrfs balance is still running in the kernel ...` and exits 130. Check
+   it with `sudo btrfs balance status /`; stop it yourself with `sudo btrfs balance cancel /`. A second Ctrl-C
+   exits at once. The audit log records that step as `running` and `run_end` as `interrupted`.
+6. Save the "after" state the same way as step 1 and keep both beside the gate report. `disk-cleanup audit
+   verify` and `make safety` must pass as for the other gates.

@@ -465,6 +465,12 @@ fn kinds_should_list_every_selector_with_availability_and_exit_0() {
             assert!(row(unbuilt).contains(" yes "), "{unbuilt}");
             continue;
         }
+        // Story 4.3.2: a Gate D build registers the balance; it needs root, so a user sees "needs root".
+        if cfg!(feature = "gate-d") && unbuilt == "btrfs" {
+            let r = row(unbuilt);
+            assert!(r.contains(" needs root ") || r.contains(" yes "), "{r}");
+            continue;
+        }
         assert!(
             row(unbuilt).contains("not available in this build"),
             "{unbuilt}"

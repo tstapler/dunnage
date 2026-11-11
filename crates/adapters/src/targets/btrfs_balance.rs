@@ -172,6 +172,14 @@ impl Target for BtrfsBalanceTarget {
         KindGate::Available
     }
 
+    /// The `kinds` table says "needs root" for a user; the run itself reports the item `Skip(NeedsRoot)`.
+    fn selector_gate(&self, _selector: SelectorId, env: &Env) -> KindGate {
+        if env.probe.euid() != 0 {
+            return KindGate::Unavailable(SkipReason::NeedsRoot);
+        }
+        self.gate(env)
+    }
+
     fn unavailable_detail(&self, env: &Env) -> Option<String> {
         (env.probe.platform() == Platform::Linux).then(|| "btrfs".to_string())
     }

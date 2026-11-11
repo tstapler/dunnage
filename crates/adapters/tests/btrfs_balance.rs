@@ -131,7 +131,7 @@ impl Rig {
         self.runner
             .calls_of(CallKind::RunMutating)
             .iter()
-            .map(|c| c.rendered())
+            .map(disk_cleanup_core::testing::RecordedCall::rendered)
             .collect()
     }
 }
@@ -573,7 +573,12 @@ fn sigint_during_balance_should_stop_waiting_print_the_cancel_command_exit_130_a
     let (rig, r) = interrupted_run(2);
 
     // no step after the blocked one, and nothing that cancels
-    let all: Vec<String> = rig.runner.calls().iter().map(|c| c.rendered()).collect();
+    let all: Vec<String> = rig
+        .runner
+        .calls()
+        .iter()
+        .map(disk_cleanup_core::testing::RecordedCall::rendered)
+        .collect();
     assert_eq!(
         rig.mutating_argvs().last().unwrap(),
         "btrfs balance start -dusage=10,limit=8 /"
@@ -693,4 +698,80 @@ fn balance_mount_should_pick_the_shortest_mount_of_the_same_filesystem() {
         balance_mount(&[mount("/mnt", 1)], Path::new("/home/u")),
         Path::new("/home/u")
     );
+}
+
+// ------------------------------------------------------------------------------- safety guarantees
+
+#[test]
+fn safety_btrfs_balance_is_never_cancelled_by_the_tool() {
+    let (rig, _) = interrupted_run(2);
+    let all: Vec<String> = rig
+        .runner
+        .calls()
+        .iter()
+        .map(disk_cleanup_core::testing::RecordedCall::rendered)
+        .collect();
+    assert!(all.iter().all(|a| !a.contains("cancel")), "{all:?}");
+    // and `balance cancel` is not a runnable argv in either class
+    for mutating in [true, false] {
+        let mut cmd =
+            disk_cleanup_core::ports::Cmd::new("btrfs", ["balance", "cancel", "/"], mutating);
+        cmd.mutating = mutating;
+        assert_eq!(disk_cleanup_core::ports::classify(&cmd), None);
+    }
+}
+
+#[test]
+fn safety_btrfs_balance_non_root_runs_no_command_and_never_sudo() {
+    let rig = Rig::new(1000, &[3 * GIB]);
+    let r = apply(&rig, &BtrfsBalanceTarget::new());
+    assert_eq!(
+        only_outcome(&r).status,
+        Status::Skipped(SkipReason::NeedsRoot)
+    );
+    assert!(rig.runner.calls().is_empty(), "{:?}", rig.runner.calls());
+}
+
+#[test]
+fn safety_btrfs_balance_non_zero_steps_are_bounded_and_need_one_gib_unallocated() {
+    let rig = Rig::new(0, &[999 * MIB, 999 * MIB]);
+    on_steps(&rig, [1, 1, 1, 1, 1]);
+    apply(&rig, &BtrfsBalanceTarget::new());
+    assert_eq!(rig.mutating_argvs(), ["btrfs balance start -dusage=0 /"]);
+
+    for usage in [5u8, 10, 20, 40] {
+        let unbounded = disk_cleanup_core::ports::Cmd::new(
+            "btrfs",
+            [
+                "balance".to_string(),
+                "start".into(),
+                format!("-dusage={usage}"),
+                "/".into(),
+            ],
+            true,
+        );
+        assert_eq!(
+            disk_cleanup_core::ports::classify(&unbounded),
+            None,
+            "usage {usage}"
+        );
+    }
+}
+
+#[test]
+fn safety_btrfs_balance_never_starts_beside_a_running_job() {
+    let rig = Rig::with_status(
+        0,
+        three_gib(),
+        Idle {
+            scrub: Ok(out("Status:           running\n")),
+            ..Idle::default()
+        },
+    );
+    let r = apply(&rig, &BtrfsBalanceTarget::new());
+    assert_eq!(
+        only_outcome(&r).status,
+        Status::Skipped(SkipReason::AlreadyRunning)
+    );
+    assert_eq!(rig.runner.mutating_calls(), 0);
 }

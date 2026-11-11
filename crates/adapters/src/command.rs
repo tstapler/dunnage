@@ -227,7 +227,7 @@ mod tests {
     fn spawn_until_aborted_should_stop_waiting_and_leave_the_child_running_When_the_flag_is_set() {
         let flag = std::sync::Arc::new(AbortFlag::new());
         let pidfile = tempfile::NamedTempFile::new().unwrap();
-        let script = format!("echo $$ > {}; sleep 30", pidfile.path().display());
+        let script = format!("echo $$ > {}; exec sleep 30", pidfile.path().display());
         let args = os(&["-c", &script]);
         let setter = std::sync::Arc::clone(&flag);
         let path = pidfile.path().to_path_buf();
@@ -247,9 +247,17 @@ mod tests {
             .trim()
             .parse()
             .unwrap();
-        // signal 0 only tests that the child is still there, then it is cleaned up by the test
-        assert_eq!(unsafe { libc::kill(pid, 0) }, 0, "the child must still run");
-        unsafe { libc::kill(-pid, libc::SIGKILL) };
+        let kill = |args: &[&str]| {
+            std::process::Command::new("kill")
+                .args(args)
+                .arg(pid.to_string())
+                .status()
+                .unwrap()
+                .success()
+        };
+        // signal 0 only tests that the child is still there; then the test cleans it up
+        assert!(kill(&["-0"]), "the child must still run");
+        kill(&["-KILL"]);
     }
 
     #[test]
