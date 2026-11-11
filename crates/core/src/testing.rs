@@ -383,7 +383,6 @@ impl FakeSpaceMeter {
     }
 
     /// Makes `try_snapshot` fail with `errno` (`snapshot` keeps answering).
-    #[must_use]
     pub fn failing(self, errno: i32) -> FakeSpaceMeter {
         *lock(&self.fail_errno) = Some(errno);
         self

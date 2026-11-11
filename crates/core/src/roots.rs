@@ -91,7 +91,7 @@ pub enum CacheTool {
 }
 
 impl CacheTool {
-    fn basename(self) -> &'static str {
+    pub fn basename(self) -> &'static str {
         match self {
             CacheTool::Go => "go-build",
             CacheTool::Pip => "pip",
