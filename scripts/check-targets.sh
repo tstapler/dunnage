@@ -26,6 +26,11 @@ check() {
     fi
   done
   for t in "${TARGETS[@]}"; do
+    # psm/cc build scripts need a C compiler that targets $t; a host gcc cannot (-arch, no cross gcc), clang can (cargo check never links)
+    local cc_var="CC_${t//-/_}"
+    if [ -z "${!cc_var:-}" ] && [ "$t" != x86_64-unknown-linux-gnu ] && command -v clang >/dev/null 2>&1; then
+      case "$t" in aarch64-unknown-linux-gnu) command -v aarch64-linux-gnu-gcc >/dev/null 2>&1 || export "$cc_var=clang --target=$t" ;; *) export "$cc_var=clang --target=$t" ;; esac
+    fi
     ( cd "$root" && "$cargo" check --workspace --all-targets --target "$t" --message-format short ) >&2
     rc=$?
     if [ $rc = 0 ]; then echo "ok: $t (compile-only)"; else echo "FAIL: $t did not compile (cargo check exit $rc)"; bad=1; fi
