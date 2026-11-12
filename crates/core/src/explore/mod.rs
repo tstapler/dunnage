@@ -2,6 +2,7 @@
 //! is declared here so the stories of W5 to W9 each fill their own file and never edit this one or `lib.rs`.
 
 pub mod confirm;
+pub mod delete_flow;
 pub mod fmt;
 pub mod headroom;
 pub mod help;

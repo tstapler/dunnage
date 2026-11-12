@@ -1,7 +1,8 @@
 //! The input state machine (Task 6.2.4a; UX-T1, UX-T12, UX-T20). [`handle_key`] turns one key into a change of
 //! the view, the marks or the modal state and returns an [`Action`] for the loop. `core` never deletes:
-//! [`Action::Delete`] is a request, and the flow behind it (a saved plan for exactly this set, then the typed
-//! count) belongs to Story 6.6.4. No variant of [`Action`] writes to disk or runs a command by itself.
+//! [`Action::Delete`] is a request, and the flow behind it (the plan of this session for exactly this set,
+//! then the typed count) is [`super::delete_flow`] and the loop. No variant of [`Action`] writes to disk or
+//! runs a command by itself.
 
 use std::path::{Path, PathBuf};
 

@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::sync_channel;
 use std::sync::{Arc, Mutex};
 
-use super::confirm::{ConfirmRecord, ConfirmedPlan};
+use super::confirm::{ConfirmRecord, ConfirmedPlan, ReviewedItem, ReviewedPlan};
 use super::msg::{DeleteMsg, FileRows, PlanPreview, ScanMsg};
 
 use super::ports::{
@@ -188,6 +188,40 @@ pub struct FakeExplorerActions {
     finishes: Mutex<Vec<Vec<PathBuf>>>,
     delete_script: Mutex<Vec<DeleteMsg>>,
     deletes: Mutex<Vec<ConfirmRecord>>,
+    reviews: Mutex<Vec<Vec<PathBuf>>>,
+    reviewer: Mutex<Option<ReviewerBox>>,
+}
+
+/// What a fake `review` answers for a marked set.
+pub type Reviewer = Box<dyn Fn(&[PathBuf]) -> Result<ReviewedPlan, String> + Send>;
+
+struct ReviewerBox(Reviewer);
+
+impl std::fmt::Debug for ReviewerBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Reviewer")
+    }
+}
+
+/// A reviewed plan of `marks` with one directory item each, the identity derived from the path, so the same
+/// marks always give the same plan-id. `bytes_each` is the attributed size of every item.
+pub fn reviewed_of(marks: &[PathBuf], bytes_each: u64) -> ReviewedPlan {
+    let items = marks
+        .iter()
+        .map(|p| ReviewedItem {
+            path: p.clone(),
+            identity: crate::plan::ItemIdentity {
+                dev: 1,
+                ino: p
+                    .as_os_str()
+                    .as_encoded_bytes()
+                    .iter()
+                    .fold(7u64, |a, b| a.wrapping_mul(31).wrapping_add(u64::from(*b))),
+                kind: crate::delete_types::FileKind::Dir,
+            },
+        })
+        .collect();
+    ReviewedPlan::new(items, Vec::new(), bytes_each * marks.len() as u64)
 }
 
 impl FakeExplorerActions {
@@ -198,7 +232,27 @@ impl FakeExplorerActions {
             finishes: Mutex::new(Vec::new()),
             delete_script: Mutex::new(Vec::new()),
             deletes: Mutex::new(Vec::new()),
+            reviews: Mutex::new(Vec::new()),
+            reviewer: Mutex::new(None),
         }
+    }
+
+    /// Replaces the default reviewer (`reviewed_of(marks, 1 GiB)`).
+    #[must_use]
+    pub fn with_reviewer(self, reviewer: Reviewer) -> FakeExplorerActions {
+        *self
+            .reviewer
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(ReviewerBox(reviewer));
+        self
+    }
+
+    /// The marked sets `review` was asked about.
+    pub fn reviews(&self) -> Vec<Vec<PathBuf>> {
+        self.reviews
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// The messages every `delete` replays (default: an immediate `Done` with nothing removed).
@@ -274,30 +328,37 @@ impl ExplorerActions for FakeExplorerActions {
         }
         DeleteHandle::new(rx, Arc::new(AtomicBool::new(false)))
     }
+
+    fn review(&self, marks: &[PathBuf]) -> Result<ReviewedPlan, String> {
+        self.reviews
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(marks.to_vec());
+        match &*self
+            .reviewer
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        {
+            Some(f) => (f.0)(marks),
+            None => Ok(reviewed_of(marks, 1 << 30)),
+        }
+    }
 }
 
-/// A scripted [`TypedCountSource`]: answers the listed entries in order, then cancels.
-#[derive(Debug)]
+/// A [`TypedCountSource`] that says whether there is a terminal.
+#[derive(Debug, Clone, Copy)]
 pub struct FakeTypedCount {
     terminal: bool,
-    entries: std::collections::VecDeque<String>,
 }
 
 impl FakeTypedCount {
-    pub fn new(terminal: bool, entries: &[&str]) -> FakeTypedCount {
-        FakeTypedCount {
-            terminal,
-            entries: entries.iter().map(|e| (*e).to_string()).collect(),
-        }
+    pub fn new(terminal: bool) -> FakeTypedCount {
+        FakeTypedCount { terminal }
     }
 }
 
 impl TypedCountSource for FakeTypedCount {
     fn is_terminal(&self) -> bool {
         self.terminal
-    }
-
-    fn next_entry(&mut self) -> Option<String> {
-        self.entries.pop_front()
     }
 }
