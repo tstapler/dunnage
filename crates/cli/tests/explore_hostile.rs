@@ -1432,6 +1432,16 @@ const CONFIRM_PRELUDE: &str = "use disk_cleanup_core::explore::confirm::{Confirm
 #[test]
 fn safety_explorer_hostile_should_not_compile_a_forged_confirmation_When_it_does_not_come_from_accepts(
 ) {
+    // Bazel does not lay the built rlibs out next to the test binary: the Bazel target sets DC_SKIP_COMPILE_FAIL=1
+    // and `make gate` runs this test through cargo instead (scripts/gate.sh, "cargo-only tests").
+    if std::env::var_os("DC_SKIP_COMPILE_FAIL").is_some() {
+        assert!(
+            std::env::var_os("DC_REQUIRE_COMPILE_FAIL").is_none(),
+            "DC_REQUIRE_COMPILE_FAIL is set and this build cannot run the compile-fail probes"
+        );
+        eprintln!("SKIP: compile-fail probes need Cargo's rlib layout (DC_SKIP_COMPILE_FAIL=1); `make gate` runs them through cargo");
+        return;
+    }
     let (ok, err) = rustc_check(&format!(
         "{CONFIRM_PRELUDE}pub fn good(r: ReviewedPlan) -> Option<ConfirmedPlan> {{ Confirm::new(r).accepts(\"1\").ok() }}"
     ));

@@ -148,6 +148,11 @@ dc_integration_tests(
             "env": {"DC_SKIP_PROFILE_BUILDS": "1"},
             "tags": ["requires-cargo"],
         },
+        # The compile-fail probes run rustc against the built rlibs, which sit next to the test binary only under Cargo.
+        "explore_hostile": {
+            "env": {"DC_SKIP_COMPILE_FAIL": "1"},
+            "tags": ["requires-cargo"],
+        },
         "e2e_apply_caches": {
             "env": {"DC_SKIP_PROFILE_BUILDS": "1"},
             "env_inherit": ["DC_REPO_ROOT"],
