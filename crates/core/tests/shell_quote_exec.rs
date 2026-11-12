@@ -184,7 +184,9 @@ fn a_quoted_hostile_name_should_reach_the_command_as_one_argument_and_inject_not
             }
         }
     }
-    eprintln!("dash: {dash_inert} lines in the $'..' form ran inert but not intact (dash has no $'..')");
+    eprintln!(
+        "dash: {dash_inert} lines in the $'..' form ran inert but not intact (dash has no $'..')"
+    );
     assert!(runs >= 2 * 35 * 2 * 3, "{runs}");
 }
 

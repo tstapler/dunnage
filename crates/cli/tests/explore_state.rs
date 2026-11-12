@@ -221,16 +221,12 @@ fn big_tree(f: &Fixture) -> PathBuf {
     fs::canonicalize(root).unwrap()
 }
 
-/// `SigCgt` bits of SIGHUP (1), SIGINT (2), SIGQUIT (3), SIGTERM (15) and SIGTSTP (20); signal n is bit n-1.
-const INSTALLED: u64 = 0x1 | 0x2 | 0x4 | 1 << 14 | 1 << 19;
+/// The caught-signal bits of SIGHUP, SIGINT, SIGQUIT, SIGTERM and SIGTSTP (20 on Linux, 18 on macOS).
+const TSTP: i32 = if cfg!(target_os = "linux") { 20 } else { 18 };
+const INSTALLED: u64 = 0x1 | 0x2 | 0x4 | 1 << 14 | 1 << (TSTP - 1);
 
 fn signal_mask(pid: u32) -> u64 {
-    let status = fs::read_to_string(format!("/proc/{pid}/status")).unwrap_or_default();
-    status
-        .lines()
-        .find_map(|l| l.strip_prefix("SigCgt:"))
-        .and_then(|h| u64::from_str_radix(h.trim(), 16).ok())
-        .unwrap_or(0)
+    common::caught_signals(pid)
 }
 
 fn kill(sig: &str, pid: u32) {

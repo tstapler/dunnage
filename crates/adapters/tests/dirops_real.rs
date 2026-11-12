@@ -89,6 +89,10 @@ fn open_verified_root_should_fail_with_identity_mismatch_and_on_a_symlinked_base
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "the kernel mount id (statx STATX_MNT_ID) exists on Linux only"
+)]
 fn stat_should_match_std_metadata_and_report_a_mount_id() {
     let (_t, p) = tmp();
     std::fs::write(p.join("f"), vec![1u8; 10_000]).unwrap();

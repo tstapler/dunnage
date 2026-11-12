@@ -268,6 +268,10 @@ fn fixture() -> (Arc<Ex>, PathBuf) {
 // ----- the cases -----
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_an_explorer_delete_of_a_throwaway_directory_removes_exactly_that_directory_and_writes_the_audit(
 ) {
     let (ex, dist) = fixture();

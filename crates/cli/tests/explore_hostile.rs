@@ -716,6 +716,10 @@ fn dir_size_bytes_sparse(path: &Path, bytes: u64) {
 // ---------------------------------------------------------------------------------------------------------
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_explorer_hostile_should_delete_and_log_a_plain_directory_When_it_has_no_sibling_marker_below_a_root(
 ) {
     let rig = Rig::new();
@@ -956,6 +960,7 @@ fn safety_explorer_hostile_should_refuse_the_roots_When_a_root_equals_the_parent
 }
 
 #[test]
+#[cfg_attr(not(target_os = "linux"), ignore = "needs /proc: Linux only")]
 fn safety_explorer_hostile_should_refuse_a_proc_root_When_config_names_a_pseudo_filesystem() {
     let rig = Rig::with_home("home", |_, _| vec![PathBuf::from("/proc")]);
     let err = rig.roots().expect_err("/proc is not a usable root");
@@ -974,6 +979,10 @@ fn safety_explorer_hostile_should_refuse_a_proc_root_When_config_names_a_pseudo_
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_explorer_hostile_should_refuse_scan_roots_and_delete_the_same_item_When_roots_are_nested_in_either_order(
 ) {
     for swapped in [false, true] {
@@ -1656,6 +1665,10 @@ fn safety_explorer_hostile_should_delete_nothing_and_say_changed_since_you_confi
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn growth_should_not_refuse_the_delete_When_the_item_grew_by_less_than_the_limit() {
     let (rig, dist, _mid, a) = grow_case(1 << 20, true);
     let r = a.report.as_ref().expect("report");

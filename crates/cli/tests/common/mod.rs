@@ -53,6 +53,30 @@ pub fn tempdir() -> tempfile::TempDir {
     tempfile::Builder::new().tempdir_in(base).expect("tempdir")
 }
 
+/// The signals process `pid` catches, as a bit mask (signal n is bit n-1): `SigCgt` of `/proc/<pid>/status` on
+/// Linux, `ps -o caught` (hex) elsewhere. 0 when the process or the answer is not there.
+pub fn caught_signals(pid: u32) -> u64 {
+    if cfg!(target_os = "linux") {
+        let status = std::fs::read_to_string(format!("/proc/{pid}/status")).unwrap_or_default();
+        return status
+            .lines()
+            .find_map(|l| l.strip_prefix("SigCgt:"))
+            .and_then(|h| u64::from_str_radix(h.trim(), 16).ok())
+            .unwrap_or(0);
+    }
+    Command::new("ps")
+        .args(["-o", "caught=", "-p", &pid.to_string()])
+        .output()
+        .ok()
+        .and_then(|o| u64::from_str_radix(String::from_utf8_lossy(&o.stdout).trim(), 16).ok())
+        .unwrap_or(0)
+}
+
+/// The bit of signal `n` in a `caught_signals` mask.
+pub fn signal_bit(n: i32) -> u64 {
+    1 << (n - 1)
+}
+
 /// A fixture root: `<root>/home`, `<root>/xdg/{state,cache,config}` and the sentinel. Removed on drop.
 pub struct Fixture {
     dir: tempfile::TempDir,

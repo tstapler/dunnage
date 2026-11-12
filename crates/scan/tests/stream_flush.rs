@@ -65,7 +65,8 @@ fn parent_event_lateness() -> Duration {
         .stream(&request(&roots, 2), &sink, &fake)
         .unwrap();
     let created = created.lock().unwrap().unwrap();
-    arrived.lock().unwrap().unwrap().duration_since(created)
+    let arrived_at = arrived.lock().unwrap().unwrap();
+    arrived_at.duration_since(created)
 }
 
 #[test]

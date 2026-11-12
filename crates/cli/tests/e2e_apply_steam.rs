@@ -142,6 +142,10 @@ fn with_id(out: &Output) -> String {
 // ------------------------------------------------------------------ registered at Gate D
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "the steam kind is Linux only (Steam keeps its libraries elsewhere on macOS)"
+)]
 fn kinds_should_list_steam_as_a_destructive_kind_that_can_delete_When_the_gate_d_build_runs() {
     let w = world();
     let out = plain(&w.f, &["kinds", "--json"]);
@@ -159,6 +163,10 @@ fn kinds_should_list_steam_as_a_destructive_kind_that_can_delete_When_the_gate_d
 // ------------------------------------------------------------------ the destructive-kind gate
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "the steam kind is Linux only (Steam keeps its libraries elsewhere on macOS)"
+)]
 fn safety_steam_apply_needs_plan_id() {
     let w = world();
     let before = steam_state(&w);
@@ -185,6 +193,10 @@ fn safety_steam_apply_needs_plan_id() {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "the steam kind is Linux only (Steam keeps its libraries elsewhere on macOS)"
+)]
 fn apply_should_remove_the_orphans_and_log_steam_kinds_When_the_pasted_line_is_run() {
     let w = world();
     let out = dry(&w.f, &[]);
@@ -251,6 +263,10 @@ fn prefix_with_save(w: &World) {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "the steam kind is Linux only (Steam keeps its libraries elsewhere on macOS)"
+)]
 fn a_pasted_next_line_should_carry_steam_saves_discard_and_refuse_the_line_without_it() {
     let w = world();
     prefix_with_save(&w);
@@ -271,6 +287,10 @@ fn a_pasted_next_line_should_carry_steam_saves_discard_and_refuse_the_line_witho
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "the steam kind is Linux only (Steam keeps its libraries elsewhere on macOS)"
+)]
 fn a_prefix_with_saves_should_stay_and_say_so_When_steam_saves_is_not_given() {
     let w = world();
     prefix_with_save(&w);
@@ -286,6 +306,10 @@ fn a_prefix_with_saves_should_stay_and_say_so_When_steam_saves_is_not_given() {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "the steam kind is Linux only (Steam keeps its libraries elsewhere on macOS)"
+)]
 fn steam_saves_should_exit_64_When_steam_is_not_in_kinds() {
     let w = world();
     let out = plain(&w.f, &["--kinds", "caches", "--steam-saves", "discard"]);
@@ -295,6 +319,10 @@ fn steam_saves_should_exit_64_When_steam_is_not_in_kinds() {
 // ------------------------------------------------------------------ whole-kind skips
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "the steam kind is Linux only (Steam keeps its libraries elsewhere on macOS)"
+)]
 fn plan_should_say_steam_is_running_and_apply_should_end_without_deleting_When_steam_runs() {
     let w = world();
     let out = dry(&w.f, &["--json"]);
@@ -320,6 +348,10 @@ fn plan_should_say_steam_is_running_and_apply_should_end_without_deleting_When_s
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "the steam kind is Linux only (Steam keeps its libraries elsewhere on macOS)"
+)]
 fn plan_should_name_the_library_and_apply_should_delete_nothing_When_a_library_is_unmounted() {
     let w = world();
     fs::remove_dir_all(&w.libs[1]).unwrap();
@@ -348,6 +380,10 @@ fn plan_should_name_the_library_and_apply_should_delete_nothing_When_a_library_i
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "the steam kind is Linux only (Steam keeps its libraries elsewhere on macOS)"
+)]
 fn the_default_kinds_apply_should_never_touch_steam_data() {
     let w = world();
     let before = steam_state(&w);

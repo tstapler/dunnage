@@ -422,8 +422,12 @@ fn without_size(t: &str) -> String {
             if l.starts_with("speed ") {
                 l.split(';')
                     .filter(|f| {
+                        // GNU: "rows 30; columns 100"; BSD/macOS: "30 rows; 100 columns"
                         let f = f.trim();
-                        !f.starts_with("rows ") && !f.starts_with("columns ")
+                        !(f.starts_with("rows ")
+                            || f.starts_with("columns ")
+                            || f.ends_with(" rows")
+                            || f.ends_with(" columns"))
                     })
                     .collect::<Vec<_>>()
                     .join(";")
@@ -474,27 +478,30 @@ fn strip(bytes: &mut Vec<u8>, pat: &[u8]) {
     }
 }
 
-/// A descendant of `ancestor` (child, grandchild, ...) whose command name starts with `name`.
+/// A descendant of `ancestor` (child, grandchild, ...) whose command name starts with `name`. Read with
+/// `ps -A -o pid=,ppid=,comm=` (procps and BSD alike; there is no /proc on macOS).
 fn descendant_named(ancestor: u32, name: &str) -> Option<u32> {
     let mut parent_of = std::collections::HashMap::new();
     let mut named = Vec::new();
-    for e in fs::read_dir("/proc").ok()?.flatten() {
-        let Some(pid) = e.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else {
+    let out = std::process::Command::new("ps")
+        .args(["-A", "-o", "pid=,ppid=,comm="])
+        .output()
+        .ok()?;
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let mut f = line.split_whitespace();
+        let (Some(pid), Some(ppid)) = (
+            f.next().and_then(|s| s.parse::<u32>().ok()),
+            f.next().and_then(|s| s.parse::<u32>().ok()),
+        ) else {
             continue;
         };
-        let Ok(stat) = fs::read_to_string(format!("/proc/{pid}/stat")) else {
-            continue;
-        };
-        let (Some(open), Some(close)) = (stat.find('('), stat.rfind(')')) else {
-            continue;
-        };
-        let ppid: u32 = stat[close + 2..]
-            .split(' ')
-            .nth(1)
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
+        let comm = f.collect::<Vec<_>>().join(" ");
         parent_of.insert(pid, ppid);
-        if stat[open + 1..close].starts_with(name) {
+        // macOS prints the full path of the executable; Linux the (truncated) command name
+        let base = Path::new(&comm)
+            .file_name()
+            .map_or_else(|| comm.clone(), |b| b.to_string_lossy().into_owned());
+        if base.starts_with(name) {
             named.push(pid);
         }
     }

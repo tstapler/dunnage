@@ -48,6 +48,10 @@ fn run(f: &Fixture, args: &[&str]) -> (Option<i32>, String, String) {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "the steam kind is Linux only (Steam keeps its libraries elsewhere on macOS)"
+)]
 fn steam_list_should_rank_ghostrunner_hide_proton_and_leave_the_home_unchanged() {
     let f = Fixture::new();
     let root = steam_fixture(&f, None);
@@ -72,6 +76,10 @@ fn steam_list_should_rank_ghostrunner_hide_proton_and_leave_the_home_unchanged()
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "the steam kind is Linux only (Steam keeps its libraries elsewhere on macOS)"
+)]
 fn steam_list_should_note_an_unmounted_library_and_exit_0_and_exit_1_when_none_is_readable() {
     let f = Fixture::new();
     let gone = f.root().join("gone-lib");
@@ -98,6 +106,10 @@ fn steam_list_should_note_an_unmounted_library_and_exit_0_and_exit_1_when_none_i
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "the steam kind is Linux only (Steam keeps its libraries elsewhere on macOS)"
+)]
 fn steam_list_without_steam_should_exit_1_and_json_should_be_one_document() {
     let f = Fixture::new();
     let (code, out, err) = run(&f, &["steam", "list"]);

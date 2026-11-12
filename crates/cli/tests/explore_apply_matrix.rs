@@ -170,6 +170,10 @@ fn fake_dir_id() -> ItemIdentity {
 // ------------------------------------------------------------------------------------------ A-01 to A-04
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn a01_symlinks_at_every_depth_pointing_outside_root_are_unlinked_not_followed() {
     let fx = Fx::new();
     let ssh = fx.ex.home.join(".ssh");
@@ -188,6 +192,10 @@ fn a01_symlinks_at_every_depth_pointing_outside_root_are_unlinked_not_followed()
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn a02_symlink_swapped_for_a_directory_after_open_dir_is_not_followed() {
     let fx = Fx::new();
     std::fs::create_dir_all(fx.nm.join("victim")).unwrap();
@@ -215,6 +223,10 @@ fn a02_symlink_swapped_for_a_directory_after_open_dir_is_not_followed() {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn a03_entry_replaced_by_a_symlink_before_unlinkat_unlinks_the_link_only() {
     let fx = Fx::new();
     std::fs::write(fx.nm.join("target-file"), "t").unwrap();
@@ -378,6 +390,10 @@ fn many_trees(fx: &Fx, n: usize, files: usize) -> Vec<PathBuf> {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn a09_enospc_on_the_fifth_unlinkat_stops_every_later_item() {
     let fx = Fx::new();
     let trees = many_trees(&fx, 4, 3);
@@ -402,6 +418,10 @@ fn a09_enospc_on_the_fifth_unlinkat_stops_every_later_item() {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn a10_bytes_freed_before_enospc_are_in_the_result() {
     let fx = Fx::new();
     let d = fx.ex.code.join("w/big");
@@ -423,6 +443,10 @@ fn a10_bytes_freed_before_enospc_are_in_the_result() {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn a11_a_subdirectory_on_another_mount_id_is_not_entered_and_siblings_are_removed() {
     let fx = Fx::new();
     let mnt = fx.nm.join("mnt");

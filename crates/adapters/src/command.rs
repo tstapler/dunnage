@@ -96,6 +96,9 @@ fn spawn_inner(
         // `git status` otherwise takes and drops index.lock, which moves the admin entry's mtime that the
         // worktree age floor reads (Story 3.1.2); harmless to every other program
         .env("GIT_OPTIONAL_LOCKS", "0")
+        // macOS's /usr/bin/pip3 (Xcode's Python) otherwise writes .pyc files into ~/Library/Caches/com.apple.python
+        // while answering `pip cache dir`, so a dry run would change the home it only reads
+        .env("PYTHONDONTWRITEBYTECODE", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

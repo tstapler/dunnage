@@ -493,17 +493,21 @@ fn the_binary_should_print_two_lines_and_exit_2_when_another_process_holds_the_r
     let f = Fixture::new();
     let root = stale_fixture(&f);
     let id = dry_run_id(&f, &root);
-    // A second process holds run.lock: `flock` from util-linux keeps it for the life of the child.
+    // A second process holds run.lock: perl (on every runner; util-linux `flock` is not on macOS) takes flock(2) on it
+    // and keeps it for the life of the child.
     let lock = f.xdg("state").join("dunnage/run.lock");
     std::fs::create_dir_all(lock.parent().unwrap()).unwrap();
-    let mut holder = std::process::Command::new("flock")
-        .arg("--exclusive")
+    let mut holder = std::process::Command::new("perl")
+        .args([
+            "-MFcntl=:flock",
+            "-e",
+            "open(my $f, '>>', $ARGV[0]) or die; flock($f, LOCK_EX) or die; sleep 30",
+        ])
         .arg(&lock)
-        .args(["sleep", "30"])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("util-linux flock");
+        .expect("perl");
     std::thread::sleep(std::time::Duration::from_millis(400));
     let out = apply_cmd(&f, &root, &id).output().unwrap();
     holder.kill().unwrap();
