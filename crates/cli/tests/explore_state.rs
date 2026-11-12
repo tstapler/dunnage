@@ -195,6 +195,9 @@ fn big_tree(f: &Fixture) -> PathBuf {
     fs::canonicalize(root).unwrap()
 }
 
+/// `SigCgt` bits of SIGHUP (1), SIGINT (2), SIGQUIT (3), SIGTERM (15) and SIGTSTP (20); signal n is bit n-1.
+const INSTALLED: u64 = 0x1 | 0x2 | 0x4 | 1 << 14 | 1 << 19;
+
 fn signal_mask(pid: u32) -> u64 {
     let status = fs::read_to_string(format!("/proc/{pid}/status")).unwrap_or_default();
     status
@@ -228,8 +231,10 @@ fn signalled(sig: &str) -> (Option<i32>, String, String) {
         .unwrap();
     let pid = child.id();
     let end = Instant::now() + Duration::from_secs(20);
-    // SIGINT is bit 1, SIGTERM bit 14.
-    while signal_mask(pid) & 0x4002 != 0x4002 && Instant::now() < end {
+    // `install_term_handlers` installs the five handlers one after the other; a signal
+    // sent between two of them would meet the default action (the process dies of it, with no exit code), so the
+    // test waits for every one. Signal n is bit n-1 of `SigCgt`.
+    while signal_mask(pid) & INSTALLED != INSTALLED && Instant::now() < end {
         std::thread::sleep(Duration::from_millis(1));
     }
     kill("STOP", pid);

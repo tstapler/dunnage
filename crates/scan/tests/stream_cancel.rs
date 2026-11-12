@@ -180,6 +180,88 @@ fn truncated_save_should_keep_the_old_records_of_unvisited_directories_When_100_
     );
 }
 
+/// The cache save on the real filesystem, except that every chunk takes `hold` and the first one says so on
+/// `started`: the write stays open for as long as the test needs, so the gate is cleared during it for certain
+/// and no race with a fast write is left (a saturated host once finished the write before a polling thread ran).
+#[derive(Clone)]
+struct HeldIo {
+    started: Arc<std::sync::Mutex<std::sync::mpsc::Sender<()>>>,
+    hold: Duration,
+}
+
+struct HeldFile {
+    file: fs::File,
+    first: bool,
+    io: HeldIo,
+}
+
+impl cache::TempFile for HeldFile {
+    fn write_chunk(&mut self, chunk: &[u8]) -> std::io::Result<()> {
+        use std::io::Write;
+        self.file.write_all(chunk)?;
+        if std::mem::take(&mut self.first) {
+            let _ = self.io.started.lock().unwrap().send(());
+        }
+        std::thread::sleep(self.io.hold);
+        Ok(())
+    }
+    fn sync(&mut self) -> std::io::Result<()> {
+        self.file.sync_all()
+    }
+}
+
+struct HeldSave {
+    fake: FakeFs,
+    io: HeldIo,
+}
+
+impl cache::SaveIo for HeldIo {
+    fn create(&self, path: &Path) -> std::io::Result<Box<dyn cache::TempFile>> {
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)?;
+        Ok(Box::new(HeldFile {
+            file,
+            first: true,
+            io: self.clone(),
+        }))
+    }
+    fn rename(&self, from: &Path, to: &Path) -> std::io::Result<()> {
+        fs::rename(from, to)
+    }
+    fn free_bytes(&self, _dir: &Path) -> std::io::Result<u64> {
+        Ok(1 << 40)
+    }
+}
+
+use disk_cleanup_scan::walker::WalkHooks;
+
+impl WalkHooks for HeldSave {
+    fn load_cache(&self, path: &Path) -> std::collections::HashMap<PathBuf, cache::Rec> {
+        self.fake.load_cache(path)
+    }
+    fn stat_override(&self, p: &Path) -> Option<Result<disk_cleanup_scan::walker::DirStat, i32>> {
+        self.fake.stat_override(p)
+    }
+    fn list_override(
+        &self,
+        p: &Path,
+        st: &disk_cleanup_scan::walker::DirStat,
+    ) -> Option<Result<cache::Rec, i32>> {
+        self.fake.list_override(p, st)
+    }
+    fn dir_finished(&self, id: u64) {
+        self.fake.dir_finished(id);
+    }
+    fn worker_exited(&self) {
+        self.fake.worker_exited();
+    }
+    fn save_io(&self) -> Option<&dyn cache::SaveIo> {
+        Some(&self.io)
+    }
+}
+
 #[test]
 fn save_should_abort_and_leave_no_file_When_the_gate_is_cleared_during_the_write() {
     let fake = FakeFs::new(1, 1);
@@ -196,22 +278,23 @@ fn save_should_abort_and_leave_no_file_When_the_gate_is_cleared_during_the_write
     let cancel = Arc::new(AtomicBool::new(false));
     let req = request(&roots, 1, &cancel);
     let gate = Arc::clone(&req.save);
-    let watch_dir = dir.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let hooks = HeldSave {
+        fake,
+        io: HeldIo {
+            started: Arc::new(std::sync::Mutex::new(tx)),
+            hold: Duration::from_millis(25),
+        },
+    };
+    // Clears the gate once the first chunk is on disk; the remaining chunks (the cache is about 20 MiB, in
+    // 1 MiB chunks of 25 ms each) leave the abort watcher half a second to notice.
     let clearer = std::thread::spawn(move || {
-        let t = Instant::now();
-        while t.elapsed() < Duration::from_secs(20) {
-            let writing = fs::read_dir(&watch_dir)
-                .unwrap()
-                .any(|e| e.unwrap().file_name().to_string_lossy().ends_with(".tmp"));
-            if writing {
-                gate.store(false, Ordering::Relaxed);
-                return;
-            }
-            std::thread::sleep(Duration::from_micros(200));
+        if rx.recv_timeout(Duration::from_secs(60)).is_ok() {
+            gate.store(false, Ordering::Relaxed);
         }
     });
     let summary = cached(&dir)
-        .stream(&req, &Recorder::default().sink(), &fake)
+        .stream(&req, &Recorder::default().sink(), &hooks)
         .unwrap();
     clearer.join().unwrap();
     assert!(
