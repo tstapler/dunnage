@@ -42,6 +42,7 @@ use super::env::{read_root, tool_dirs, Wired};
 use super::kinds::{KindCtx, KindRegistry};
 use super::run_guard::run_lock_path;
 use crate::explore::actions::{ExplorerPorts, RealExplorerActions};
+use crate::explore::handle::DeleteWiring;
 use crate::explore::text::ExploreEnv;
 
 /// Walker threads when `--jobs` is not given: the UI thread shares the machine (SA s3).
@@ -312,6 +313,25 @@ pub fn mark_check_fn(base: &Dirs, roots: &RootSet, exe: PathBuf, tty: bool) -> A
     })
 }
 
+/// The roots as `RootSet::resolve_on` gives them now, from `config.toml` alone (the explorer never takes a
+/// `--root`, ADR-006 O-8). The apply calls this again and compares the result with the reviewed plan.
+pub fn resolve_roots_now(base: &Dirs) -> Result<RootSet, String> {
+    let config = disk_cleanup_adapters::config::read_config(
+        &disk_cleanup_adapters::config::config_path(base),
+    )
+    .map_err(|e| format!("error: {e}."))?;
+    let cwd = std::env::current_dir().unwrap_or_else(|_| base.home.clone());
+    RootSet::resolve_on(
+        base,
+        &[],
+        config.roots.as_deref(),
+        &cwd,
+        &super::dirs::real_canon,
+        &|p| disk_cleanup_core::ports::Fs::fs_type(&super::env::RealFs, p),
+    )
+    .map_err(|e| e.text())
+}
+
 /// Wires the interactive explorer. Opens the state directory (the first run creates the reserve files).
 pub fn build_explorer_env(base: &Dirs, roots: &RootSet, settings: &Settings) -> ExplorerEnv {
     let wired = Wired::build(base, true);
@@ -383,8 +403,16 @@ pub fn build_explorer_env(base: &Dirs, roots: &RootSet, settings: &Settings) -> 
         let activity = Arc::clone(&activity);
         move |_: &Path| activity.load(Ordering::SeqCst) > 0
     };
-    let actions: Arc<dyn ExplorerActions> =
-        Arc::new(RealExplorerActions::new(ports).with_scanning_probe(Arc::new(still_scanning)));
+    let delete_wiring = Arc::new(DeleteWiring {
+        base: base.clone(),
+        roots: roots.clone(),
+        exe: std::env::current_exe().unwrap_or_default(),
+    });
+    let actions: Arc<dyn ExplorerActions> = Arc::new(
+        RealExplorerActions::new(ports)
+            .with_scanning_probe(Arc::new(still_scanning))
+            .with_delete_wiring(delete_wiring),
+    );
 
     let exe = std::env::current_exe().unwrap_or_default();
     let mounts = mount_table();

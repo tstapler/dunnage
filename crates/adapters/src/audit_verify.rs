@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+use crate::audit_verify_explorer::{self as explorer, ExplorerBook};
+
 /// The reviewed table, compiled into the binary.
 pub const EMBEDDED_TABLE: &str = include_str!("../../../ci/allowed-roots.txt");
 
@@ -107,7 +109,7 @@ fn seg_matches(pat: &str, comp: &[u8]) -> bool {
 }
 
 /// A lexically clean absolute path as its components; `None` for anything else.
-fn components(p: &[u8]) -> Option<Vec<&[u8]>> {
+pub(crate) fn components(p: &[u8]) -> Option<Vec<&[u8]>> {
     let rest = p.strip_prefix(b"/")?;
     if rest.is_empty() {
         return Some(Vec::new());
@@ -119,11 +121,11 @@ fn components(p: &[u8]) -> Option<Vec<&[u8]>> {
         .then_some(comps)
 }
 
-fn under<'a>(p: &'a [&'a [u8]], root: &[&[u8]]) -> Option<&'a [&'a [u8]]> {
+pub(crate) fn under<'a>(p: &'a [&'a [u8]], root: &[&[u8]]) -> Option<&'a [&'a [u8]]> {
     p.starts_with(root).then(|| &p[root.len()..])
 }
 
-fn expand(raw: &str, home: &Path) -> Vec<u8> {
+pub(crate) fn expand(raw: &str, home: &Path) -> Vec<u8> {
     use std::os::unix::ffi::OsStrExt;
     match raw.strip_prefix("~/") {
         Some(rest) => {
@@ -156,6 +158,9 @@ pub struct VerifyReport {
     /// Lines this binary could not judge: not JSON (a torn last line included) or a schema it skips. Each
     /// names the line; any of them makes the exit code non-zero (Task 6.6.5g, review C13).
     pub warnings: Vec<String>,
+    /// A last line with no newline that does not parse (a write cut short by a crash): named and printed,
+    /// never a failure by itself (Task 6.6.3c).
+    pub notes: Vec<String>,
 }
 
 impl VerifyReport {
@@ -204,7 +209,32 @@ pub struct VerifyInputs<'a> {
     pub config_roots: Option<&'a [PathBuf]>,
 }
 
-fn show(bytes: &[u8]) -> String {
+/// What only the verifying machine knows, read at verify time and never from the log: the tool's own state
+/// directories (rule M5 of the explorer's marks).
+#[derive(Debug, Clone, Default)]
+pub struct VerifyExtras {
+    pub own_dirs: Vec<PathBuf>,
+}
+
+impl VerifyInputs<'_> {
+    /// The roots a deletion is judged against: the reviewed table's defaults (`~` expanded) plus the owner's
+    /// `config.toml`, never the roots the run recorded about itself.
+    pub(crate) fn trusted_roots(&self) -> Vec<Vec<u8>> {
+        let mut roots: Vec<Vec<u8>> = self
+            .table
+            .default_roots
+            .iter()
+            .map(|r| expand(r, self.home))
+            .collect();
+        if let Some(extra) = self.config_roots {
+            use std::os::unix::ffi::OsStrExt;
+            roots.extend(extra.iter().map(|r| r.as_os_str().as_bytes().to_vec()));
+        }
+        roots
+    }
+}
+
+pub(crate) fn show(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     let mut s = String::new();
     for chunk in bytes.utf8_chunks() {
@@ -216,7 +246,7 @@ fn show(bytes: &[u8]) -> String {
     s
 }
 
-fn unhex(h: &str) -> Option<Vec<u8>> {
+pub(crate) fn unhex(h: &str) -> Option<Vec<u8>> {
     if !h.len().is_multiple_of(2) {
         return None;
     }
@@ -329,27 +359,50 @@ fn judge(kind: &str, path: &[u8], inp: &VerifyInputs, rec: &Recorded) -> Verdict
 
 /// Reads the whole log (streaming) and compares each `removed` result that has a path.
 pub fn verify_audit(log: impl BufRead, inp: &VerifyInputs) -> Result<VerifyReport, VerifyError> {
+    verify_audit_with(log, inp, &VerifyExtras::default())
+}
+
+/// [`verify_audit`] plus what only the verifying machine knows (the tool's own directories, for the explorer's
+/// rule M5). Without `extras.own_dirs` the explorer's own-state check has nothing to compare with.
+pub fn verify_audit_with(
+    mut log: impl BufRead,
+    inp: &VerifyInputs,
+    extras: &VerifyExtras,
+) -> Result<VerifyReport, VerifyError> {
     let mut report = VerifyReport::default();
     let mut recorded: BTreeMap<String, Recorded> = BTreeMap::new();
     let mut open: Vec<String> = Vec::new();
-    for (n, line) in log.lines().enumerate() {
-        let line = line.map_err(VerifyError::Io)?;
+    let mut explorer = ExplorerBook::default();
+    let mut raw = String::new();
+    let mut n = 0usize;
+    loop {
+        raw.clear();
+        if log.read_line(&mut raw).map_err(VerifyError::Io)? == 0 {
+            break;
+        }
+        n += 1;
+        let torn = !raw.ends_with('\n');
+        let line = raw.trim_end_matches('\n');
         if line.trim().is_empty() {
             continue;
         }
-        let Ok(v) = serde_json::from_str::<Value>(&line) else {
-            report.warnings.push(format!(
-                "line {}: not valid JSON, so it was not checked",
-                n + 1
-            ));
+        let Ok(v) = serde_json::from_str::<Value>(line) else {
+            if torn {
+                report.notes.push(format!(
+                    "line {n}: unfinished last line (no newline, not valid JSON): a write cut short; it was not checked"
+                ));
+            } else {
+                report
+                    .warnings
+                    .push(format!("line {n}: not valid JSON, so it was not checked"));
+            }
             continue;
         };
         if let Some(schema) = v.get("schema").and_then(Value::as_u64) {
             if schema == 2 {
-                report.warnings.push(format!(
-                    "line {}: schema 2 is not checked by this binary",
-                    n + 1
-                ));
+                report
+                    .warnings
+                    .push(format!("line {n}: schema 2 is not checked by this binary"));
                 continue;
             }
             if schema != 1 {
@@ -365,6 +418,7 @@ pub fn verify_audit(log: impl BufRead, inp: &VerifyInputs) -> Result<VerifyRepor
             Some("run_start") => {
                 report.runs += 1;
                 open.push(run_id.clone());
+                explorer.run_start(&run_id, &v);
                 recorded.insert(
                     run_id,
                     Recorded {
@@ -373,27 +427,37 @@ pub fn verify_audit(log: impl BufRead, inp: &VerifyInputs) -> Result<VerifyRepor
                     },
                 );
             }
-            Some("run_end") => open.retain(|r| *r != run_id),
+            Some("run_end") => {
+                explorer.run_end(&run_id, &v);
+                open.retain(|r| *r != run_id);
+            }
+            Some("explorer_confirm") => explorer.confirm(&run_id, &v, &mut report),
             Some("result") if v.get("status").and_then(Value::as_str) == Some("removed") => {
-                check_result(&v, &run_id, inp, recorded.get(&run_id), &mut report);
+                explorer.result(&run_id, &v);
+                check_result(&v, &run_id, inp, extras, recorded.get(&run_id), &mut report);
             }
             // A failed or interrupted delete may have removed entries below the path before it stopped.
             Some("result") if !is_skipped(&v) => {
+                explorer.result(&run_id, &v);
                 check_attempt(
                     &v,
                     "partial or failed delete",
                     &run_id,
                     inp,
+                    extras,
                     recorded.get(&run_id),
                     &mut report,
                 );
             }
+            Some("result") => explorer.skipped(&run_id, &v),
             Some("intent") => {
+                explorer.intent(&run_id, &v);
                 check_attempt(
                     &v,
                     "intent",
                     &run_id,
                     inp,
+                    extras,
                     recorded.get(&run_id),
                     &mut report,
                 );
@@ -401,6 +465,7 @@ pub fn verify_audit(log: impl BufRead, inp: &VerifyInputs) -> Result<VerifyRepor
             _ => {}
         }
     }
+    explorer.finish(&mut report);
     report.unfinished = open;
     Ok(report)
 }
@@ -419,27 +484,67 @@ fn attempt_path(v: &Value) -> Option<&str> {
     })
 }
 
+/// The exact bytes of the path of a `result` or an `intent` line: `path_hex` when the line has one (it must
+/// be valid hex that agrees with the lossy `path`), else `path`. `Err` is the reason the line is a violation.
+pub(crate) fn line_path(v: &Value) -> Option<Result<Vec<u8>, (String, &'static str)>> {
+    let path = attempt_path(v)?;
+    Some(match v.get("path_hex").and_then(Value::as_str) {
+        None => Ok(path.as_bytes().to_vec()),
+        Some(h) => match unhex(h) {
+            None => Err((path.to_string(), "path_hex is not valid hex")),
+            Some(b) if String::from_utf8_lossy(&b) != path => {
+                Err((show(&b), "path and path_hex differ"))
+            }
+            Some(b) => Ok(b),
+        },
+    })
+}
+
+/// One violation judged by the table (or, for the explorer's kind, by its code rule).
+fn judge_line(
+    kind: &str,
+    bytes: &[u8],
+    inp: &VerifyInputs,
+    extras: &VerifyExtras,
+    rec: &Recorded,
+) -> Verdict {
+    if kind == explorer::KIND {
+        return match explorer::judge(bytes, inp, extras) {
+            None => Verdict::Inside,
+            Some(reason) => Verdict::Outside(reason),
+        };
+    }
+    judge(kind, bytes, inp, rec)
+}
+
 /// A `Partial` result or an `intent` whose path the table does not allow. It is not a counted deletion.
 fn check_attempt(
     v: &Value,
     what: &str,
     run_id: &str,
     inp: &VerifyInputs,
+    extras: &VerifyExtras,
     rec: Option<&Recorded>,
     report: &mut VerifyReport,
 ) {
-    let Some(path) = attempt_path(v) else {
-        return;
-    };
     let kind = v.get("kind").and_then(Value::as_str).unwrap_or("");
+    let violation = |path: String, reason: String| Violation {
+        run_id: run_id.to_string(),
+        kind: kind.to_string(),
+        path,
+        reason: format!("{what}: {reason}"),
+    };
+    let bytes = match line_path(v) {
+        None => return,
+        Some(Err((shown, why))) => {
+            report.violations.push(violation(shown, why.to_string()));
+            return;
+        }
+        Some(Ok(b)) => b,
+    };
     let none = Recorded::default();
-    if let Verdict::Outside(reason) = judge(kind, path.as_bytes(), inp, rec.unwrap_or(&none)) {
-        report.violations.push(Violation {
-            run_id: run_id.to_string(),
-            kind: kind.to_string(),
-            path: path.to_string(),
-            reason: format!("{what}: {reason}"),
-        });
+    if let Verdict::Outside(reason) = judge_line(kind, &bytes, inp, extras, rec.unwrap_or(&none)) {
+        report.violations.push(violation(show(&bytes), reason));
     }
 }
 
@@ -447,6 +552,7 @@ fn check_result(
     v: &Value,
     run_id: &str,
     inp: &VerifyInputs,
+    extras: &VerifyExtras,
     rec: Option<&Recorded>,
     report: &mut VerifyReport,
 ) {
@@ -465,32 +571,31 @@ fn check_result(
         path,
         reason: reason.to_string(),
     };
-    let bytes = match v.get("path_hex").and_then(Value::as_str) {
+    let bytes = match line_path(v) {
+        Some(Ok(b)) => b,
+        Some(Err((shown, why))) => {
+            report.violations.push(violation(shown, why));
+            return;
+        }
         None => path.as_bytes().to_vec(),
-        Some(h) => match unhex(h) {
-            None => {
-                report
-                    .violations
-                    .push(violation(path.to_string(), "path_hex is not valid hex"));
-                return;
-            }
-            Some(b) if String::from_utf8_lossy(&b) != path => {
-                report
-                    .violations
-                    .push(violation(show(&b), "path and path_hex differ"));
-                return;
-            }
-            Some(b) => b,
-        },
     };
     let none = Recorded::default();
-    if let Verdict::Outside(reason) = judge(&kind, &bytes, inp, rec.unwrap_or(&none)) {
+    if let Verdict::Outside(reason) = judge_line(&kind, &bytes, inp, extras, rec.unwrap_or(&none)) {
         report.violations.push(violation(show(&bytes), &reason));
     }
 }
 
 /// `verify_audit` over a file; an unreadable log is `VerifyError::Io`.
 pub fn verify_file(path: &Path, inp: &VerifyInputs) -> Result<VerifyReport, VerifyError> {
+    verify_file_with(path, inp, &VerifyExtras::default())
+}
+
+/// [`verify_file`] with the verifying machine's own directories.
+pub fn verify_file_with(
+    path: &Path,
+    inp: &VerifyInputs,
+    extras: &VerifyExtras,
+) -> Result<VerifyReport, VerifyError> {
     let f = std::fs::File::open(path).map_err(VerifyError::Io)?;
-    verify_audit(io::BufReader::new(f), inp)
+    verify_audit_with(io::BufReader::new(f), inp, extras)
 }

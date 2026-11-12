@@ -270,3 +270,31 @@ pub fn measure<D: DirOps>(
     }
     w.stats
 }
+
+/// `treestat` as the explorer planner's size port (Task 6.6.3b): the plan and the apply's re-measure use this one
+/// walk, so a figure the owner saw and the figure checked before the delete are measured the same way.
+pub struct TreestatSizer<D: DirOps> {
+    ops: D,
+}
+
+impl<D: DirOps> TreestatSizer<D> {
+    pub fn new(ops: D) -> TreestatSizer<D> {
+        TreestatSizer { ops }
+    }
+}
+
+impl<D: DirOps> disk_cleanup_core::explorer_plan::TreeSizer for TreestatSizer<D> {
+    fn measure(
+        &self,
+        path: &std::path::Path,
+    ) -> std::io::Result<disk_cleanup_core::explorer_plan::TreeSize> {
+        let dir = self.ops.open_root(path)?;
+        let dev = self.ops.fstat(&dir)?.ident.dev;
+        let stats = measure(&self.ops, &dir, RootDev(dev), MeasureOpts::default());
+        Ok(disk_cleanup_core::explorer_plan::TreeSize {
+            allocated: stats.allocated,
+            newest_mtime: stats.newest_mtime.map(crate::mtime_probe::unix_secs),
+            git_repos: stats.git_repos,
+        })
+    }
+}

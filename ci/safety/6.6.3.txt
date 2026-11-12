@@ -9,3 +9,36 @@ safety_for_allowed_roots_should_refuse_When_the_planned_device_differs_from_the_
 safety_for_allowed_roots_should_refuse_a_witness_whose_identity_is_home_or_an_ancestor   # 6.6.3f
 safety_decide_path_common_should_refuse_an_ancestor_of_home_by_identity_When_it_is_reached_under_another_spelling   # 6.6.3f
 safety_delete_tree_should_refuse_and_keep_the_tree_When_expect_is_the_fresh_identity_but_the_plan_saw_another   # 6.6.3f
+# Task 6.6.3e: the explorer-selection target.
+safety_target_should_remove_a_reviewed_directory_and_nothing_beside_it   # 6.6.3e
+safety_target_should_refuse_the_item_and_delete_nothing_When_the_root_mount_id_is_unavailable   # 6.6.3e
+safety_target_should_report_changed_since_the_plan_When_the_directory_is_swapped_after_the_guard   # 6.6.3e
+safety_target_should_refuse_an_opened_directory_that_is_home_or_an_ancestor_by_identity   # 6.6.3e
+safety_target_should_not_enter_a_subdirectory_the_engine_sees_on_another_mount   # 6.6.3e
+# Tasks 6.6.3b and 6.6.3d: the apply sequence, its signals and mounts, the token-site and containment checks.
+safety_apply_should_delete_only_the_reviewed_directories_in_the_documented_order_When_nothing_changed   # 6.6.3b
+safety_apply_should_say_deleting_is_disabled_and_mint_nothing_When_the_stamp_is_refused   # 6.6.3b
+safety_apply_should_leave_the_tree_unchanged_When_the_audit_log_cannot_be_written   # 6.6.3b
+safety_apply_should_stop_after_the_first_item_and_keep_the_second_When_an_intent_cannot_be_written   # 6.6.3b
+safety_apply_should_skip_an_item_that_became_a_symlink_to_a_directory_that_must_stay   # 6.6.3b
+safety_apply_should_skip_an_item_removed_and_recreated_with_a_new_inode   # 6.6.3b
+safety_apply_should_skip_every_item_below_a_parent_that_was_swapped_for_a_symlink   # 6.6.3b
+safety_apply_should_skip_every_item_When_the_scan_root_was_replaced_by_a_new_directory   # 6.6.3b
+safety_apply_should_skip_every_item_When_the_scan_root_became_a_symlink   # 6.6.3b
+safety_apply_should_skip_an_item_When_the_roots_resolved_now_no_longer_hold_it   # 6.6.3b
+safety_apply_should_end_refused_and_delete_nothing_When_the_roots_cannot_be_resolved_now   # 6.6.3b
+safety_apply_should_skip_an_item_that_is_now_inside_the_tools_own_state_M5_against_fresh_data   # 6.6.3b
+safety_apply_should_leave_an_intent_with_a_result_and_a_run_end_When_the_abort_is_raised_inside_the_second_item   # 6.6.3b
+safety_apply_should_skip_a_reviewed_directory_that_a_tmpfs_now_covers   # 6.6.3b
+safety_apply_should_never_delete_the_source_of_a_bind_mount_made_below_a_reviewed_directory   # 6.6.3b
+safety_apply_should_stop_at_the_next_entry_and_exit_130_When_sigint_arrives_mid_item   # 6.6.3b
+safety_apply_should_stop_at_the_next_entry_and_exit_143_When_sigterm_arrives_mid_item   # 6.6.3b
+safety_apply_should_stop_at_the_next_entry_and_exit_143_When_sighup_arrives_mid_item   # 6.6.3b
+safety_apply_should_stop_at_the_next_entry_and_exit_143_When_sigquit_arrives_mid_item   # 6.6.3b
+safety_explorer_apply_should_add_no_second_mint_site_and_keep_tui_and_unlink_checks_green   # 6.6.3b
+safety_default_build_should_refuse_d_and_register_no_explorer_apply   # 6.6.3b
+# Task 6.6.3c: the explorer checks of audit verify.
+safety_audit_verify_should_read_back_a_real_explorer_run_written_by_the_real_audit_sink_as_clean   # 6.6.3c
+safety_explorer_confirm_should_be_synced_to_disk_when_it_is_written   # 6.6.3c
+safety_target_should_report_changed_since_the_plan_When_the_directory_vanishes_after_the_guard   # 6.6.3e
+safety_apply_should_refuse_a_forged_set_over_the_mark_limits_or_with_one_mark_inside_another   # 6.6.3b

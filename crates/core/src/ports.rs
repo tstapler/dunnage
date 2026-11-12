@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use crate::allowed::WorktreeRemoval;
 use crate::apply_token::ApplyToken;
-use crate::audit_types::{Intent, ItemResult, RunEnd, RunStart};
+use crate::audit_types::{ExplorerConfirm, Intent, ItemResult, RunEnd, RunStart};
 use crate::delete_types::{AbortFlag, DeleteError, DirEntryInfo, StatInfo};
 use crate::dirs::Dirs;
 use crate::plan_state::{SaveOutcome, SavedPlan, SavedSelection};
@@ -482,6 +482,11 @@ pub trait AuditSink: Send + Sync {
     fn intent(&self, rec: &Intent) -> io::Result<()>;
     fn result(&self, rec: &ItemResult) -> io::Result<()>;
     fn run_end(&self, rec: &RunEnd) -> io::Result<()>;
+    /// The explorer's `explorer_confirm` line, written with `sync_data` before the first `intent`. The default
+    /// refuses, so a sink that does not know the line fails the explorer's apply closed (Task 6.6.3c).
+    fn explorer_confirm(&self, _rec: &ExplorerConfirm) -> io::Result<()> {
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
 }
 
 pub trait RunGuard: Send + Sync {

@@ -1,0 +1,44 @@
+# Tasks 6.6.3b, 6.6.3c and 6.6.3e. No survivor is accepted; the two excluded timeouts are in .cargo/mutants.toml.
+#
+# cargo-mutants 27.1.0 over the files of 6.6.3b.files, with the test targets that exercise them (the workspace run of
+# `make mutants` includes these plus every other test):
+#   env -u CARGO_TARGET_DIR cargo mutants --no-shuffle -j 3 --timeout 120 \
+#     -f crates/adapters/src/targets/explorer_selection.rs -f crates/cli/src/explore/apply.rs \
+#     -f crates/cli/src/explore/handle.rs -f crates/adapters/src/audit_verify_explorer.rs \
+#     --test-package disk-cleanup --cargo-test-arg=--test=explore_apply --cargo-test-arg=--test=explore_target \
+#     --cargo-test-arg=--test=explore_apply_matrix --cargo-test-arg=--test=explore_apply_mounts \
+#     --cargo-test-arg=--test=explore_apply_signals --cargo-test-arg=--test=audit_verify_explorer \
+#     --cargo-test-arg=--test=explore_review
+#
+# Run 1 (94 mutants): 19 missed, 46 caught, 27 unviable, 2 timeouts. Each survivor got a test:
+#   ExplorerRun::refuse and ::send -> ()                         : apply_should_send_progress_item_and_done_messages_in_order_to_the_loop,
+#                                                                  apply_should_send_exactly_one_refused_message_..., explorer_run_refuse_should_send_...
+#   outcome_of measured_bytes (== and >)                          : apply_should_leave_no_measured_bytes_on_a_skipped_item_and_some_on_a_removed_one
+#   status_of_failure Refused == aborted                          : the abort tests assert the partly-removed Error row and the Aborted skip
+#   sequence: Progress index n + 1, stopped_early, interrupted    : the same messages test, and the two interrupted/not-interrupted tests
+#   reviewed_roots -> default / without scan_roots                : apply_should_record_the_reviewed_scan_roots_in_run_start
+#   review_marks count == 0                                       : explore_review.rs
+#   candidate_of is_dir; name, selectors, discover                : explore_target.rs
+#   recheck lstat NotFound / ENOTDIR / other errno; remove NotFound: target_should_call_a_vanished_or_replaced_path_...,
+#                                                                  safety_target_should_report_changed_since_the_plan_When_the_directory_vanishes_after_the_guard
+# The 2 timeouts were `bridge_aborts` `while !done` -> `while done` (an endless loop) and the Progress index `n + 1` -> `n - 1`
+# (an underflow panic that left the scoped bridge thread running). The bridge now stops through `StopOnDrop`, so the second
+# is a failed test; the first no longer has a `!` to delete (`loop { if done { break } .. }`).
+#
+# Run 2 (162 mutants, same files plus audit_verify_explorer.rs): 3 missed, 130 caught, 27 unviable, 2 timeouts:
+#   judge_run `touched` (> and +)                                 : audit_verify_should_flag_a_missing_confirm_only_once_the_run_did_something
+#   own_dirs -> vec![Default::default()]                          : own_dirs_should_name_the_three_tool_directories_and_their_canonical_spellings
+#
+# Run 3 (apply.rs bridge/sequence, 16 mutants): 13 caught, 2 unviable, 1 timeout: `StopOnDrop::drop -> ()` hangs the scope
+# when the sequence panics; the hang is the detection and the mutant is excluded in .cargo/mutants.toml.
+#
+# Run 4 (the changed parts of audit_verify.rs, treestat.rs, audit.rs, handle.rs, and judge_fresh/measure_attributed of
+# explorer_plan.rs; 53 mutants): 3 missed, 46 caught, 4 unviable. The survivors got tests:
+#   verify_audit_with `open.retain(.. != ..)` (unfinished list)   : assert_clean checks `unfinished` is empty
+#   verify_file -> Ok(Default::default())                         : verify_file_should_read_a_log_from_disk_like_verify_audit
+#   judge_fresh `r == NotADirectory` note                         : plan_rows_should_explain_a_file_mark_and_say_nothing_extra_for_other_refusals
+# (measure_attributed is killed by the 2 GiB re-measure test; a core-only run does not include the cli tests that kill it.)
+#
+# Run 5 (judge_fresh, verify_file, verify_audit_with, review_marks after the tests above; 29 mutants): 27 caught, 2 unviable,
+# 0 missed. The mutants of run 1 and 2 were not re-run whole after the later edits (the set limits in `set_refusal`, `StopOnDrop`);
+# those functions were covered by run 3 and by the forged-set test.

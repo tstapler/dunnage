@@ -96,6 +96,7 @@ fn end(run: &str) -> RunEnd {
         causes: vec![],
         explained: true,
         interrupted: false,
+        refused: None,
     }
 }
 

@@ -6,6 +6,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::allowed::Allowed;
 use crate::candidate::{Candidate, ExplorerFacts, KindFacts, Locator};
 use crate::delete_types::FileKind;
 use crate::escape::escape_os;
@@ -222,24 +223,34 @@ fn skip_of(r: &MarkRefusal) -> SkipReason {
     }
 }
 
-struct Judged {
-    guard: Guarded,
-    note: Option<String>,
+/// What the rules M1 to M5 need to be asked again on fresh data: the same inputs at plan time and at apply
+/// time, so the screen, the plan and the delete cannot disagree.
+pub struct FreshCheck<'a> {
+    pub roots: &'a RootSet,
+    pub own_state: &'a OwnState,
+    pub fs: &'a dyn Fs,
 }
 
-/// Rules M1 to M5 for one existing mark: the engine's `decide_path_common` on fresh facts, then `mark_check`
-/// (the same rules the screen applied when the mark was made).
-fn judge(
+/// The answer of [`judge_fresh`]: the engine's witness (or the catalogue reason) and the M3 note.
+pub struct FreshVerdict {
+    pub allowed: Result<Allowed, SkipReason>,
+    pub note: Option<String>,
+}
+
+/// Rules M1 to M5 for one existing mark: the engine's `decide_path_common` on fresh facts (its `Allowed` is the
+/// only way to a `DeletePolicy`), then `mark_check` (the same rules the screen applied when the mark was made).
+/// `st` is the `lstat` of `path` taken just now.
+pub fn judge_fresh(
     path: &Path,
     st: &crate::delete_types::StatInfo,
     mounts: &MountTable,
     mount_points: &[PathBuf],
-    ctx: &ExplorerPlanCtx<'_>,
-) -> Judged {
-    let root_dev = ctx
+    fc: &FreshCheck<'_>,
+) -> FreshVerdict {
+    let root_dev = fc
         .roots
         .root_of(path)
-        .and_then(|r| ctx.fs.lstat(r).ok())
+        .and_then(|r| fc.fs.lstat(r).ok())
         .map_or(RootDev(st.ident.dev), |s| RootDev(s.ident.dev));
     let facts = Facts {
         kind: Kind::ExplorerSelection,
@@ -249,18 +260,21 @@ fn judge(
         root_dev,
         is_mount_point: mount_points.iter().any(|m| m == path),
     };
-    if let GuardDecision::Skip(r) = decide_path_common(&facts, ctx.roots) {
-        return Judged {
-            guard: Guarded::Skip(r),
-            note: None,
-        };
-    }
-    let mark_facts = FsMarkFacts { fs: ctx.fs };
+    let allowed = match decide_path_common(&facts, fc.roots) {
+        GuardDecision::Skip(r) => {
+            return FreshVerdict {
+                allowed: Err(r),
+                note: None,
+            };
+        }
+        GuardDecision::Allow(a) => a,
+    };
+    let mark_facts = FsMarkFacts { fs: fc.fs };
     let env = MarkEnv {
-        roots: ctx.roots.scan_roots(),
-        home: ctx.roots.home(),
+        roots: fc.roots.scan_roots(),
+        home: fc.roots.home(),
         mounts,
-        own_state: ctx.own_state,
+        own_state: fc.own_state,
         facts: &mark_facts,
         tty: false,
     };
@@ -272,21 +286,67 @@ fn judge(
             marks: &empty,
         },
     ) {
-        Ok(ok) => Judged {
-            guard: Guarded::Allow,
+        Ok(ok) => FreshVerdict {
+            allowed: Ok(allowed),
             note: ok.note,
         },
-        Err(r) => Judged {
-            guard: Guarded::Skip(skip_of(&r)),
+        Err(r) => FreshVerdict {
+            allowed: Err(skip_of(&r)),
             note: (r == MarkRefusal::NotADirectory)
                 .then(|| "not a folder: the explorer deletes folders only".to_string()),
         },
     }
 }
 
+struct Judged {
+    guard: Guarded,
+    note: Option<String>,
+}
+
+fn judge(
+    path: &Path,
+    st: &crate::delete_types::StatInfo,
+    mounts: &MountTable,
+    mount_points: &[PathBuf],
+    ctx: &ExplorerPlanCtx<'_>,
+) -> Judged {
+    let fc = FreshCheck {
+        roots: ctx.roots,
+        own_state: ctx.own_state,
+        fs: ctx.fs,
+    };
+    let v = judge_fresh(path, st, mounts, mount_points, &fc);
+    Judged {
+        guard: match v.allowed {
+            Ok(_) => Guarded::Allow,
+            Err(r) => Guarded::Skip(r),
+        },
+        note: v.note,
+    }
+}
+
 fn gone_like(e: &io::Error) -> bool {
     // ENOENT, or ENOTDIR when a parent was replaced by a file.
     matches!(e.kind(), io::ErrorKind::NotFound) || e.raw_os_error() == Some(20)
+}
+
+/// Allocated bytes less the shared extents the probe found: the figure the plan shows and the apply's
+/// re-measure compares, computed in this one place.
+pub fn attributed(allocated: u64, shared: Option<u64>) -> u64 {
+    allocated.saturating_sub(shared.unwrap_or(0))
+}
+
+/// The attributed size of `path` right now, measured as the plan measured it.
+pub fn measure_attributed(
+    path: &Path,
+    sizer: &dyn TreeSizer,
+    extents: Option<&dyn ExtentProbe>,
+) -> io::Result<u64> {
+    let t = sizer.measure(path)?;
+    Ok(attributed(
+        t.allocated.0,
+        extents.and_then(|e| shared_of(e, path)),
+    ))
 }
 
 fn shared_of(extents: &dyn ExtentProbe, path: &Path) -> Option<u64> {
@@ -302,7 +362,8 @@ fn shared_of(extents: &dyn ExtentProbe, path: &Path) -> Option<u64> {
     }
 }
 
-fn mount_facts(probe: &dyn SystemProbe) -> (MountTable, Vec<PathBuf>) {
+/// The mount table as `mark_check` reads it, and the plain list of mount points.
+pub fn mount_facts(probe: &dyn SystemProbe) -> (MountTable, Vec<PathBuf>) {
     let Ok(entries) = probe.mounts() else {
         return (MountTable::default(), Vec::new());
     };
@@ -380,7 +441,7 @@ fn plan_one(
         )),
     };
     row.shared_bytes = ctx.extents.and_then(|e| shared_of(e, path));
-    row.attributed_bytes = allocated.0.saturating_sub(row.shared_bytes.unwrap_or(0));
+    row.attributed_bytes = attributed(allocated.0, row.shared_bytes);
     let candidate = Candidate::new(
         Locator::Path(path.to_path_buf()),
         KindFacts::Explorer(ExplorerFacts { is_dir }),

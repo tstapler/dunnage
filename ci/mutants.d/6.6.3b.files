@@ -1,0 +1,7 @@
+# Tasks 6.6.3b, 6.6.3c and 6.6.3e: the explorer apply sequence, the explorer-selection target, the in-session review
+# and the explorer rules of audit verify. (explorer_plan.rs and plan.rs are listed by 6.6.2.files; the new
+# FreshCheck/judge_fresh/measure_attributed in explorer_plan.rs are covered by the same run.)
+crates/adapters/src/targets/explorer_selection.rs
+crates/cli/src/explore/apply.rs
+crates/cli/src/explore/handle.rs
+crates/adapters/src/audit_verify_explorer.rs

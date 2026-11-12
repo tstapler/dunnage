@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use disk_cleanup_core::executor::{Executor, Mode, RunOptions, RunReport};
-use disk_cleanup_core::explore::confirm::ConfirmedPlan;
+use disk_cleanup_core::explore::confirm::{ConfirmedPlan, ReviewedPlan};
 use disk_cleanup_core::explore::msg::{DeleteMsg, MarkRefusal, PlanPreview, PreviewRow, ScanMsg};
 use disk_cleanup_core::explore::ports::{DeleteHandle, ExplorerActions, Handoff, PreviewHandle};
 use disk_cleanup_core::explore::refusal::RefusalCtx;
@@ -25,12 +25,16 @@ use disk_cleanup_core::selector::{KindSelector, Selection};
 use disk_cleanup_core::target::Target;
 use disk_cleanup_core::{Dirs, RunRoots, SelectorId};
 
+use super::apply::{ExplorerRun, NOT_IN_BUILD};
+use super::handle::{review_marks, DeleteWiring};
 use super::handoff::{self, CLOSED_LINE};
 use crate::app::{floor_notes_for, fs_block, reason_facts_for};
 use crate::reasontext::{self, ReasonFacts, TextCtx};
 use crate::render::render_plan;
 use crate::terminal::Terminal;
 use crate::view::{saved_entries_for, Options, PlanInput, PlanView, RowStatus, ScanFacts};
+use crate::wiring::compose::{run_apply, ApplyRequest};
+use crate::wiring::kinds::explorer_selection_registered;
 
 /// The kinds a marked path can be an item of: the ones whose items are paths. Docker and btrfs items have
 /// none, and the apt cache needs root.
@@ -102,6 +106,8 @@ struct MarkPlan {
 pub struct RealExplorerActions {
     ports: Arc<ExplorerPorts>,
     still_scanning: Arc<ScanningProbe>,
+    /// What review and delete need besides the planner's ports; `None` leaves `d` refusing (Task 6.6.3e).
+    delete: Option<Arc<DeleteWiring>>,
 }
 
 /// The one-line footer message for a failed preview.
@@ -120,6 +126,24 @@ impl RealExplorerActions {
         RealExplorerActions {
             ports,
             still_scanning: Arc::new(|_| false),
+            delete: None,
+        }
+    }
+
+    /// Wires `review` and `delete`. The delete still runs only in a build that registers `explorer-selection`
+    /// (the `gate-d` feature); in every other build `d` refuses.
+    #[must_use]
+    pub fn with_delete_wiring(mut self, wiring: Arc<DeleteWiring>) -> RealExplorerActions {
+        self.delete = Some(wiring);
+        self
+    }
+
+    /// The reviewed plan of `marks` for the delete key (Story 6.6.4 holds it until the count is typed). It
+    /// plans and saves again every time: an earlier plan authorises nothing.
+    pub fn review(&self, marks: &[PathBuf]) -> Result<ReviewedPlan, String> {
+        match &self.delete {
+            Some(w) if explorer_selection_registered() => review_marks(&self.ports, w, marks),
+            _ => Err(NOT_IN_BUILD.to_string()),
         }
     }
 
@@ -181,14 +205,39 @@ impl ExplorerActions for RealExplorerActions {
         }
     }
 
-    /// Not wired until Task 6.6.4c: refuses at once, so a confirmed plan cannot delete anything yet.
+    /// Runs the confirmed plan through `run_apply` on a worker thread. Only a build that registers
+    /// `explorer-selection` (`gate-d`) does; every other build refuses at once and deletes nothing.
     fn delete(&self, confirmed: ConfirmedPlan) -> DeleteHandle {
-        drop(confirmed);
-        let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        let _ = tx.send(DeleteMsg::Refused(
-            "Deleting is not available in this build. Nothing was deleted.".to_string(),
-        ));
-        DeleteHandle::new(rx, Arc::new(AtomicBool::new(false)))
+        let (tx, rx) = std::sync::mpsc::sync_channel(64);
+        let abort = Arc::new(AtomicBool::new(false));
+        let handle = DeleteHandle::new(rx, Arc::clone(&abort));
+        let wiring = match &self.delete {
+            Some(w) if explorer_selection_registered() => Arc::clone(w),
+            _ => {
+                drop(confirmed);
+                let _ = tx.send(DeleteMsg::Refused(NOT_IN_BUILD.to_string()));
+                return handle;
+            }
+        };
+        let run = ExplorerRun {
+            abort,
+            events: Some(tx.clone()),
+        };
+        let spawned = std::thread::Builder::new()
+            .name("explore-delete".into())
+            .spawn(move || {
+                run_apply(
+                    ApplyRequest::Explorer { confirmed, run },
+                    &wiring.base,
+                    &wiring.roots,
+                )
+            });
+        if spawned.is_err() {
+            let _ = tx.send(DeleteMsg::Refused(
+                "could not start the delete thread. Nothing was deleted.".to_string(),
+            ));
+        }
+        handle
     }
 
     fn finish(&self, marks: &[PathBuf]) -> Handoff {

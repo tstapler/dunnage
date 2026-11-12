@@ -25,30 +25,40 @@ use disk_cleanup_adapters::audit::{unclean_run_warning, RealAuditSink};
 use disk_cleanup_adapters::gate_stamp::{
     current_exe_sha256, open_controlling_tty, read_stamp, stamp_path,
 };
-use disk_cleanup_adapters::signals::SwallowBrokenPipe;
+use disk_cleanup_adapters::lock::RealRunGuard;
+use disk_cleanup_adapters::signals::{SignalState, SwallowBrokenPipe};
 use disk_cleanup_adapters::space_meter::run_meter;
 use disk_cleanup_adapters::state::{
     append_outcome, LastPlanRead, OutcomeLine, OutcomeMode, Owner, RealPlanStore, StateDir,
     StatePaths, OUTCOME_SCHEMA,
 };
-use disk_cleanup_adapters::{RealProbe, RealSpaceMeter};
+use disk_cleanup_adapters::treestat::TreestatSizer;
+use disk_cleanup_adapters::{RealDirOps, RealProbe, RealSpaceMeter};
 use disk_cleanup_core::executor::{ExitClass, Refused, RunHooks};
+use disk_cleanup_core::explore::confirm::ConfirmedPlan;
+use disk_cleanup_core::explore::mark_check::OwnState;
 use disk_cleanup_core::plan::PlanId;
+use disk_cleanup_core::plan_state::BuildInfo;
 use disk_cleanup_core::ports::{Clock, Env, SystemProbe};
 use disk_cleanup_core::roots::RootSet;
 use disk_cleanup_core::selector::KindSelector;
-use disk_cleanup_core::{build_flavor, Candidate, Dirs, DiskVerdict, FatalError, Locator, Warning};
+use disk_cleanup_core::{
+    build_flavor, ApplyToken, Candidate, Dirs, DiskVerdict, FatalError, Locator, Warning,
+};
 
 use crate::app::{self, ApplyHooks, ApplyMode, Io, Ports};
 use crate::apply::render_marker;
 use crate::args::{self, Cli, Parsed};
+use crate::explore::apply::{
+    compose_explorer_apply, ExplorerApplyPorts, ExplorerRun, NOT_IN_BUILD as EXPLORER_NOT_IN_BUILD,
+};
 use crate::progress::{progress_mode, Progress};
 use crate::terminal::{self, Terminal};
-use crate::wiring::audit::{build_info, stamp_gate, StampInputs};
+use crate::wiring::audit::{build_info, stamp_gate, GateExit, StampInputs, StampOutcome};
 use crate::wiring::confine::{self, Confine};
 use crate::wiring::env::{open_state, read_root, tool_dirs, RealFs, SystemClock};
 use crate::wiring::kinds::{KindCtx, KindRegistry};
-use crate::wiring::run_guard::install_apply;
+use crate::wiring::run_guard::{install_apply, run_lock_path};
 use crate::wiring::token::grant_apply;
 
 const EXIT_USAGE: i32 = 64;
@@ -63,7 +73,7 @@ impl Trace {
         &self.0
     }
 
-    fn push(&mut self, name: &'static str) {
+    pub(crate) fn push(&mut self, name: &'static str) {
         self.0.push(name);
     }
 }
@@ -349,18 +359,206 @@ fn unix_now() -> i64 {
     SystemClock.now_epoch()
 }
 
-/// The real `--apply`: builds every real port, mints the capability once and runs [`compose_apply`].
+/// Which kind of apply `run_apply` serves. Both variants go through the one function below: the same
+/// confinement, state directory, audit sink, run lock, stamp step and capability mint site. The explorer's
+/// variant takes only the [`ConfirmedPlan`] (the typed count bound to the plan the owner reviewed); the
+/// per-run switches in [`ExplorerRun`] carry no authority.
+pub enum ApplyRequest<'a> {
+    /// `disk-cleanup --apply ...`: `argv` is parsed again by [`compose_apply`].
+    Cleaner { argv: Vec<OsString>, cli: &'a Cli },
+    /// The explorer's `d` after the typed count (Story 6.6.3). Bypasses `parse_args`, `kind_availability` and
+    /// the selection (review C4).
+    Explorer {
+        confirmed: ConfirmedPlan,
+        run: ExplorerRun,
+    },
+}
+
+/// The one place the capability is minted (`scripts/check-token-sites.sh --expect-sites 1`). The cleaner
+/// calls it before it builds the registry that deletes through it; the explorer calls it only after its
+/// plan-id and stamp gates, so a refused explorer run mints nothing.
+fn mint_apply() -> ApplyToken {
+    grant_apply()
+}
+
+/// Every real port of an apply, owned in one place (the cleaner and the explorer build the same ones).
+struct RealApply {
+    dirs: Dirs,
+    euid: u32,
+    paths: StatePaths,
+    owner: Option<Owner>,
+    probe: RealProbe,
+    audit: RealAuditSink,
+    plans: RealPlanStore,
+    space: Box<dyn disk_cleanup_core::ports::SpaceMeter>,
+    runner: Box<dyn disk_cleanup_core::ports::CommandRunner>,
+    guard: RealRunGuard,
+    confined: bool,
+    build: BuildInfo,
+}
+
+impl RealApply {
+    /// `None` when the confinement allows no runner (a refused run). `guard` is built by the caller because
+    /// the cleaner installs the process's signal handlers with it and the explorer must not.
+    fn build(
+        dirs: &Dirs,
+        confinement: &Confine,
+        guard: impl FnOnce(&Dirs, Option<Owner>) -> Option<RealRunGuard>,
+    ) -> Option<RealApply> {
+        let runner = confine::apply_runner(confinement)?;
+        let probe = RealProbe;
+        let euid = probe.euid();
+        let paths = StatePaths {
+            dir: dirs.state.clone(),
+        };
+        let owner = Owner::for_euid(euid, &dirs.state);
+        let guard = guard(dirs, owner)?;
+        let audit = RealAuditSink::new(paths.audit(), paths.audit_reserve(), owner);
+        let plans = RealPlanStore::new(
+            StateDir {
+                paths: paths.clone(),
+                owner,
+            },
+            Arc::new(unix_now),
+        );
+        let space = run_meter(RealSpaceMeter::new(probe.platform()));
+        Some(RealApply {
+            dirs: dirs.clone(),
+            euid,
+            paths,
+            owner,
+            probe,
+            audit,
+            plans,
+            space,
+            runner,
+            guard,
+            confined: matches!(confinement, Confine::Root(_)),
+            build: build_info(),
+        })
+    }
+
+    fn env<'a>(&'a self, fs: &'a RealFs, clock: &'a SystemClock) -> Env<'a> {
+        Env {
+            fs,
+            runner: self.runner.as_ref(),
+            clock,
+            probe: &self.probe,
+            space: self.space.as_ref(),
+            audit: &self.audit,
+            guard: &self.guard,
+            plans: &self.plans,
+            dirs: self.dirs.clone(),
+        }
+    }
+
+    /// The stamp step for `gate`; `ungated` is `DISK_CLEANUP_UNGATED` (the explorer passes `None`: it owns the
+    /// terminal, so there is no break-glass prompt).
+    fn stamp(&self, gate: char, ungated: Option<&str>) -> Result<StampOutcome, GateExit> {
+        let installed = read_stamp(&stamp_path(&self.dirs.state));
+        let exe_sha256 = current_exe_sha256().unwrap_or_default();
+        stamp_gate(
+            &StampInputs {
+                build: &self.build,
+                stamp: installed.as_ref(),
+                exe_sha256: &exe_sha256,
+                required_gate: gate,
+                confined: self.confined,
+                ungated_var: ungated,
+            },
+            &open_controlling_tty,
+        )
+    }
+}
+
+fn run_id_now() -> String {
+    format!("{:x}-{:x}", unix_now(), std::process::id())
+}
+
+/// The real apply: builds every real port, mints the capability and runs [`compose_apply`] (the cleaner) or
+/// [`compose_explorer_apply`] (the explorer).
 ///
 /// # Panics
-/// If the capability is asked for twice in one run, which `apply_flow` never does.
-pub fn run_apply(args: Vec<OsString>, cli: &Cli, base: &Dirs, roots: &RootSet) -> i32 {
+/// If the capability is asked for twice in one run, which neither sequence does.
+pub fn run_apply(request: ApplyRequest<'_>, base: &Dirs, roots: &RootSet) -> i32 {
     let dirs = tool_dirs(base);
     let vars = confine::current_vars();
     let confinement = confine::confine_mode(&vars, build_flavor(), cfg!(debug_assertions));
-    if let Confine::Refuse(msg) = confinement {
-        eprintln!("{msg}");
+    match request {
+        ApplyRequest::Cleaner { argv, cli } => {
+            if let Confine::Refuse(msg) = confinement {
+                eprintln!("{msg}");
+                return EXIT_USAGE;
+            }
+            run_cleaner_apply(argv, cli, &dirs, roots, &confinement)
+        }
+        ApplyRequest::Explorer { confirmed, run } => {
+            if let Confine::Refuse(msg) = confinement {
+                run.refuse(msg);
+                return EXIT_USAGE;
+            }
+            run_explorer_apply(confirmed, &run, base, &dirs, &confinement)
+        }
+    }
+}
+
+fn run_explorer_apply(
+    confirmed: ConfirmedPlan,
+    run: &ExplorerRun,
+    base: &Dirs,
+    dirs: &Dirs,
+    confinement: &Confine,
+) -> i32 {
+    if !crate::wiring::kinds::explorer_selection_registered() {
+        run.refuse(EXPLORER_NOT_IN_BUILD);
         return EXIT_USAGE;
     }
+    let Some(real) = RealApply::build(dirs, confinement, |d, owner| {
+        // No signal handlers here: the explorer's loop owns them and sets `run.abort`.
+        Some(RealRunGuard::new(
+            run_lock_path(&d.state),
+            owner,
+            Arc::new(SignalState::new()),
+        ))
+    }) else {
+        run.refuse(EXPLORER_NOT_IN_BUILD);
+        return EXIT_USAGE;
+    };
+    let (fs, clock) = (RealFs, SystemClock);
+    let env = real.env(&fs, &clock);
+    let read = read_root();
+    let stamp = |gate: char| real.stamp(gate, None);
+    let mint = mint_apply;
+    let ops = |t: &ApplyToken| {
+        confine::apply_dir_ops(confinement, t).unwrap_or_else(|| RealDirOps::confined_to(&read))
+    };
+    let resolve = || crate::wiring::explore::resolve_roots_now(base);
+    let sizer = TreestatSizer::new(RealDirOps::confined_to(&read));
+    let exe = std::env::current_exe().unwrap_or_default();
+    let ports = ExplorerApplyPorts {
+        env: &env,
+        stamp: &stamp,
+        mint: &mint,
+        ops: &ops,
+        resolve_roots: &resolve,
+        own_state: OwnState::canonical(base, exe, &crate::wiring::explore::canonical_lenient),
+        sizer: &sizer,
+        extents: None,
+        build: real.build.clone(),
+        run_id: run_id_now(),
+        tty: std::io::stdin().is_terminal(),
+    };
+    let mut trace = Trace::default();
+    compose_explorer_apply(confirmed, &ports, run, &mut trace).exit
+}
+
+fn run_cleaner_apply(
+    args: Vec<OsString>,
+    cli: &Cli,
+    dirs: &Dirs,
+    roots: &RootSet,
+    confinement: &Confine,
+) -> i32 {
     let read = read_root();
     let fixture_mode = matches!(confinement, Confine::Root(_));
 
@@ -378,9 +576,9 @@ pub fn run_apply(args: Vec<OsString>, cli: &Cli, base: &Dirs, roots: &RootSet) -
     let any_capable = !KindRegistry::build(&probe_ctx).apply_capable().is_empty();
 
     // Phase two: the capability (once), the registry that deletes through it, the real ports.
-    let token = any_capable.then(grant_apply);
+    let token = any_capable.then(mint_apply);
     let apply_ops = || match &token {
-        Some(t) => confine::apply_dir_ops(&confinement, t).unwrap_or_else(&read_only_ops),
+        Some(t) => confine::apply_dir_ops(confinement, t).unwrap_or_else(&read_only_ops),
         None => read_only_ops(),
     };
     let ctx = KindCtx {
@@ -398,71 +596,31 @@ pub fn run_apply(args: Vec<OsString>, cli: &Cli, base: &Dirs, roots: &RootSet) -
             .unwrap_or_else(|| panic!("the apply capability is minted once per run"))
     };
 
-    let Some(runner) = confine::apply_runner(&confinement) else {
-        return EXIT_USAGE;
-    };
-    let probe = RealProbe;
-    let euid = probe.euid();
-    let paths = StatePaths {
-        dir: dirs.state.clone(),
-    };
-    let owner = Owner::for_euid(euid, &dirs.state);
-    let guard = match install_apply(&dirs.state, owner) {
-        Ok(g) => g,
-        Err(e) => {
-            eprintln!(
-                "error: cannot install the signal handlers ({e}). Nothing was deleted. Run again."
-            );
-            return EXIT_FATAL;
+    let Some(real) = RealApply::build(dirs, confinement, |d, owner| {
+        match install_apply(&d.state, owner) {
+            Ok(g) => Some(g),
+            Err(e) => {
+                eprintln!(
+                    "error: cannot install the signal handlers ({e}). Nothing was deleted. Run again."
+                );
+                None
+            }
         }
+    }) else {
+        return EXIT_FATAL;
     };
-    let audit = RealAuditSink::new(paths.audit(), paths.audit_reserve(), owner);
-    let plans = RealPlanStore::new(
-        StateDir {
-            paths: paths.clone(),
-            owner,
-        },
-        Arc::new(unix_now),
-    );
-    if plans.read() == LastPlanRead::Unreadable {
+    if real.plans.read() == LastPlanRead::Unreadable {
         // Told on stderr why the gate will say "no dry run" (`design/ux.md` 3.5); nothing is created.
-        eprintln!("{}", plans.unreadable_warning().text());
+        eprintln!("{}", real.plans.unreadable_warning().text());
     }
-    let space = run_meter(RealSpaceMeter::new(probe.platform()));
-    let clock = SystemClock;
-    let fs = RealFs;
-    let env = Env {
-        fs: &fs,
-        runner: runner.as_ref(),
-        clock: &clock,
-        probe: &probe,
-        space: space.as_ref(),
-        audit: &audit,
-        guard: &guard,
-        plans: &plans,
-        dirs: dirs.clone(),
-    };
-
-    let build = build_info();
-    let run_id = format!("{:x}-{:x}", unix_now(), std::process::id());
+    let (fs, clock) = (RealFs, SystemClock);
+    let env = real.env(&fs, &clock);
+    let (paths, owner) = (real.paths.clone(), real.owner);
+    let build = real.build.clone();
+    let run_id = run_id_now();
     let via = std::env::var("DISK_CLEANUP_VIA").ok();
     let ungated = std::env::var("DISK_CLEANUP_UNGATED").ok();
-    let confined = fixture_mode;
-    let stamp = |gate: char| {
-        let installed = read_stamp(&stamp_path(&dirs.state));
-        let exe_sha256 = current_exe_sha256().unwrap_or_default();
-        stamp_gate(
-            &StampInputs {
-                build: &build,
-                stamp: installed.as_ref(),
-                exe_sha256: &exe_sha256,
-                required_gate: gate,
-                confined,
-                ungated_var: ungated.as_deref(),
-            },
-            &open_controlling_tty,
-        )
-    };
+    let stamp = |gate: char| real.stamp(gate, ungated.as_deref());
     let outcome_run_id = run_id.clone();
     let outcome_via = via.clone();
     let outcome = |m: OutcomeMode, verdict: DiskVerdict, free: u64, unalloc: Option<u64>| {
@@ -491,7 +649,7 @@ pub fn run_apply(args: Vec<OsString>, cli: &Cli, base: &Dirs, roots: &RootSet) -
         },
         apply_capable: Some(&capable),
         stamp: &stamp,
-        build: build.clone(),
+        build,
         roots: roots.run_roots(),
         scan_roots: roots.scan_roots().len(),
         exe: std::env::current_exe().unwrap_or_default(),
@@ -505,7 +663,7 @@ pub fn run_apply(args: Vec<OsString>, cli: &Cli, base: &Dirs, roots: &RootSet) -
     };
     let state = RealApplyState {
         dirs: dirs.clone(),
-        euid,
+        euid: real.euid,
     };
     let out = Sink::new(SwallowBrokenPipe::new(std::io::stdout()));
     let err = Sink::new(std::io::stderr());

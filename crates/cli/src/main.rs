@@ -83,7 +83,11 @@ fn real_main() -> i32 {
     }
     if compose::is_cleaner_apply(&cli) {
         let argv: Vec<OsString> = std::env::args_os().skip(1).collect();
-        return compose::run_apply(argv, &cli, &base, &roots);
+        return compose::run_apply(
+            compose::ApplyRequest::Cleaner { argv, cli: &cli },
+            &base,
+            &roots,
+        );
     }
     run_wired(&cli, &base, &roots, writes_state)
 }
