@@ -5,6 +5,7 @@
 #![cfg(feature = "explore")]
 
 mod common;
+mod explore_pty_rig;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -299,6 +300,11 @@ fn sigterm_sighup_and_sigquit_mid_scan_should_all_exit_143() {
 
 // ----- the interactive screen on a pty -----
 
+/// The title once the scan ended. The painter writes only the cells that changed, so over a frame that still said
+/// "SCANNING" the wire carries "SCAN DO E" (the N is already there); the marker stops before the letters that
+/// may be skipped.
+const SCAN_DONE: &str = "SCAN D";
+
 struct Pty {
     session: expectrl::Session,
     seen: Vec<u8>,
@@ -365,7 +371,11 @@ impl Pty {
         let end = Instant::now() + Duration::from_secs(20);
         while Instant::now() < end {
             self.pump();
-            if let Some(at) = self.screen_text().find(needle) {
+            let text = self.screen_text();
+            if let Some(at) = text
+                .find(needle)
+                .or_else(|| explore_pty_rig::fuzzy_find(&text, needle))
+            {
                 return at;
             }
             std::thread::sleep(Duration::from_millis(20));
@@ -410,7 +420,7 @@ fn the_first_interactive_run_should_note_the_reserve_files_before_the_alternate_
     let root = tree(&f);
     let mut p = Pty::spawn(&f, &[&root]);
     p.wait_for("created 2 reserve files of 1 MiB");
-    p.wait_for("SCAN DONE");
+    p.wait_for(SCAN_DONE);
     let raw = String::from_utf8_lossy(&p.seen).into_owned();
     let (note, alt) = (
         raw.find("created 2 reserve files").unwrap(),
@@ -458,7 +468,7 @@ fn a_preview_should_save_last_plan_and_still_create_no_lock_audit_or_outcome_fil
     let f = Fixture::new();
     let root = tree(&f);
     let mut p = Pty::spawn(&f, &[&root]);
-    p.wait_for("SCAN DONE");
+    p.wait_for(SCAN_DONE);
     p.send(b" ");
     p.wait_for("marked ");
     p.send(b"p");
