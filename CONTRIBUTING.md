@@ -13,6 +13,10 @@ cargo build --workspace
 cargo test --workspace
 ```
 
+Bazel (`scripts/bazel.sh`, ADR-008) keeps no cache of its own: set the disk cache, the repository cache and their size
+caps once in your `~/.bazelrc` (`build --disk_cache=...`, `build --experimental_disk_cache_gc_max_size=...`) and every
+workspace shares them. CI keeps its own caches through `setup-bazel`.
+
 The toolchain is pinned in `rust-toolchain.toml`. `jq` and `ast-grep` (`cargo install ast-grep --locked`) are
 needed by some `scripts/check-*.sh` checks.
 

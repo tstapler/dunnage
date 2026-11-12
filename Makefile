@@ -1,7 +1,7 @@
 .PHONY: gate safety mutants install bazel-build bazel-test lint dist sync bench-explore
 
-# Bazel is the build, test and lint system (ADR-008); scripts/bazel.sh is bazelisk with a private output base and
-# disk cache (DC_BAZEL_OUTPUT_ROOT, DC_BAZEL_DISK_CACHE, DC_BAZEL_JOBS). Cargo stays for `cargo publish`,
+# Bazel is the build, test and lint system (ADR-008); scripts/bazel.sh is bazelisk with a bounded job count
+# (DC_BAZEL_JOBS); the output base and caches are the shared ones from ~/.bazelrc. Cargo stays for `cargo publish`,
 # `make mutants`, the Cargo/Bazel drift leg of the gate and the tests that build release profiles with cargo.
 BAZEL ?= scripts/bazel.sh
 
