@@ -864,9 +864,12 @@ fn stat_at_and_fstat_should_report_mode_nlink_blocks_size_kind_and_mnt_id_When_c
     assert_eq!(ds.mnt_id, st.mnt_id, "same filesystem, same mount id");
     assert!(ds.mnt_id.is_some() || !cfg!(target_os = "linux"));
 
-    fs::set_permissions(&f, fs::Permissions::from_mode(0o4755)).unwrap();
-    let st = ops.stat_at(&d, OsStr::new("file")).unwrap();
-    assert_eq!(st.mode, 0o4755, "setuid bit is kept, nothing above 0o7777");
+    // macOS drops the setuid bit of a file chmod'ed by a user that is not root, so there is nothing to read back
+    if cfg!(target_os = "linux") {
+        fs::set_permissions(&f, fs::Permissions::from_mode(0o4755)).unwrap();
+        let st = ops.stat_at(&d, OsStr::new("file")).unwrap();
+        assert_eq!(st.mode, 0o4755, "setuid bit is kept, nothing above 0o7777");
+    }
 }
 
 #[test]
