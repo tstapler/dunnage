@@ -155,6 +155,14 @@ fn audit_verify_should_exit_0_for_a_finished_run_a_changed_item_a_refused_run_an
 }
 
 #[test]
+fn audit_verify_should_exit_0_for_an_item_stopped_by_a_mount_after_its_intent() {
+    // The engine's Partial: intent, some entries removed, then `skipped: cross-device` for the same path.
+    let mut lines = finished();
+    lines.splice(4..6, [intent("r", B), skipped("r", B)]);
+    assert_clean(&lines, "intent then skipped:cross-device for the same path");
+}
+
+#[test]
 fn audit_verify_should_list_a_crash_between_intent_and_result_as_unfinished_and_exit_0() {
     let r = verify(&[start("r"), confirm("r", 2, "2", &[A, B]), intent("r", A)]);
     assert_eq!(r.exit_code(), 0, "{r:?}");

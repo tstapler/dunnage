@@ -217,9 +217,10 @@ impl Pty {
                 return at;
             }
             if Instant::now() > end {
+                let text = self.screen_text();
                 panic!(
-                    "never saw {needle:?} after byte {from}; screen text: {:?}",
-                    self.screen_text()
+                    "never saw {needle:?} after byte {from}; end of the screen text: {:?}",
+                    &text[text.len().saturating_sub(2500)..]
                 );
             }
             std::thread::sleep(Duration::from_millis(20));

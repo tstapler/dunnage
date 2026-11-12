@@ -14,6 +14,7 @@ set -euo pipefail
 MARKER='dc-flavor=test-support;9f3ac7e1'   # == core::build_flavor() under test-support
 PANIC_MARKER='DC_EXPLORE_PANIC_AT'          # the forced-panic switch of the Gate F journeys: test-support only (Story 6.5.6)
 DELAY_MARKER='DC_EXPLORE_PLAN_DELAY_MS'     # the slow-planner switch of the full-disk journeys: test-support only
+DELETE_MARKER='DC_EXPLORE_DELETE_DELAY_MS'  # the slow-delete switch of the live-delete journey: test-support only
 FLAVOR_PREFIX='dc-flavor='                  # both flavors start with it; present iff main reaches build_flavor()
 PKG=disk-cleanup CORE=disk-cleanup-core
 CORE_TARGET=${CORE//-/_}                    # cargo prints lib target names with underscores
@@ -52,13 +53,13 @@ leg_features() {
 # arg: file. Fails when the marker bytes are present.
 leg_marker() { [ "$(grep -a -c -F -- "$MARKER" "$1")" -eq 0 ]; }
 # arg: file. The test-support switches (forced panic, slow planner) must not be in a shipped artifact.
-leg_panic_marker() { [ "$(grep -a -c -F -e "$PANIC_MARKER" -e "$DELAY_MARKER" -- "$1")" -eq 0 ]; }
+leg_panic_marker() { [ "$(grep -a -c -F -e "$PANIC_MARKER" -e "$DELAY_MARKER" -e "$DELETE_MARKER" -- "$1")" -eq 0 ]; }
 # arg: file. A flavor string must be present: proves main reaches build_flavor(), so the marker would survive
 # linking if the feature were on (the marker leg cannot be vacuous for this binary).
 leg_reference() { [ "$(grep -a -c -F -- "$FLAVOR_PREFIX" "$1")" -ge 1 ]; }
 # arg: file. Positive control: the scanner must see the marker in a known-tainted build.
 scanner_sees_marker() { [ "$(grep -a -c -F -- "$MARKER" "$1")" -ge 1 ]; }
-scanner_sees_panic_marker() { grep -a -q -F -- "$PANIC_MARKER" "$1" && grep -a -q -F -- "$DELAY_MARKER" "$1"; }
+scanner_sees_panic_marker() { grep -a -q -F -- "$PANIC_MARKER" "$1" && grep -a -q -F -- "$DELAY_MARKER" "$1" && grep -a -q -F -- "$DELETE_MARKER" "$1"; }
 
 bin_from_json() { jq -r 'select(.reason=="compiler-artifact" and .executable != null
         and (.target.kind|index("bin")) and (.profile.test|not)) | .executable'; }
@@ -72,7 +73,7 @@ report_features() {  # $1 = profile label; stdin json
 byte_legs() {  # $1 label, $2 file
   local rc=0
   leg_marker "$2" || { echo "FAIL marker leg ($1): marker bytes present in $2"; rc=1; }
-  leg_panic_marker "$2" || { echo "FAIL marker leg ($1): $PANIC_MARKER or $DELAY_MARKER (a test-support switch) is present in $2"; rc=1; }
+  leg_panic_marker "$2" || { echo "FAIL marker leg ($1): $PANIC_MARKER, $DELAY_MARKER or $DELETE_MARKER (a test-support switch) is present in $2"; rc=1; }
   leg_reference "$2" || { echo "FAIL reference leg ($1): '$FLAVOR_PREFIX' absent from $2, so main does not reach build_flavor() and the marker leg is blind"; rc=1; }
   return "$rc"
 }
@@ -150,7 +151,7 @@ bazel_selftest() {
   if bin=$(bazel_dist_binary --//build:test_support=true); then
     scanner_sees_marker "$bin" && echo "ok: tainted bazel build, marker found (scanner is not blind)" || { echo "SELFTEST BAD: marker absent from a tainted bazel binary"; rc=1; }
     leg_marker "$bin" && { echo "SELFTEST BAD: tainted bazel build, marker leg passed"; rc=1; } || echo "ok: tainted bazel build, marker leg fails"
-    scanner_sees_panic_marker "$bin" && echo "ok: tainted bazel build, $PANIC_MARKER and $DELAY_MARKER found (scanner is not blind)" || { echo "SELFTEST BAD: a test-support switch absent from a tainted bazel binary"; rc=1; }
+    scanner_sees_panic_marker "$bin" && echo "ok: tainted bazel build, $PANIC_MARKER, $DELAY_MARKER and $DELETE_MARKER found (scanner is not blind)" || { echo "SELFTEST BAD: a test-support switch absent from a tainted bazel binary"; rc=1; }
     leg_panic_marker "$bin" && { echo "SELFTEST BAD: tainted bazel build, panic marker leg passed"; rc=1; } || echo "ok: tainted bazel build, panic marker leg fails"
   else echo "SELFTEST BAD: tainted bazel build failed to build"; rc=1; fi
   return "$rc"
@@ -174,7 +175,8 @@ selftest() {
   r=0; printf 'not json\n' | leg_features 2>/dev/null || r=$?; [ "$r" -eq 2 ] && echo "ok: feature leg fails (2) on garbage input" || { echo "SELFTEST BAD: garbage input passed (rc $r)"; rc=1; }
   r=0; printf '{"reason":"compiler-artifact","target":{"name":"other","kind":["lib"]},"features":[]}\n' | leg_features || r=$?; [ "$r" -eq 2 ] && echo "ok: feature leg fails (2) when no core artifact is present" || { echo "SELFTEST BAD: missing core artifact passed (rc $r)"; rc=1; }
   printf 'ELF\0pad%spad' "$MARKER" > "$t/tainted"; printf 'ELF\0pad%spad' 'dc-flavor=release' > "$t/clean"; printf 'ELF\0pad' > "$t/blind"
-  printf 'ELF\0pad%spad%spad' 'dc-flavor=release' "$PANIC_MARKER" > "$t/panicky"; printf 'ELF\0pad%spad%spad' 'dc-flavor=release' "$DELAY_MARKER" > "$t/slowpoke"
+  printf 'ELF\0pad%spad%spad' 'dc-flavor=release' "$PANIC_MARKER" > "$t/panicky"; printf 'ELF\0pad%spad%spad' 'dc-flavor=release' "$DELAY_MARKER" > "$t/slowpoke"; printf 'ELF\0pad%spad%spad' 'dc-flavor=release' "$DELETE_MARKER" > "$t/slowdel"
+  leg_panic_marker "$t/slowdel" && { echo "SELFTEST BAD: slow-delete marker leg missed"; rc=1; } || echo "ok: marker leg fails on a binary holding $DELETE_MARKER"
   leg_panic_marker "$t/slowpoke" && { echo "SELFTEST BAD: slow-planner marker leg missed"; rc=1; } || echo "ok: marker leg fails on a binary holding $DELAY_MARKER"
   leg_panic_marker "$t/panicky" && { echo "SELFTEST BAD: panic marker leg missed"; rc=1; } || echo "ok: panic marker leg fails on a binary holding $PANIC_MARKER"
   leg_panic_marker "$t/clean" && echo "ok: panic marker leg passes on clean bytes" || { echo "SELFTEST BAD: panic marker leg false positive"; rc=1; }
@@ -192,7 +194,7 @@ selftest() {
   bin=$(printf '%s' "$json" | bin_from_json | head -1)
   scanner_sees_marker "$bin" && echo "ok: forced build, marker found in $bin (scanner is not blind)" || { echo "SELFTEST BAD: marker absent from a test-support binary: scanner blind"; rc=1; }
   leg_marker "$bin" && { echo "SELFTEST BAD: forced build, marker leg passed"; rc=1; } || echo "ok: forced build, marker leg fails"
-  scanner_sees_panic_marker "$bin" && echo "ok: forced build, $PANIC_MARKER and $DELAY_MARKER found (scanner is not blind)" || { echo "SELFTEST BAD: a test-support switch absent from a test-support binary: scanner blind"; rc=1; }
+  scanner_sees_panic_marker "$bin" && echo "ok: forced build, $PANIC_MARKER, $DELAY_MARKER and $DELETE_MARKER found (scanner is not blind)" || { echo "SELFTEST BAD: a test-support switch absent from a test-support binary: scanner blind"; rc=1; }
   leg_panic_marker "$bin" && { echo "SELFTEST BAD: forced build, panic marker leg passed"; rc=1; } || echo "ok: forced build, panic marker leg fails"
   # 3 manifest pins
   printf '[workspace]\nresolver = "1"\n' > "$t/Cargo.toml"

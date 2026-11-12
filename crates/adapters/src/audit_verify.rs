@@ -449,6 +449,18 @@ pub fn verify_audit_with(
                     &mut report,
                 );
             }
+            Some("result") if explorer.follows_intent(&run_id, &v) => {
+                explorer.result(&run_id, &v);
+                check_attempt(
+                    &v,
+                    "partial delete",
+                    &run_id,
+                    inp,
+                    extras,
+                    recorded.get(&run_id),
+                    &mut report,
+                );
+            }
             Some("result") => explorer.skipped(&run_id, &v),
             Some("intent") => {
                 explorer.intent(&run_id, &v);

@@ -38,3 +38,17 @@ pub fn explore_plan_delay_ms() -> Option<u64> {
 pub fn explore_plan_delay_ms() -> Option<u64> {
     None
 }
+
+/// Milliseconds the explorer's apply pauses after each item, from `DC_EXPLORE_DELETE_DELAY_MS` (the live-delete
+/// journey sends SIGTERM while the delete runs). `test-support` builds only.
+#[cfg(feature = "test-support")]
+pub fn explore_delete_delay_ms() -> Option<u64> {
+    std::env::var("DC_EXPLORE_DELETE_DELAY_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+}
+
+#[cfg(not(feature = "test-support"))]
+pub fn explore_delete_delay_ms() -> Option<u64> {
+    None
+}
