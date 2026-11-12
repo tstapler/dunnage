@@ -61,6 +61,8 @@ dc_integration_tests(
         # Drives the loop with a real-time key script (100/200/600 ms): misses its frame when the machine is
         # saturated (failed in 3 of 6 full runs at load 20 to 35, passes 6 of 6 alone).
         "loop_fake": {"flaky": True},
+        # Task 6.6.4c: the same real-time key script, with the plan, review and delete answering from workers.
+        "loop_delete": {"flaky": True},
         "pty_restore": {
             "data": [":guard_probe"],
             "env": {"DC_GUARD_PROBE": "$(rootpath :guard_probe)"},

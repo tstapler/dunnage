@@ -190,6 +190,8 @@ dc_integration_tests(
                 "requires-repo-checkout",
             ],
         },
+        # Task 6.6.4c: the TUI loop on a real-time key script over the explorer-apply rig.
+        "explore_delete_flow": {"flaky": True},
         "canary_home": {"tags": ["requires-strace"]},
     },
 )

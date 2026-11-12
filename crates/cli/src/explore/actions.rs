@@ -240,6 +240,12 @@ impl ExplorerActions for RealExplorerActions {
         handle
     }
 
+    /// The same plan-and-save as the inherent method (which stays for the callers that hold the concrete
+    /// type); the loop reaches it through the trait on a worker thread.
+    fn review(&self, marks: &[PathBuf]) -> Result<ReviewedPlan, String> {
+        RealExplorerActions::review(self, marks)
+    }
+
     fn finish(&self, marks: &[PathBuf]) -> Handoff {
         if marks.is_empty() {
             return Handoff {

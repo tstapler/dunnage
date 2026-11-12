@@ -59,7 +59,7 @@ use crate::wiring::compose::Trace;
 const REQUIRED_GATE: char = 'D';
 
 /// What `d` says in a build that does not register `explorer-selection` (every build but Gate D).
-pub const NOT_IN_BUILD: &str = "Deleting is not available in this build. Nothing was deleted.";
+pub const NOT_IN_BUILD: &str = disk_cleanup_core::explore::ports::DELETE_NOT_IN_BUILD;
 
 pub const STAMP_REFUSED: &str =
     "Deleting is disabled in this build: run 'make gate' and 'make install-gated'. Nothing was deleted.";

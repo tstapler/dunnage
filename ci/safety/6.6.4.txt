@@ -1,0 +1,19 @@
+# Task 6.6.4a: the reviewed-set rule, the prompt's input rules and the settled marks (core, pure).
+safety_press_d_should_plan_again_When_one_mark_is_added_or_removed_or_replaced   # 6.6.4a
+safety_a_plan_should_authorise_nothing_When_a_fresh_review_has_other_items   # 6.6.4a
+safety_remeasured_should_not_open_the_prompt_When_the_marks_changed_during_the_measure   # 6.6.4a
+safety_remeasured_should_not_open_the_prompt_When_no_plan_is_held   # 6.6.4a
+safety_a_wrong_count_should_keep_the_prompt_and_say_nothing_was_deleted   # 6.6.4a
+safety_enter_on_an_empty_entry_should_not_confirm   # 6.6.4a
+safety_near_misses_should_not_confirm   # 6.6.4a
+safety_only_failed_items_should_keep_their_marks   # 6.6.4a
+# Task 6.6.4c: the loop over a scripted delete and the explorer delete over a fixture tree.
+safety_after_one_mark_changes_d_is_back_to_planning_and_no_prompt_opens   # 6.6.4c
+safety_a_plan_whose_items_changed_at_the_fresh_measure_opens_no_prompt   # 6.6.4c
+safety_the_prompt_ignores_d_y_j_space_and_q   # 6.6.4c
+safety_an_explorer_delete_of_a_throwaway_directory_removes_exactly_that_directory_and_writes_the_audit   # 6.6.4c
+safety_a_wrong_count_at_the_prompt_deletes_nothing_in_the_fixture   # 6.6.4c
+safety_in_the_default_build_d_shows_the_refusal_and_nothing_is_deleted   # 6.6.4c
+safety_in_a_gate_d_build_the_real_review_opens_the_prompt_and_a_cancel_deletes_nothing   # 6.6.4c
+safety_in_a_gate_d_build_the_prompt_shows_the_real_count_and_total   # 6.6.4c
+safety_text_and_json_have_no_path_to_the_delete_and_leave_the_fixture_untouched   # 6.6.4c

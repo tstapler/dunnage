@@ -92,6 +92,8 @@ pub struct ExplorerEnv {
     pub now_unix: i64,
     /// `another disk-cleanup apply is running (pid N); sizes are in flux`, while the run lock is held.
     pub start_note: Option<String>,
+    /// `audit.jsonl`, which a delete from the explorer appends to.
+    pub audit_log: PathBuf,
 }
 
 /// The footer note while another process holds the run lock. The probe takes no lock and creates no file.
@@ -444,6 +446,7 @@ pub fn build_explorer_env(base: &Dirs, roots: &RootSet, settings: &Settings) -> 
         cleaner_roots: roots.scan_roots().to_vec(),
         now_unix,
         start_note: in_flux_note(base),
+        audit_log: tool_dirs(base).state.join("audit.jsonl"),
     }
 }
 

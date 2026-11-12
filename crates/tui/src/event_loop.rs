@@ -242,8 +242,15 @@ where
         stats.iterations += 1;
 
         if let Some(sig) = signals.interrupted() {
-            app.detach_scan();
-            break Why::Signal(signal_exit_code(sig));
+            let code = signal_exit_code(sig);
+            if app.delete_running() || app.is_aborting() {
+                // The delete stops at its next item boundary; the loop stays live and leaves, after the
+                // terminal is restored, once the worker reported (or after the bounded wait).
+                app.begin_abort(code, now);
+            } else {
+                app.detach_scan();
+                break Why::Signal(code);
+            }
         }
         if signals.suspend_requested() {
             if suspend(rt, &signals, app.size).is_err() {
@@ -259,6 +266,9 @@ where
         stats.messages += n as u64;
         if n > 0 {
             scan_dirty = true;
+        }
+        if app.take_dirty() {
+            ui_dirty = true;
         }
         if planning_before != (app.busy_planning(), app.plan.is_some()) {
             ui_dirty = true;
@@ -421,7 +431,7 @@ where
         Why::Ending(Ending::Leave { code, lines }) => {
             (code, lines, code == EXIT_SIGINT || code == EXIT_SIGTERM)
         }
-        Why::Signal(code) => (code, Vec::new(), true),
+        Why::Signal(code) => (code, app.signal_lines(), true),
         Why::TerminalLost => (EXIT_TERMINAL, Vec::new(), false),
     };
     app.detach_scan();

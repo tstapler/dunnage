@@ -330,3 +330,94 @@ fn a_closed_pty_master_fails_the_restore_writes_with_eio_and_the_signal_code_sti
         "SIGHUP, not 74 for the failed restore write"
     );
 }
+
+// ----- a signal during a delete (Task 6.6.4c; UX-T38) -----
+
+/// Marks a directory row, plans, opens the prompt, types the count and waits for the delete to start. The
+/// terminal repaints by differences, so a phrase can be split on the wire; the probe's marker files say when
+/// the review ran, and the pauses let the screen settle.
+fn start_delete(name: &str) -> Pty {
+    let pause = |p: &mut Pty| {
+        std::thread::sleep(Duration::from_millis(400));
+        p.pump();
+    };
+    let mut p = Pty::spawn(name, "delete");
+    p.up();
+    assert!(p.wait_for(b"node_modules", 0), "no rows: {}", p.tail());
+    p.send(b"j ");
+    pause(&mut p);
+    p.send(b"d");
+    p.wait_file("review-1");
+    pause(&mut p);
+    p.send(b"d");
+    p.wait_file("review-2");
+    pause(&mut p);
+    p.send(b"1");
+    pause(&mut p);
+    p.send(b"\r");
+    p.wait_file("delete-started");
+    pause(&mut p);
+    p
+}
+
+fn mtime(p: &Pty, name: &str) -> std::time::SystemTime {
+    fs::metadata(p.dir.join(name)).unwrap().modified().unwrap()
+}
+
+/// The delete is aborted, the screen stays up until the worker reported, then the terminal is restored and
+/// the process exits with the signal's code; the closing line is printed after the restore.
+fn delete_case(name: &str, trigger: impl Fn(&mut Pty), want: i32) {
+    let mut p = start_delete(name);
+    let from = p.seen.len();
+    trigger(&mut p);
+    p.wait_file("abort-seen");
+    p.pump();
+    assert!(
+        find(&p.seen[from..], LEAVE_ALT).is_none(),
+        "{name}: restored before the aborted delete reported: {}",
+        p.tail()
+    );
+    assert_eq!(exit_of(&mut p), want, "{name}");
+    assert!(
+        p.dir.join("worker-done").exists(),
+        "{name}: left before the worker was done"
+    );
+    assert!(mtime(&p, "worker-done") <= mtime(&p, "exit"), "{name}");
+    p.finish();
+    p.assert_restored();
+    let leave = p
+        .seen
+        .windows(LEAVE_ALT.len())
+        .rposition(|w| w == LEAVE_ALT)
+        .unwrap();
+    let closing = find(&p.seen, b"EXPLORE CLOSED - deleted 0 items").expect("the closing line");
+    assert!(
+        closing > leave,
+        "{name}: the closing line follows the restore"
+    );
+}
+
+#[test]
+fn sigterm_mid_delete_waits_for_the_abort_restores_and_exits_143() {
+    delete_case("d-term", |p| p.kill("TERM"), 143);
+}
+
+#[test]
+fn sighup_mid_delete_waits_for_the_abort_restores_and_exits_143() {
+    delete_case("d-hup", |p| p.kill("HUP"), 143);
+}
+
+#[test]
+fn sigquit_mid_delete_waits_for_the_abort_restores_and_exits_143() {
+    delete_case("d-quit", |p| p.kill("QUIT"), 143);
+}
+
+#[test]
+fn sigint_mid_delete_waits_for_the_abort_restores_and_exits_130() {
+    delete_case("d-int", |p| p.kill("INT"), 130);
+}
+
+#[test]
+fn the_ctrl_c_key_mid_delete_waits_for_the_abort_restores_and_exits_130() {
+    delete_case("d-ctrlc", |p| p.send(&[0x03]), 130);
+}

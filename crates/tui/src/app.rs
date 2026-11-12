@@ -12,6 +12,11 @@ use std::sync::Arc;
 use std::thread;
 
 use disk_cleanup_core::escape::escape;
+use disk_cleanup_core::explore::confirm::ReviewedPlan;
+use disk_cleanup_core::explore::delete_flow::{
+    rescan_target, DPress, DeleteRun, Prompt, PromptKey, Remeasured, ReviewedSet, Submitted, Tally,
+    MSG_PLAN_CHANGED, MSG_REVIEW_FIRST,
+};
 use disk_cleanup_core::explore::headroom::headroom_line;
 use disk_cleanup_core::explore::hint::{hint_of_node, kind_line, shape_of_node};
 use disk_cleanup_core::explore::input::{
@@ -20,13 +25,14 @@ use disk_cleanup_core::explore::input::{
 use disk_cleanup_core::explore::keymap::Key;
 use disk_cleanup_core::explore::layout::{layout_for_width, Layout, Tier};
 use disk_cleanup_core::explore::mark_check::MarkOk;
+use disk_cleanup_core::explore::marks::MarkSetId;
 use disk_cleanup_core::explore::msg::{
     ClassifyFacts, FileRows, MarkRefusal, NodeEvent, PlanPreview, ScanMode, ScanMsg, ScanSummary,
     StopCause,
 };
 use disk_cleanup_core::explore::ports::{
-    DirLister, ExplorerActions, Handoff, PreviewHandle, ScanHandle, ScanOpts, ScanSource,
-    TermSignals,
+    DeleteHandle, DirLister, ExplorerActions, Handoff, PreviewHandle, ScanHandle, ScanOpts,
+    ScanSource, TermSignals, TypedCountSource, NEEDS_TERMINAL,
 };
 use disk_cleanup_core::explore::rows::ROW_CAP;
 use disk_cleanup_core::explore::rows::{Badge, Sort};
@@ -39,13 +45,17 @@ use ratatui::Frame;
 
 use crate::overlays::UnreadableEntry;
 use crate::theme::Theme;
-use crate::view::{adjust_scroll, list_capacity, render, row_path, ScanFacts, Screen};
+use crate::view::{
+    adjust_scroll, list_capacity, render, row_path, DeleteScreen, ScanFacts, Screen,
+};
 
 /// Nested scan roots the owner can stack with Enter on an `x` row (O-2).
 pub const MAX_NESTED_ROOTS: usize = 4;
 pub const MSG_NESTED_LIMIT: &str = "4 nested scans: go back with h";
-pub const MSG_DELETE_PENDING: &str =
-    "Deleting from the explorer is not wired in this build. Nothing was deleted.";
+/// How long the loop waits for an aborted delete to report before it restores the terminal and leaves anyway
+/// (review 2, N8: the abort ends the running tree promptly, so the wait normally ends with `run_end` written).
+pub const ABORT_WAIT_MS: u64 = 5_000;
+pub const MSG_DELETE_CANCELLED: &str = "Cancelled. Nothing was deleted; the marks are kept.";
 pub const CLOSED_LINE: &str = "EXPLORE CLOSED - nothing was deleted.";
 pub const CLOSED_PARTIAL_LINE: &str =
     "Closed while scanning; the tree was partial. Nothing was deleted.";
@@ -80,6 +90,10 @@ pub struct ExplorerConfig {
     pub headroom_path: PathBuf,
     /// Shown in the footer until the first key (the wiring's `another apply is running` note).
     pub start_note: Option<String>,
+    /// The audit log a delete appends to: named by the prompt and the closing line.
+    pub audit_log: Option<PathBuf>,
+    /// How long the loop waits for an aborted delete to report before it leaves anyway.
+    pub abort_wait_ms: u64,
 }
 
 impl ExplorerConfig {
@@ -103,6 +117,8 @@ impl ExplorerConfig {
             cache_age: None,
             initial_headroom: Err("not read yet".to_string()),
             start_note: None,
+            audit_log: None,
+            abort_wait_ms: ABORT_WAIT_MS,
         }
     }
 }
@@ -114,6 +130,8 @@ pub struct Ports {
     pub lister: Arc<dyn DirLister>,
     pub signals: Arc<dyn TermSignals>,
     pub actions: Arc<dyn ExplorerActions>,
+    /// Whether the typed count can be collected (stdin is a terminal).
+    pub typed: Arc<dyn TypedCountSource>,
 }
 
 /// An answer from a worker thread.
@@ -124,12 +142,52 @@ enum Aux {
         rows: FileRows,
     },
     Planner(PreviewHandle),
+    /// The in-session review of the marks (`ticket` names the planning it belongs to).
+    Reviewed {
+        ticket: u64,
+        result: Result<ReviewedPlan, String>,
+    },
     Finished(Handoff),
+}
+
+/// Why a plan is being made.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Purpose {
+    /// `p`, or `d` with no plan of this session: show the preview, keep the review.
+    Preview { from_d: bool },
+    /// `d` on a reviewed set: measure again and open the prompt.
+    Remeasure,
+}
+
+enum PreviewState {
+    NotWanted,
+    Pending,
+    Ready(PlanPreview),
+    Failed(String),
 }
 
 struct Planning {
     cancel: Arc<AtomicBool>,
     handle: Option<PreviewHandle>,
+    purpose: Purpose,
+    /// The marks the plan was started for.
+    set: MarkSetId,
+    ticket: u64,
+    preview: PreviewState,
+    review: Option<Result<ReviewedPlan, String>>,
+}
+
+struct Running {
+    run: DeleteRun,
+    handle: DeleteHandle,
+}
+
+/// Which delete screen has the keys.
+enum Stage {
+    None,
+    Prompt(Prompt),
+    Deleting(Running),
+    Result(DeleteRun),
 }
 
 /// The tree and view of a root left behind by Enter on an `x` row.
@@ -171,8 +229,17 @@ pub struct App {
     aux_tx: Sender<Aux>,
     aux_rx: Receiver<Aux>,
     planning: Option<Planning>,
+    planning_ticket: u64,
     finishing: Option<Arc<AtomicBool>>,
     pub plan: Option<PlanPreview>,
+    /// The line above the preview's keys.
+    plan_note: Option<String>,
+    reviewed: ReviewedSet,
+    stage: Stage,
+    tally: Tally,
+    /// Set by Ctrl-C or a signal during a delete: the exit code, and when the wait for the abort ends.
+    abort_exit: Option<(i32, u64)>,
+    dirty: bool,
     stack: Vec<Saved>,
     root_note: Option<String>,
     notice: Option<String>,
@@ -218,8 +285,15 @@ impl App {
             aux_tx,
             aux_rx,
             planning: None,
+            planning_ticket: 0,
             finishing: None,
             plan: None,
+            plan_note: None,
+            reviewed: ReviewedSet::new(),
+            stage: Stage::None,
+            tally: Tally::new(),
+            abort_exit: None,
+            dirty: false,
             stack: Vec::new(),
             root_note: None,
             notice: start_note,
@@ -304,6 +378,7 @@ impl App {
             }
         }
         self.poll_planner();
+        self.poll_delete(now_ms);
         (applied, more)
     }
 
@@ -364,14 +439,8 @@ impl App {
                 self.shared.insert(dir, estimate);
             }
             ScanMsg::Facts(f) => self.facts = f,
-            ScanMsg::Preview(p) => {
-                self.planning = None;
-                self.plan = Some(p);
-            }
-            ScanMsg::PreviewFailed(text) => {
-                self.planning = None;
-                self.state.input.message = Some(text);
-            }
+            ScanMsg::Preview(p) => self.preview_arrived(Ok(p)),
+            ScanMsg::PreviewFailed(text) => self.preview_arrived(Err(text)),
         }
     }
 
@@ -442,16 +511,19 @@ impl App {
                         h.cancel();
                     }
                 }
+                Aux::Reviewed { ticket, result } => {
+                    if let Some(p) = self.planning.as_mut().filter(|p| p.ticket == ticket) {
+                        p.review = Some(result);
+                        self.advance_planning();
+                    }
+                }
                 Aux::Finished(h) => {
                     if self
                         .finishing
                         .take()
                         .is_some_and(|c| !c.load(std::sync::atomic::Ordering::SeqCst))
                     {
-                        self.ending = Some(Ending::Leave {
-                            code: h.exit_code,
-                            lines: h.lines,
-                        });
+                        self.leave_with(h.exit_code, h.lines);
                     }
                 }
             }
@@ -465,14 +537,8 @@ impl App {
         };
         let Some(h) = p.handle.as_ref() else { return };
         match h.rx.try_recv() {
-            Ok(ScanMsg::Preview(plan)) => {
-                self.planning = None;
-                self.plan = Some(plan);
-            }
-            Ok(ScanMsg::PreviewFailed(text)) => {
-                self.planning = None;
-                self.state.input.message = Some(text);
-            }
+            Ok(ScanMsg::Preview(plan)) => self.preview_arrived(Ok(plan)),
+            Ok(ScanMsg::PreviewFailed(text)) => self.preview_arrived(Err(text)),
             _ => {}
         }
     }
@@ -485,24 +551,126 @@ impl App {
         self.state.marks.iter().map(|m| m.path.clone()).collect()
     }
 
-    fn start_plan(&mut self) {
+    /// Starts the planner for the preview (unless this is the measure before the prompt) and the review of
+    /// the marks, each on its own worker; `advance_planning` finishes when both have answered.
+    fn start_plan(&mut self, purpose: Purpose) {
         if self.planning.is_some() || self.finishing.is_some() {
             return;
         }
+        self.planning_ticket += 1;
+        let ticket = self.planning_ticket;
         let cancel = Arc::new(AtomicBool::new(false));
+        let wants_preview = matches!(purpose, Purpose::Preview { .. });
         self.planning = Some(Planning {
             cancel: Arc::clone(&cancel),
             handle: None,
+            purpose,
+            set: self.state.marks.identity(),
+            ticket,
+            preview: if wants_preview {
+                PreviewState::Pending
+            } else {
+                PreviewState::NotWanted
+            },
+            review: None,
         });
         let marks = self.mark_paths();
+        if wants_preview {
+            let actions = Arc::clone(&self.ports.actions);
+            let tx = self.aux_tx.clone();
+            let marks = marks.clone();
+            let _ = thread::Builder::new()
+                .name("explore-planner".into())
+                .spawn(move || {
+                    let h = actions.preview(&marks, cancel);
+                    let _ = tx.send(Aux::Planner(h));
+                });
+        }
         let actions = Arc::clone(&self.ports.actions);
         let tx = self.aux_tx.clone();
-        let _ = thread::Builder::new()
-            .name("explore-planner".into())
+        let spawned = thread::Builder::new()
+            .name("explore-review".into())
             .spawn(move || {
-                let h = actions.preview(&marks, cancel);
-                let _ = tx.send(Aux::Planner(h));
+                let result = actions.review(&marks);
+                let _ = tx.send(Aux::Reviewed { ticket, result });
             });
+        if spawned.is_err() {
+            let _ = self.aux_tx.send(Aux::Reviewed {
+                ticket,
+                result: Err("could not start the review thread. Nothing was deleted.".to_string()),
+            });
+        }
+    }
+
+    fn preview_arrived(&mut self, result: Result<PlanPreview, String>) {
+        let Some(p) = self.planning.as_mut() else {
+            return;
+        };
+        if matches!(p.preview, PreviewState::Pending) {
+            p.preview = match result {
+                Ok(plan) => PreviewState::Ready(plan),
+                Err(text) => PreviewState::Failed(text),
+            };
+            self.advance_planning();
+        }
+    }
+
+    /// Finishes the plan once the preview (when wanted) and the review have both answered.
+    fn advance_planning(&mut self) {
+        let done = self
+            .planning
+            .as_ref()
+            .is_some_and(|p| !matches!(p.preview, PreviewState::Pending) && p.review.is_some());
+        if !done {
+            return;
+        }
+        let Some(p) = self.planning.take() else {
+            return;
+        };
+        self.dirty = true;
+        let Some(review) = p.review else { return };
+        let same_marks = self.state.marks.identity() == p.set;
+        match p.purpose {
+            Purpose::Remeasure => match review {
+                Ok(fresh) => match self.reviewed.remeasured(&p.set, &self.state.marks, fresh) {
+                    Remeasured::Prompt(prompt) => self.stage = Stage::Prompt(prompt),
+                    Remeasured::Changed => {
+                        self.state.input.message = Some(MSG_PLAN_CHANGED.to_string());
+                    }
+                },
+                Err(text) => {
+                    self.reviewed.clear();
+                    self.state.input.message = Some(text);
+                }
+            },
+            Purpose::Preview { from_d } => {
+                let (review, note) = match review {
+                    Ok(plan) => (Some(plan), from_d.then(|| MSG_REVIEW_FIRST.to_string())),
+                    Err(text) if from_d => {
+                        self.reviewed.clear();
+                        self.state.input.message = Some(text);
+                        return;
+                    }
+                    Err(text) => (None, Some(text)),
+                };
+                match p.preview {
+                    PreviewState::Ready(preview) => {
+                        // A plan counts as reviewed only once its preview was put on the screen.
+                        match review {
+                            Some(plan) if same_marks => self.reviewed.hold(&self.state.marks, plan),
+                            _ => self.reviewed.clear(),
+                        }
+                        self.plan = Some(preview);
+                        self.plan_note = note;
+                    }
+                    PreviewState::Failed(text) => {
+                        self.reviewed.clear();
+                        self.state.input.message = Some(text);
+                    }
+                    PreviewState::Pending | PreviewState::NotWanted => self.reviewed.clear(),
+                }
+            }
+        }
     }
 
     fn start_finish(&mut self) {
@@ -562,6 +730,23 @@ impl App {
 
     /// One key. Returns whether the screen must be redrawn now.
     pub fn on_key(&mut self, key: Key, now_ms: u64) -> bool {
+        match self.stage {
+            Stage::Prompt(_) => {
+                self.prompt_key(key);
+                return true;
+            }
+            Stage::Deleting(_) => {
+                if key == Key::Ctrl('c') {
+                    self.begin_abort(130, now_ms);
+                }
+                return true;
+            }
+            Stage::Result(_) => {
+                self.result_key(key);
+                return true;
+            }
+            Stage::None => {}
+        }
         if self.plan.is_some() {
             self.plan_key(key);
             return true;
@@ -606,21 +791,19 @@ impl App {
         match key {
             Key::Esc => {
                 self.plan = None;
+                self.plan_note = None;
             }
             Key::Enter => {
                 self.plan = None;
+                self.plan_note = None;
                 self.start_finish();
             }
             Key::Char('d') => {
-                self.state.input.message = Some(MSG_DELETE_PENDING.to_string());
                 self.plan = None;
+                self.plan_note = None;
+                self.press_d();
             }
-            Key::Ctrl('c') => {
-                self.ending = Some(Ending::Leave {
-                    code: 130,
-                    lines: vec![],
-                });
-            }
+            Key::Ctrl('c') => self.leave_with(130, vec![]),
             Key::Char('q') => self.leave_closed(),
             _ => {}
         }
@@ -632,11 +815,241 @@ impl App {
         } else {
             CLOSED_LINE
         };
+        self.leave_with(0, vec![OsString::from(line)]);
+    }
+
+    /// Ends the run with `base` as the exit code and `lines` for stdout. After a delete the closing line
+    /// replaces the `nothing was deleted` ones and the exit code reflects an `ERR` item (1) or a btrfs
+    /// refusal (3) when `base` is 0 (UX-T38).
+    fn leave_with(&mut self, base: i32, mut lines: Vec<OsString>) {
         self.detach_scan();
+        if let Some(closing) = self.closing_line() {
+            lines.retain(|l| {
+                l.to_str() != Some(CLOSED_LINE) && l.to_str() != Some(CLOSED_PARTIAL_LINE)
+            });
+            lines.push(OsString::from(closing));
+        }
         self.ending = Some(Ending::Leave {
-            code: 0,
-            lines: vec![OsString::from(line)],
+            code: self.tally.exit_code(base),
+            lines,
         });
+    }
+
+    fn closing_line(&self) -> Option<String> {
+        let audit = self
+            .cfg
+            .audit_log
+            .as_deref()
+            .unwrap_or_else(|| Path::new("audit.jsonl"));
+        self.tally.closing_line(audit, self.cfg.tty)
+    }
+
+    /// What to print after a signal ended the run: the closing line when a delete ran.
+    pub fn signal_lines(&self) -> Vec<OsString> {
+        self.closing_line()
+            .map(OsString::from)
+            .into_iter()
+            .collect()
+    }
+
+    // ----- delete -----
+
+    /// `d`: the reviewed-set rule (UX-T34).
+    fn press_d(&mut self) {
+        if self.planning.is_some() || self.finishing.is_some() {
+            return;
+        }
+        let press = self.reviewed.press_d(&self.state.marks);
+        if press == DPress::NothingMarked {
+            self.state.input.message =
+                Some(disk_cleanup_core::explore::input::MSG_NOTHING_MARKED.to_string());
+            return;
+        }
+        if !self.ports.typed.is_terminal() {
+            self.state.input.message = Some(NEEDS_TERMINAL.to_string());
+            return;
+        }
+        match press {
+            DPress::NothingMarked => {}
+            DPress::ReviewFirst => self.start_plan(Purpose::Preview { from_d: true }),
+            DPress::Remeasure => self.start_plan(Purpose::Remeasure),
+        }
+    }
+
+    fn prompt_key(&mut self, key: Key) {
+        let Stage::Prompt(prompt) = &mut self.stage else {
+            return;
+        };
+        match prompt.key(key) {
+            PromptKey::Edited | PromptKey::Ignored => {}
+            PromptKey::Cancel => {
+                if let Stage::Prompt(p) = std::mem::replace(&mut self.stage, Stage::None) {
+                    let (set, plan) = p.cancel();
+                    self.reviewed.restore(set, plan);
+                }
+                self.state.input.message = Some(MSG_DELETE_CANCELLED.to_string());
+            }
+            PromptKey::Interrupt => {
+                self.stage = Stage::None;
+                self.leave_with(130, vec![]);
+            }
+            PromptKey::Submit => {
+                if let Stage::Prompt(p) = std::mem::replace(&mut self.stage, Stage::None) {
+                    match p.submit() {
+                        Submitted::Accepted(confirmed) => {
+                            let planned = confirmed.count();
+                            let handle = self.ports.actions.delete(confirmed);
+                            self.reviewed.clear();
+                            self.state.input.message = None;
+                            self.stage = Stage::Deleting(Running {
+                                run: DeleteRun::new(planned),
+                                handle,
+                            });
+                        }
+                        Submitted::Refused(p) => self.stage = Stage::Prompt(p),
+                    }
+                }
+            }
+        }
+    }
+
+    fn result_key(&mut self, key: Key) {
+        match key {
+            Key::Esc => self.stage = Stage::None,
+            Key::Ctrl('c') => {
+                self.stage = Stage::None;
+                self.leave_with(130, vec![]);
+            }
+            _ => {}
+        }
+    }
+
+    pub fn delete_running(&self) -> bool {
+        matches!(self.stage, Stage::Deleting(_))
+    }
+
+    /// Whether Ctrl-C or a signal asked a running delete to stop and the run has not ended yet.
+    pub fn is_aborting(&self) -> bool {
+        self.abort_exit.is_some()
+    }
+
+    /// Asks the running delete to stop at the next item boundary and leaves with `code` once it reported,
+    /// or after `abort_wait_ms` ([`ABORT_WAIT_MS`] by default) when it does not.
+    pub fn begin_abort(&mut self, code: i32, now_ms: u64) {
+        if self.abort_exit.is_some() {
+            return;
+        }
+        if let Stage::Deleting(r) = &self.stage {
+            r.handle.abort();
+            self.abort_exit = Some((code, now_ms.saturating_add(self.cfg.abort_wait_ms)));
+            self.dirty = true;
+        }
+    }
+
+    fn poll_delete(&mut self, now_ms: u64) {
+        let Stage::Deleting(r) = &mut self.stage else {
+            return;
+        };
+        for _ in 0..256 {
+            match r.handle.rx.try_recv() {
+                Ok(m) => {
+                    r.run.apply(m);
+                    self.dirty = true;
+                    if r.run.is_finished() {
+                        break;
+                    }
+                }
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    r.run.lose();
+                    self.dirty = true;
+                    break;
+                }
+            }
+        }
+        let overdue = self
+            .abort_exit
+            .is_some_and(|(_, deadline)| now_ms >= deadline);
+        if overdue {
+            r.run.lose();
+        }
+        if r.run.is_finished() {
+            self.finish_delete(now_ms);
+        }
+    }
+
+    /// The delete reported: add it to the session, drop the marks of settled items, rescan where it removed
+    /// something and show the result, or leave when an abort was waiting for it.
+    fn finish_delete(&mut self, now_ms: u64) {
+        let Stage::Deleting(r) = std::mem::replace(&mut self.stage, Stage::None) else {
+            return;
+        };
+        let run = r.run;
+        self.tally.add(&run);
+        for path in run.settled() {
+            self.state.marks.remove(path);
+        }
+        if let Some(target) = rescan_target(&run.removed_paths()) {
+            self.rescan_dir(&target, now_ms);
+        }
+        self.dirty = true;
+        if let Some((code, _)) = self.abort_exit {
+            self.leave_with(code, vec![]);
+        } else {
+            self.stage = Stage::Result(run);
+        }
+    }
+
+    /// The node of `path` in the tree, if the scan reached it.
+    fn find_node(&self, path: &Path) -> Option<NodeId> {
+        for root in self.tree.roots() {
+            let Ok(rest) = path.strip_prefix(self.tree.path_of(root)) else {
+                continue;
+            };
+            let mut cur = root;
+            for part in rest.components() {
+                cur = self
+                    .tree
+                    .children(cur)
+                    .find(|c| self.tree.name(*c) == part.as_os_str())?;
+            }
+            return Some(cur);
+        }
+        None
+    }
+
+    /// Rescans `target`, whose rows read `.` until it is done. The view stays where it is when it already
+    /// shows `target` or something below it; otherwise it moves to `target`, because a rescan drops the
+    /// subtree the view would be standing in.
+    fn rescan_dir(&mut self, target: &Path, now_ms: u64) {
+        let Some(node) = self.find_node(target) else {
+            return;
+        };
+        let inside = self.state.view.dir().is_some_and(|v| {
+            let mut up = Some(node);
+            while let Some(n) = up {
+                if n == v {
+                    return true;
+                }
+                up = self.tree.parent(n);
+            }
+            false
+        });
+        if !inside {
+            let badge = badge_fn(&self.tree, &self.cfg.roots, &self.facts);
+            let req = self.state.view.open_dir(&self.tree, node, now_ms, &badge);
+            self.spawn_listing(req.dir, req.generation, req.cancel);
+        }
+        let mut opts = self.cfg.scan_opts.clone();
+        opts.paint_from_cache = false;
+        opts.generation = self.tree.begin_rescan(node);
+        self.start_scan(&[target.to_path_buf()], &opts, now_ms);
+        self.rebuild_view_now(now_ms);
+    }
+
+    /// Whether something the screen shows changed outside a key (a delete message, a finished plan).
+    pub fn take_dirty(&mut self) -> bool {
+        std::mem::take(&mut self.dirty)
     }
 
     fn do_action(&mut self, action: Action, now_ms: u64) {
@@ -646,10 +1059,8 @@ impl App {
                     self.force_clear = true;
                 }
             }
-            Action::Delete => {
-                self.state.input.message = Some(MSG_DELETE_PENDING.to_string());
-            }
-            Action::Preview => self.start_plan(),
+            Action::Delete => self.press_d(),
+            Action::Preview => self.start_plan(Purpose::Preview { from_d: false }),
             Action::Rescan(r) => self.rescan(r, now_ms),
             Action::NewRoot(path) => self.new_root(&path, now_ms),
             Action::PopRoot => self.pop_root(),
@@ -661,13 +1072,7 @@ impl App {
             }
             Action::ListFiles(req) => self.spawn_listing(req.dir, req.generation, req.cancel),
             Action::Exit(ExitKind::Closed) => self.leave_closed(),
-            Action::Exit(ExitKind::Interrupted) => {
-                self.detach_scan();
-                self.ending = Some(Ending::Leave {
-                    code: 130,
-                    lines: vec![],
-                });
-            }
+            Action::Exit(ExitKind::Interrupted) => self.leave_with(130, vec![]),
             Action::Exit(ExitKind::Plan) => self.start_finish(),
         }
     }
@@ -857,9 +1262,17 @@ impl App {
             planning: self.busy_planning(),
             banner: self.banner.as_deref(),
             plan: self.plan.as_ref(),
-            plan_note: None,
-            delete: None,
-            audit_log: None,
+            plan_note: self.plan_note.as_deref(),
+            delete: match &self.stage {
+                Stage::None => None,
+                Stage::Prompt(p) => Some(DeleteScreen::Prompt(p)),
+                Stage::Deleting(r) => Some(DeleteScreen::Running {
+                    run: &r.run,
+                    stopping: self.abort_exit.is_some(),
+                }),
+                Stage::Result(run) => Some(DeleteScreen::Result(run)),
+            },
+            audit_log: self.cfg.audit_log.as_deref(),
             scroll_top: self.scroll_top,
             kind_line: kind,
             shared,

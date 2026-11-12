@@ -9,3 +9,4 @@ pub mod json;
 pub mod mode;
 pub mod run;
 pub mod text;
+pub mod tty;

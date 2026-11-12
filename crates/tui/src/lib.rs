@@ -11,3 +11,10 @@ pub mod overlays;
 pub mod terminal;
 pub mod theme;
 pub mod view;
+
+/// The in-memory backend and buffer, so a test in another crate can drive [`event_loop::run_explorer`]
+/// without depending on `ratatui` itself.
+pub mod testing {
+    pub use ratatui::backend::TestBackend;
+    pub use ratatui::buffer::Buffer;
+}
