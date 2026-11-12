@@ -9,6 +9,7 @@
 
 mod explore_rig;
 
+use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -79,7 +80,6 @@ fn review_should_return_the_planned_identities_and_save_the_plan_for_the_gate() 
     for p in [&a, &b] {
         let item = reviewed.item(p).unwrap();
         let st = std::fs::symlink_metadata(p).unwrap();
-        use std::os::unix::fs::MetadataExt;
         assert_eq!((item.identity.dev, item.identity.ino), (st.dev(), st.ino()));
     }
     // The saved entry carries the same plan-id the typed count will be bound to.
