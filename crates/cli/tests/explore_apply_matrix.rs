@@ -58,7 +58,7 @@ use disk_cleanup_adapters::testing::{At, Event, FaultDirOps};
 use disk_cleanup_adapters::RealDirOps;
 use disk_cleanup_core::plan::ItemIdentity;
 use disk_cleanup_core::{AuditRecord, FileKind, Outcome, SkipReason, Status};
-use explore_rig::{manifest, Ex, Ran};
+use explore_rig::{manifest, Ex, Knobs, Ran};
 
 static SERIAL: Mutex<()> = Mutex::new(());
 
@@ -102,6 +102,40 @@ impl Fx {
     /// Reviews and applies `marks` over the plain directory operations.
     fn apply(&self, marks: &[PathBuf]) -> Ran {
         self.ex.run(self.ex.confirmed(marks), self.ops())
+    }
+
+    /// Runs `confirmed` after `change` was made: before the apply (the plan-id gate sees it and refuses the whole
+    /// set) or in the window after the gate (the per-item identity compare sees it).
+    fn run_swapped(
+        &self,
+        confirmed: disk_cleanup_core::explore::confirm::ConfirmedPlan,
+        change: impl FnOnce() + Send + 'static,
+        after_gate: bool,
+    ) -> Ran {
+        if after_gate {
+            self.ex
+                .run_with(confirmed, self.ops(), &Knobs::after_gate(change))
+        } else {
+            change();
+            self.ex.run(confirmed, self.ops())
+        }
+    }
+
+    /// Before the gate: the whole set is refused with the plan-id text, nothing was audited or deleted.
+    fn assert_gate_refused(&self, ran: &Ran) {
+        assert_eq!(ran.report.exit, 64, "{:?}", ran.report);
+        assert!(
+            ran.report
+                .refused
+                .as_deref()
+                .is_some_and(|t| t.contains("changed since the plan was made")
+                    && t.ends_with("Nothing was deleted.")),
+            "{:?}",
+            ran.report.refused
+        );
+        assert_eq!(ran.report.summary.removed, 0);
+        assert!(self.statuses().is_empty(), "{:?}", self.statuses());
+        assert_eq!(ran.minted, 0, "no capability exists after a gate refusal");
     }
 
     fn statuses(&self) -> Vec<Status> {
@@ -283,8 +317,7 @@ fn a07_a_target_with_dotdot_to_a_sibling_is_skipped_and_the_sibling_survives() {
     assert_eq!(manifest(&sib), before);
 }
 
-#[test]
-fn a08_a_symlinked_intermediate_component_is_skipped() {
+fn a08_case(after_gate: bool) {
     let fx = Fx::new();
     let item = fx.ex.code.join("tools/npm/_cacache");
     std::fs::create_dir_all(&item).unwrap();
@@ -294,21 +327,39 @@ fn a08_a_symlinked_intermediate_component_is_skipped() {
     std::fs::create_dir_all(elsewhere.join("_cacache")).unwrap();
     std::fs::write(elsewhere.join("_cacache/precious"), "p").unwrap();
     let before = manifest(&elsewhere);
-    std::fs::rename(
+    let (npm, old, target) = (
         fx.ex.code.join("tools/npm"),
         fx.ex.code.join("tools/npm.old"),
-    )
-    .unwrap();
-    symlink(&elsewhere, fx.ex.code.join("tools/npm")).unwrap();
-    let ran = fx.ex.run(confirmed, fx.ops());
+        elsewhere.clone(),
+    );
+    let swap = move || {
+        std::fs::rename(&npm, &old).unwrap();
+        symlink(&target, &npm).unwrap();
+    };
+    let ran = fx.run_swapped(confirmed, swap, after_gate);
     assert_eq!(manifest(&elsewhere), before);
     assert_eq!(ran.report.summary.removed, 0);
-    assert!(matches!(
-        fx.statuses()[..],
-        [Status::Skipped(
-            SkipReason::IdentityChanged | SkipReason::Symlink
-        )]
-    ));
+    if after_gate {
+        assert!(matches!(
+            fx.statuses()[..],
+            [Status::Skipped(
+                SkipReason::IdentityChanged | SkipReason::Symlink
+            )]
+        ));
+    } else {
+        fx.assert_gate_refused(&ran);
+        assert!(exists(&fx.ex.code.join("tools/npm.old/_cacache/blob")));
+    }
+}
+
+#[test]
+fn a08_a_symlinked_intermediate_component_is_skipped() {
+    a08_case(true);
+}
+
+#[test]
+fn a08_a_symlinked_intermediate_component_before_the_apply_refuses_the_whole_set() {
+    a08_case(false);
 }
 
 // ------------------------------------------------------------------------------------------ A-09 to A-12
@@ -583,8 +634,7 @@ fn a18_enoent_during_the_delete_is_already_removed() {
     assert!(!exists(&fx.nm));
 }
 
-#[test]
-fn a19_a_directory_of_the_same_name_under_another_parent_is_never_deleted_for_this_one() {
+fn a19_case(after_gate: bool) {
     let fx = Fx::new();
     let (x, y) = (
         fx.ex.code.join("X/node_modules"),
@@ -596,21 +646,37 @@ fn a19_a_directory_of_the_same_name_under_another_parent_is_never_deleted_for_th
     }
     let confirmed = fx.ex.confirmed(&[x.clone()]);
     // Y takes X's place: the path `X/node_modules` now leads to Y's directory.
-    std::fs::rename(fx.ex.code.join("X"), fx.ex.code.join("X.old")).unwrap();
-    std::fs::rename(fx.ex.code.join("Y"), fx.ex.code.join("X")).unwrap();
+    let code = fx.ex.code.clone();
+    let swap = move || {
+        std::fs::rename(code.join("X"), code.join("X.old")).unwrap();
+        std::fs::rename(code.join("Y"), code.join("X")).unwrap();
+    };
+    let ran = fx.run_swapped(confirmed, swap, after_gate);
     let ys_now = manifest(&fx.ex.code.join("X"));
-    let ran = fx.ex.run(confirmed, fx.ops());
-    assert_eq!(
-        manifest(&fx.ex.code.join("X")),
-        ys_now,
+    assert!(
+        ys_now.keys().any(|k| k.ends_with("pkg/index.js")),
         "Y's directory is intact"
     );
     assert!(exists(&fx.ex.code.join("X.old/node_modules/pkg/index.js")));
     assert_eq!(ran.report.summary.removed, 0);
-    assert_eq!(
-        fx.statuses(),
-        [Status::Skipped(SkipReason::IdentityChanged)]
-    );
+    if after_gate {
+        assert_eq!(
+            fx.statuses(),
+            [Status::Skipped(SkipReason::IdentityChanged)]
+        );
+    } else {
+        fx.assert_gate_refused(&ran);
+    }
+}
+
+#[test]
+fn a19_a_directory_of_the_same_name_under_another_parent_is_never_deleted_for_this_one() {
+    a19_case(true);
+}
+
+#[test]
+fn a19_the_same_swap_before_the_apply_refuses_the_whole_set() {
+    a19_case(false);
 }
 
 #[test]
@@ -657,22 +723,46 @@ fn a21_floor_paths_are_refused_and_the_fixture_hash_is_unchanged() {
     }
 }
 
-#[test]
-fn a23_an_identity_mismatch_between_the_plan_and_the_directory_deletes_nothing() {
+fn a23_case(after_gate: bool) {
     let fx = Fx::new();
     let confirmed = fx.ex.confirmed(&[fx.nm.clone()]);
-    std::fs::remove_dir_all(&fx.nm).unwrap();
-    let _pin = fx.ex.tree("pin", 1, 10);
-    std::fs::create_dir_all(fx.nm.join("new")).unwrap();
-    std::fs::write(fx.nm.join("new/f"), "hello").unwrap();
-    let before = manifest(&fx.nm);
-    let ran = fx.ex.run(confirmed, fx.ops());
-    assert_eq!(manifest(&fx.nm), before);
-    assert_eq!(ran.report.summary.removed, 0);
+    let (nm, pin) = (fx.nm.clone(), fx.ex.p("pin"));
+    let swap = move || {
+        std::fs::remove_dir_all(&nm).unwrap();
+        // Occupy the freed inode number elsewhere so the new directory cannot get the old one back.
+        std::fs::create_dir_all(&pin).unwrap();
+        std::fs::write(pin.join("f0"), [0u8; 10]).unwrap();
+        std::fs::create_dir_all(nm.join("new")).unwrap();
+        std::fs::write(nm.join("new/f"), "hello").unwrap();
+    };
+    let ran = fx.run_swapped(confirmed, swap, after_gate);
     assert_eq!(
-        fx.statuses(),
-        [Status::Skipped(SkipReason::IdentityChanged)]
+        manifest(&fx.nm)
+            .keys()
+            .filter(|k| k.ends_with("new/f"))
+            .count(),
+        1,
+        "the new directory is intact"
     );
+    assert_eq!(ran.report.summary.removed, 0);
+    if after_gate {
+        assert_eq!(
+            fx.statuses(),
+            [Status::Skipped(SkipReason::IdentityChanged)]
+        );
+    } else {
+        fx.assert_gate_refused(&ran);
+    }
+}
+
+#[test]
+fn a23_an_identity_mismatch_between_the_plan_and_the_directory_deletes_nothing() {
+    a23_case(true);
+}
+
+#[test]
+fn a23_an_identity_mismatch_before_the_apply_refuses_the_whole_set() {
+    a23_case(false);
 }
 
 #[test]

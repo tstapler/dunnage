@@ -266,6 +266,11 @@ impl Ex {
         if let Some(a) = &knobs.audit {
             env.audit = &**a;
         }
+        let hooked = GateHook {
+            inner: env.audit,
+            hook: &knobs.after_gate,
+        };
+        env.audit = &hooked;
         let minted = AtomicUsize::new(0);
         let stamp_ok = knobs.stamp_ok;
         let stamp = move |_g: char| -> Result<StampOutcome, GateExit> {
@@ -283,9 +288,14 @@ impl Ex {
             ApplyToken::for_tests()
         };
         let default_roots = self.roots();
-        let resolve = || match &knobs.roots {
-            Some(r) => r.clone(),
-            None => Ok(default_roots.clone()),
+        let resolve_calls = AtomicUsize::new(0);
+        let resolve = || {
+            let late = resolve_calls.fetch_add(1, Ordering::SeqCst) > 0;
+            match (&knobs.roots_after_gate, &knobs.roots) {
+                (Some(r), _) if late => r.clone(),
+                (_, Some(r)) => r.clone(),
+                _ => Ok(default_roots.clone()),
+            }
         };
         let real_sizer = self.real_sizer();
         let sizer: &dyn TreeSizer = match &knobs.sizer {
@@ -342,6 +352,52 @@ pub struct Knobs {
     pub audit: Option<std::sync::Arc<dyn disk_cleanup_core::ports::AuditSink>>,
     /// Where the per-item messages go (the TUI's delete handle).
     pub events: Option<std::sync::mpsc::SyncSender<disk_cleanup_core::explore::msg::DeleteMsg>>,
+    /// Runs once, right after `explorer_confirm` is written: a change made here happens after the plan-id gate,
+    /// in the window the per-item identity compare defends.
+    pub after_gate: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>,
+    /// Roots returned from the second `resolve_roots` call on (the first is the plan-id gate's), so a root
+    /// change after the gate can be modelled.
+    pub roots_after_gate: Option<Result<RootSet, String>>,
+}
+
+impl Knobs {
+    pub fn after_gate(change: impl FnOnce() + Send + 'static) -> Knobs {
+        Knobs {
+            after_gate: std::sync::Mutex::new(Some(Box::new(change))),
+            ..Knobs::default()
+        }
+    }
+}
+
+/// Wraps the audit sink the run uses and fires the `after_gate` hook once the `explorer_confirm` line is in.
+struct GateHook<'a> {
+    inner: &'a dyn disk_cleanup_core::ports::AuditSink,
+    hook: &'a std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>,
+}
+
+impl disk_cleanup_core::ports::AuditSink for GateHook<'_> {
+    fn run_start(&self, r: &disk_cleanup_core::RunStart) -> std::io::Result<()> {
+        self.inner.run_start(r)
+    }
+    fn intent(&self, r: &disk_cleanup_core::Intent) -> std::io::Result<()> {
+        self.inner.intent(r)
+    }
+    fn result(&self, r: &disk_cleanup_core::ItemResult) -> std::io::Result<()> {
+        self.inner.result(r)
+    }
+    fn run_end(&self, r: &disk_cleanup_core::RunEnd) -> std::io::Result<()> {
+        self.inner.run_end(r)
+    }
+    fn explorer_confirm(
+        &self,
+        r: &disk_cleanup_core::audit_types::ExplorerConfirm,
+    ) -> std::io::Result<()> {
+        self.inner.explorer_confirm(r)?;
+        if let Some(h) = self.hook.lock().unwrap().take() {
+            h();
+        }
+        Ok(())
+    }
 }
 
 impl Default for Knobs {
@@ -354,6 +410,8 @@ impl Default for Knobs {
             abort: None,
             audit: None,
             events: None,
+            after_gate: std::sync::Mutex::new(None),
+            roots_after_gate: None,
         }
     }
 }
