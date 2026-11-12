@@ -572,6 +572,14 @@ fn safety_apply_should_leave_an_intent_with_a_result_and_a_run_end_When_the_abor
     );
     assert!(ran.report.summary.interrupted);
     assert_eq!(ran.report.exit, 130);
+    let rows = result_statuses(&ex);
+    assert_eq!(rows.len(), 3, "{rows:?}");
+    assert_eq!(rows[0], Status::Removed);
+    assert!(
+        matches!(&rows[1], Status::Error(m) if m == "stopped by a signal; the directory is partly removed"),
+        "{rows:?}"
+    );
+    assert_eq!(rows[2], Status::Skipped(SkipReason::Aborted));
     // The first tree was removed whole, the last one was never started.
     assert!(!a.exists());
     assert!(c.exists());
@@ -644,4 +652,215 @@ fn the_explorer_apply_should_share_named_steps_with_the_cleaner_and_keep_their_r
         assert!(ORDER.contains(&own));
     }
     assert!(cleaner.iter().any(|c| c == "plan_id_gate"));
+}
+
+#[test]
+fn apply_should_send_progress_item_and_done_messages_in_order_to_the_loop() {
+    use disk_cleanup_core::explore::msg::{DeleteItemOutcome, DeleteMsg, DeleteSummary};
+    let ex = Ex::new();
+    let (a, b) = two_marks(&ex);
+    let (tx, rx) = std::sync::mpsc::sync_channel(64);
+    let ran = ex.run_with(
+        ex.confirmed(&[a.clone(), b.clone()]),
+        ex.confined_ops(),
+        &Knobs {
+            events: Some(tx),
+            ..Knobs::default()
+        },
+    );
+    let msgs: Vec<DeleteMsg> = rx.try_iter().collect();
+    assert_eq!(msgs.len(), 5, "{msgs:?}");
+    assert_eq!(msgs[0], DeleteMsg::Progress { index: 1, total: 2 });
+    assert!(
+        matches!(&msgs[1], DeleteMsg::Item(r) if r.path == a && matches!(r.outcome, DeleteItemOutcome::Removed { bytes } if bytes > 0))
+    );
+    assert_eq!(msgs[2], DeleteMsg::Progress { index: 2, total: 2 });
+    assert!(matches!(&msgs[3], DeleteMsg::Item(r) if r.path == b));
+    let DeleteMsg::Done(summary) = msgs[4] else {
+        panic!("{msgs:?}");
+    };
+    assert_eq!(summary.removed, 2);
+    assert!(summary.bytes > 0);
+    assert!(!summary.interrupted);
+    assert_eq!(summary, ran.report.summary);
+    let _ = DeleteSummary::default();
+}
+
+#[test]
+fn apply_should_send_exactly_one_refused_message_and_nothing_else_When_a_gate_stops_it() {
+    use disk_cleanup_core::explore::msg::DeleteMsg;
+    let ex = Ex::new();
+    let (a, _) = two_marks(&ex);
+    let (tx, rx) = std::sync::mpsc::sync_channel(64);
+    let _ = ex.run_with(
+        ex.confirmed(&[a.clone()]),
+        ex.confined_ops(),
+        &Knobs {
+            stamp_ok: false,
+            events: Some(tx),
+            ..Knobs::default()
+        },
+    );
+    let msgs: Vec<DeleteMsg> = rx.try_iter().collect();
+    assert_eq!(msgs, [DeleteMsg::Refused(STAMP_REFUSED.to_string())]);
+}
+
+#[test]
+fn explorer_run_refuse_should_send_the_text_to_the_loop() {
+    use disk_cleanup_cli::explore::apply::ExplorerRun;
+    use disk_cleanup_core::explore::msg::DeleteMsg;
+    let (tx, rx) = std::sync::mpsc::sync_channel(4);
+    let run = ExplorerRun {
+        abort: std::sync::Arc::default(),
+        events: Some(tx),
+    };
+    run.refuse("not in this build");
+    assert_eq!(
+        rx.try_recv().unwrap(),
+        DeleteMsg::Refused("not in this build".into())
+    );
+    // A headless run has nowhere to send it and must not panic.
+    ExplorerRun::headless().refuse("x");
+}
+
+#[test]
+fn apply_should_leave_no_measured_bytes_on_a_skipped_item_and_some_on_a_removed_one() {
+    let ex = Ex::new();
+    let (a, b) = two_marks(&ex);
+    let confirmed = ex.confirmed(&[a.clone(), b.clone()]);
+    std::fs::remove_dir_all(&b).unwrap();
+    std::fs::write(&b, b"a file now").unwrap();
+    let _ = ex.run(confirmed, ex.confined_ops());
+    let rows: Vec<_> = ex
+        .audit
+        .records()
+        .into_iter()
+        .filter_map(|r| match r {
+            AuditRecord::Result(o) => Some(o.0),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(rows.len(), 2);
+    let removed = rows.iter().find(|o| o.status == Status::Removed).unwrap();
+    assert!(removed.measured_bytes.is_some_and(|b| b > 0));
+    let skipped = rows.iter().find(|o| o.status != Status::Removed).unwrap();
+    assert_eq!(skipped.measured_bytes, None);
+}
+
+#[test]
+fn apply_should_record_the_reviewed_scan_roots_in_run_start() {
+    let ex = Ex::new();
+    let (a, _) = two_marks(&ex);
+    let _ = ex.run(ex.confirmed(&[a]), ex.confined_ops());
+    let start = ex
+        .audit
+        .records()
+        .into_iter()
+        .find_map(|r| match r {
+            AuditRecord::RunStart(s) => Some(s),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(start.kinds, "explorer-selection");
+    assert_eq!(start.roots.scan_roots, [ex.code.clone()]);
+    assert!(start.plan_id.is_some());
+}
+
+#[test]
+fn apply_should_report_interrupted_When_the_abort_stops_the_last_item_part_way() {
+    let ex = Ex::new();
+    let only = ex.tree("app/only", 6, 300);
+    let confirmed = ex.confirmed(&[only.clone()]);
+    let abort = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let flag = std::sync::Arc::clone(&abort);
+    let hits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let ops = |_: &disk_cleanup_core::ApplyToken| {
+        let flag = std::sync::Arc::clone(&flag);
+        let hits = std::sync::Arc::clone(&hits);
+        FaultDirOps::wrap(RealDirOps::confined_to(&ex.base))
+            .hook(Event::BeforeUnlinkat, move |_| {
+                if hits.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 2 {
+                    flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                }
+            })
+            .build()
+    };
+    let ran = ex.run_with(
+        confirmed,
+        ops,
+        &Knobs {
+            abort: Some(abort),
+            ..Knobs::default()
+        },
+    );
+    assert!(only.exists(), "the tree stopped part way");
+    assert!(ran.report.summary.interrupted);
+    assert_eq!(ran.report.exit, 130);
+    let end = ex.audit.records().into_iter().find_map(|r| match r {
+        AuditRecord::RunEnd(e) => Some(e),
+        _ => None,
+    });
+    assert!(end.unwrap().interrupted);
+}
+
+#[test]
+fn apply_should_not_report_interrupted_When_the_abort_arrives_after_the_last_item() {
+    let ex = Ex::new();
+    let only = ex.tree("app/only", 2, 300);
+    let abort = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let confirmed = ex.confirmed(&[only.clone()]);
+    let flag = std::sync::Arc::clone(&abort);
+    let ran = ex.run_with(
+        confirmed,
+        ex.confined_ops(),
+        &Knobs {
+            abort: Some(abort),
+            ..Knobs::default()
+        },
+    );
+    flag.store(true, std::sync::atomic::Ordering::SeqCst);
+    assert!(!only.exists());
+    assert!(!ran.report.summary.interrupted);
+    assert_eq!(ran.report.exit, 0);
+}
+
+fn fake_id() -> disk_cleanup_core::plan::ItemIdentity {
+    disk_cleanup_core::plan::ItemIdentity {
+        dev: 1,
+        ino: 1,
+        kind: disk_cleanup_core::FileKind::Dir,
+    }
+}
+
+#[test]
+fn safety_apply_should_refuse_a_forged_set_over_the_mark_limits_or_with_one_mark_inside_another() {
+    let ex = Ex::new();
+    let real = ex.tree("app/dist", 1, 100);
+    let before = manifest(&ex.code);
+    let long = ex.code.join("x".repeat(600));
+    let sets: Vec<(Vec<PathBuf>, &str)> = vec![
+        (
+            (0..21).map(|i| ex.code.join(format!("m{i}"))).collect(),
+            "21 marks",
+        ),
+        (vec![real.clone(), real.join("sub")], "a mark inside a mark"),
+        (vec![long], "a path over 512 bytes"),
+    ];
+    for (paths, what) in sets {
+        let items: Vec<_> = paths.into_iter().map(|p| (p, Some(fake_id()))).collect();
+        let ran = ex.run(Ex::confirm(ex.forge(&items)), ex.confined_ops());
+        assert_eq!(ran.steps, ["check_plan_id"], "{what}");
+        assert_eq!(ran.minted, 0, "{what}");
+        assert_eq!(ran.report.exit, 64, "{what}");
+        assert!(
+            ran.report
+                .refused
+                .unwrap()
+                .ends_with("Nothing was deleted."),
+            "{what}"
+        );
+        assert_eq!(manifest(&ex.code), before, "{what}");
+    }
+    assert!(ex.audit.records().is_empty());
 }

@@ -298,3 +298,109 @@ fn explorer_selection_target_should_build_its_policy_only_through_the_witness_co
         "the loose-argument constructor"
     );
 }
+
+#[test]
+fn candidate_of_should_say_whether_the_entry_is_a_directory() {
+    use disk_cleanup_core::KindFacts;
+    let ex = Ex::new();
+    let d = ex.tree("app/dist", 1, 100);
+    let f = d.join("f0");
+    for (p, want) in [(&d, true), (&f, false)] {
+        let c = cand(&ex, p);
+        let KindFacts::Explorer(facts) = c.facts() else {
+            panic!("not an explorer candidate");
+        };
+        assert_eq!(facts.is_dir, want, "{p:?}");
+    }
+}
+
+#[test]
+fn target_should_name_its_selector_and_discover_the_reviewed_marks_that_still_exist() {
+    use disk_cleanup_core::selector::Selection;
+    use disk_cleanup_core::SelectorId;
+    let ex = Ex::new();
+    let a = ex.tree("app/dist", 1, 100);
+    let b = ex.tree("app/out", 1, 100);
+    let unreviewed = ex.tree("app/other", 1, 100);
+    let reviewed = ex.review(&[a.clone(), b.clone()]);
+    let t = target(&ex, &reviewed, plain(&ex));
+    assert_eq!(t.name(), "explorer-selection");
+    assert_eq!(t.selectors(), &[SelectorId::ExplorerSelection]);
+    std::fs::remove_dir_all(&b).unwrap();
+    let env = ex.env();
+    let found = t.discover(&env, &Selection::explorer(vec![a.clone(), b, unreviewed]));
+    assert_eq!(
+        found.len(),
+        1,
+        "the gone mark and the unreviewed one are not items"
+    );
+    assert_eq!(found[0].id(), cand(&ex, &a).id());
+}
+
+#[test]
+fn target_should_call_a_vanished_or_replaced_path_changed_since_the_plan_and_an_unreadable_one_protected(
+) {
+    use std::os::unix::fs::PermissionsExt;
+    // Gone before the guard.
+    let ex = Ex::new();
+    let a = ex.tree("app/dist", 1, 100);
+    let reviewed = ex.review(&[a.clone()]);
+    let t = target(&ex, &reviewed, plain(&ex));
+    let c = cand(&ex, &a);
+    std::fs::remove_dir_all(&a).unwrap();
+    let env = ex.env();
+    assert_eq!(
+        t.guard(&c, &env),
+        Guarded::Skip(SkipReason::IdentityChanged)
+    );
+
+    // A parent component replaced by a plain file (ENOTDIR).
+    let ex = Ex::new();
+    let a = ex.tree("proj/dist", 1, 100);
+    let reviewed = ex.review(&[a.clone()]);
+    let t = target(&ex, &reviewed, plain(&ex));
+    let c = cand(&ex, &a);
+    std::fs::remove_dir_all(ex.code.join("proj")).unwrap();
+    std::fs::write(ex.code.join("proj"), b"file").unwrap();
+    let env = ex.env();
+    assert_eq!(
+        t.guard(&c, &env),
+        Guarded::Skip(SkipReason::IdentityChanged)
+    );
+
+    // An unreadable parent fails closed with another reason.
+    if is_root() {
+        return;
+    }
+    let ex = Ex::new();
+    let a = ex.tree("proj/dist", 1, 100);
+    let reviewed = ex.review(&[a.clone()]);
+    let t = target(&ex, &reviewed, plain(&ex));
+    let c = cand(&ex, &a);
+    let proj = ex.code.join("proj");
+    std::fs::set_permissions(&proj, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let env = ex.env();
+    let got = t.guard(&c, &env);
+    std::fs::set_permissions(&proj, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(got, Guarded::Skip(SkipReason::ProtectedPath));
+}
+
+fn is_root() -> bool {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata("/proc/self").unwrap().uid() == 0
+}
+
+#[test]
+fn safety_target_should_report_changed_since_the_plan_When_the_directory_vanishes_after_the_guard()
+{
+    let ex = Ex::new();
+    let a = ex.tree("app/dist", 2, 100);
+    let reviewed = ex.review(&[a.clone()]);
+    let t = target(&ex, &reviewed, plain(&ex));
+    let c = cand(&ex, &a);
+    let env = ex.env();
+    assert_eq!(t.guard(&c, &env), Guarded::Allow);
+    std::fs::remove_dir_all(&a).unwrap();
+    let err = t.execute(&c, &env, &ApplyToken::for_tests()).unwrap_err();
+    assert_eq!(err.error, DeleteError::IdentityMismatch);
+}

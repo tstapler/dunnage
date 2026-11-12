@@ -498,3 +498,51 @@ fn child_writes_one_explorer_confirm() {
     })
     .unwrap();
 }
+
+#[test]
+fn audit_verify_should_flag_a_missing_confirm_only_once_the_run_did_something() {
+    // Killed right after run_start: nothing was attempted, nothing to say.
+    let r = verify(&[start("r")]);
+    assert_eq!(r.exit_code(), 0, "{r:?}");
+    assert_eq!(r.unfinished, ["r"]);
+    // An intent, a result or a skip with no confirm line is a violation even without a run_end.
+    assert_violation(
+        &[start("r"), intent("r", A)],
+        "intent only",
+        "without an explorer_confirm",
+    );
+    assert_violation(
+        &[start("r"), skipped("r", A)],
+        "skip only",
+        "without an explorer_confirm",
+    );
+    assert_violation(
+        &[start("r"), removed("r", A)],
+        "result only",
+        "without an explorer_confirm",
+    );
+}
+
+#[test]
+fn own_dirs_should_name_the_three_tool_directories_and_their_canonical_spellings() {
+    let td = tempfile::tempdir().unwrap();
+    let real = td.path().canonicalize().unwrap();
+    std::fs::create_dir_all(real.join("data/cache")).unwrap();
+    std::fs::create_dir_all(real.join("config")).unwrap();
+    std::fs::create_dir_all(real.join("state")).unwrap();
+    // `cache` is reached through a symlink: both spellings must be judged as the tool's own.
+    std::os::unix::fs::symlink(real.join("data/cache"), real.join("cache")).unwrap();
+    let dirs = disk_cleanup_adapters::own_dirs(
+        &real.join("state/disk-cleanup"),
+        &real.join("cache"),
+        &real.join("config"),
+    );
+    let mut want = vec![
+        real.join("state/disk-cleanup"),
+        real.join("cache/disk-cleanup"),
+        real.join("data/cache/disk-cleanup"),
+        real.join("config/disk-cleanup"),
+    ];
+    want.sort();
+    assert_eq!(dirs, want);
+}

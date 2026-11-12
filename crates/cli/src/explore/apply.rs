@@ -69,6 +69,9 @@ const GROWTH_FRACTION_DIVISOR: u64 = 10;
 /// A re-measured total more than this many bytes above the confirmed one refuses the delete.
 const GROWTH_BYTES: u64 = 1 << 30;
 
+/// The error row of a tree that the abort flag stopped after it had removed something.
+const STOPPED_PARTLY: &str = "stopped by a signal; the directory is partly removed";
+
 const EXIT_REFUSED: i32 = 64;
 const EXIT_FATAL: i32 = 2;
 const EXIT_PARTIAL: i32 = 1;
@@ -188,6 +191,26 @@ fn lock_text(e: &FatalError) -> String {
     }
 }
 
+/// Why the marked set itself cannot be deleted: the `--only` limits (M8) or one mark inside another (M6).
+fn set_refusal(sel: &Selection) -> Option<String> {
+    if let Err(e) = sel.validate_only() {
+        return Some(format!("{}. Nothing was deleted.", e.0));
+    }
+    let sorted = sel.only_sorted();
+    sorted.iter().find_map(|inner| {
+        sorted
+            .iter()
+            .find(|o| strictly_below(o, inner))
+            .map(|outer| {
+                format!(
+                    "error: {} is inside {}, which is also marked. Nothing was deleted.",
+                    disk_cleanup_core::escape::escape_os(inner.as_os_str(), false),
+                    disk_cleanup_core::escape::escape_os(outer.as_os_str(), false)
+                )
+            })
+    })
+}
+
 /// The state of the run that the closing lines need.
 struct Books<'a> {
     w_env: &'a Env<'a>,
@@ -254,7 +277,7 @@ fn status_of_failure(f: &DeleteFailure, aborted: bool) -> Status {
         return if f.freed.entries_removed == 0 {
             Status::Skipped(SkipReason::Aborted)
         } else {
-            Status::Error("stopped by a signal; the directory is partly removed".to_string())
+            Status::Error(STOPPED_PARTLY.to_string())
         };
     }
     match f.error.skip_reason() {
@@ -325,6 +348,11 @@ fn sequence<D: DirOps + 'static>(
     let sel = Selection::explorer(paths);
 
     trace.push("check_plan_id");
+    // The limits of the screen hold here too: a plan that did not come from `p` (more than 20 marks, a path over
+    // 512 bytes, a mark inside another) is refused before it can authorise anything.
+    if let Some(text) = set_refusal(&sel) {
+        return refuse(run, EXIT_REFUSED, text);
+    }
     let recomputed = PlanId::for_explorer(
         reviewed
             .items()
@@ -485,7 +513,17 @@ fn sequence<D: DirOps + 'static>(
     let _ = env.space.settle(meter, Duration::from_secs(30));
 
     trace.push("run_end");
-    let interrupted = term_signal().is_some() || run.abort.load(Ordering::SeqCst);
+    // A signal or Esc that arrived after the last item finished interrupted nothing.
+    let stopped_early = books
+        .outcomes
+        .iter()
+        .any(|o| matches!(&o.status, Status::Skipped(SkipReason::Aborted)))
+        || books
+            .outcomes
+            .iter()
+            .any(|o| matches!(&o.status, Status::Error(m) if m == STOPPED_PARTLY));
+    let interrupted =
+        stopped_early && (term_signal().is_some() || run.abort.load(Ordering::SeqCst));
     let removed = books
         .outcomes
         .iter()

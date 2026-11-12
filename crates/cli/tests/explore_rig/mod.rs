@@ -305,7 +305,7 @@ impl Ex {
         };
         let run = ExplorerRun {
             abort: knobs.abort.clone().unwrap_or_default(),
-            events: None,
+            events: knobs.events.clone(),
         };
         let mut trace = Trace::default();
         let report = compose_explorer_apply(confirmed, &ports, &run, &mut trace);
@@ -330,6 +330,8 @@ pub struct Knobs {
     pub abort: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// Replaces the fake audit sink (the real one, to read the log back with `audit verify`).
     pub audit: Option<std::sync::Arc<dyn disk_cleanup_core::ports::AuditSink>>,
+    /// Where the per-item messages go (the TUI's delete handle).
+    pub events: Option<std::sync::mpsc::SyncSender<disk_cleanup_core::explore::msg::DeleteMsg>>,
 }
 
 impl Default for Knobs {
@@ -341,6 +343,7 @@ impl Default for Knobs {
             own_state: None,
             abort: None,
             audit: None,
+            events: None,
         }
     }
 }
