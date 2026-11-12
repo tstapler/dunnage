@@ -60,6 +60,9 @@ dc_integration_tests(
     per_test = {
         # Task 6.6.4c: the same real-time key script, with the plan, review and delete answering from workers.
         "loop_delete": {"flaky": True},
+        # Real-time key script over 3 000 one-millisecond sends: on a loaded shared macOS runner a key's redraw can
+        # land after the 60 ms window it asserts (failed at 1000 ms and at 1500 ms in two runs). Bazel retries it.
+        "loop_fake": {"flaky": True},
         "pty_restore": {
             "data": [":guard_probe"],
             "env": {"DC_GUARD_PROBE": "$(rootpath :guard_probe)"},

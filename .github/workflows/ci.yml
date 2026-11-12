@@ -53,6 +53,11 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           # The runner has all three, so a missing one is a failure here, not a named skip.
           printf '%s\n' DC_REQUIRE_STRACE=1 DC_REQUIRE_UNSHARE=1 DC_REQUIRE_BIND_MOUNT=1 >> "$GITHUB_ENV"
+      - name: GNU sed for the repo check scripts that the safety tests run (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install gnu-sed
+          echo "$(brew --prefix gnu-sed)/libexec/gnubin" >> "$GITHUB_PATH"
       - name: ast-grep (the token-site and unlink checks run inside the safety tests)
         run: |
           if [ "$RUNNER_OS" = Linux ]; then sudo npm install -g @ast-grep/cli@0.44.0; else npm install -g @ast-grep/cli@0.44.0; fi
