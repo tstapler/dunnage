@@ -37,6 +37,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: 1.98.1 # rust-toolchain.toml; the tests tagged requires-cargo run cargo
+          # rust-toolchain.toml lists them; without them cargo (run by the safety tests) tries to install them
+          components: clippy, rustfmt
       - uses: bazel-contrib/setup-bazel@f34d6a05eae3c24acab7fa54587492daeaeffdab # 0.19.2
         with:
           disk-cache: ${{ matrix.os }}
@@ -49,6 +51,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends strace jq zsh
           # Ubuntu 24.04 restricts unprivileged user namespaces; the unshare -rm tests would skip by name.
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          # The runner has all three, so a missing one is a failure here, not a named skip.
+          printf '%s\n' DC_REQUIRE_STRACE=1 DC_REQUIRE_UNSHARE=1 DC_REQUIRE_BIND_MOUNT=1 >> "$GITHUB_ENV"
       - name: ast-grep (the token-site and unlink checks run inside the safety tests)
         run: |
           if [ "$RUNNER_OS" = Linux ]; then sudo npm install -g @ast-grep/cli@0.44.0; else npm install -g @ast-grep/cli@0.44.0; fi

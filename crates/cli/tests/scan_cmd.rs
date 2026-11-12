@@ -380,7 +380,7 @@ fn scan_should_exit_128_plus_the_signal_When_interrupted_or_terminated() {
             .stderr(Stdio::piped())
             .spawn()
             .unwrap();
-        let caught = |pid: u32| common::caught_signals(pid) & common::signal_bit(sig) != 0;
+        let caught = |pid: u32| common::handlers_installed(pid, common::signal_bit(sig));
         let end = Instant::now() + Duration::from_secs(10);
         while !caught(child.id()) {
             assert!(Instant::now() < end, "handlers never installed");

@@ -193,7 +193,6 @@ mod tests {
 
     use super::*;
 
-    #[cfg(target_os = "linux")]
     fn me() -> u32 {
         rustix::process::geteuid().as_raw()
     }

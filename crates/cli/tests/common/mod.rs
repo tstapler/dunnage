@@ -53,26 +53,38 @@ pub fn tempdir() -> tempfile::TempDir {
     tempfile::Builder::new().tempdir_in(base).expect("tempdir")
 }
 
-/// The signals process `pid` catches, as a bit mask (signal n is bit n-1): `SigCgt` of `/proc/<pid>/status` on
-/// Linux, `ps -o caught` (hex) elsewhere. 0 when the process or the answer is not there.
-pub fn caught_signals(pid: u32) -> u64 {
+/// True once process `pid` catches every signal in `bits` (signal n is bit n-1). Linux reads `SigCgt` of
+/// `/proc/<pid>/status`. macOS has neither /proc nor a `ps` keyword for caught signals, so the answer there is
+/// "the process has run for 2 s", long enough for the start-up that installs the handlers.
+pub fn handlers_installed(pid: u32, bits: u64) -> bool {
     if cfg!(target_os = "linux") {
         let status = std::fs::read_to_string(format!("/proc/{pid}/status")).unwrap_or_default();
-        return status
+        let mask = status
             .lines()
             .find_map(|l| l.strip_prefix("SigCgt:"))
             .and_then(|h| u64::from_str_radix(h.trim(), 16).ok())
             .unwrap_or(0);
+        return mask & bits == bits;
     }
     Command::new("ps")
-        .args(["-o", "caught=", "-p", &pid.to_string()])
+        .args(["-o", "etime=", "-p", &pid.to_string()])
         .output()
         .ok()
-        .and_then(|o| u64::from_str_radix(String::from_utf8_lossy(&o.stdout).trim(), 16).ok())
-        .unwrap_or(0)
+        .is_some_and(|o| elapsed_secs(String::from_utf8_lossy(&o.stdout).trim()) >= 2)
 }
 
-/// The bit of signal `n` in a `caught_signals` mask.
+/// Seconds in `ps` elapsed time `[[dd-]hh:]mm:ss`; 0 when it cannot be read.
+fn elapsed_secs(etime: &str) -> u64 {
+    let (days, rest) = etime
+        .split_once('-')
+        .map_or((0, etime), |(d, r)| (d.parse().unwrap_or(0), r));
+    let secs = rest
+        .split(':')
+        .try_fold(0_u64, |acc, p| p.parse::<u64>().ok().map(|n| acc * 60 + n));
+    secs.map_or(0, |s| s + days * 86_400)
+}
+
+/// The bit of signal `n` in a `handlers_installed` mask.
 pub fn signal_bit(n: i32) -> u64 {
     1 << (n - 1)
 }

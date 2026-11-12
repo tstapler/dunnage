@@ -95,6 +95,14 @@ def dc_integration_tests(crate, deps, proc_macro_deps, features = [], data = [],
             rustc_env_files = [MANIFEST_ENV],
             lint_config = LINTS,
         )
+        if "linux_only" in extra:
+            # `linux_only` is the reason, e.g. a pinned test file that cannot be edited; other platforms skip the
+            # target (bazel lists it as incompatible).
+            kw["target_compatible_with"] = select({
+                "@platforms//os:linux": [],
+                "//conditions:default": ["@platforms//:incompatible"],
+            })
+            kw["tags"] = kw["tags"] + ["linux-only"]
         if "timeout" in extra:
             kw["timeout"] = extra["timeout"]
         if "flaky" in extra:

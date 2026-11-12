@@ -225,8 +225,8 @@ fn big_tree(f: &Fixture) -> PathBuf {
 const TSTP: i32 = if cfg!(target_os = "linux") { 20 } else { 18 };
 const INSTALLED: u64 = 0x1 | 0x2 | 0x4 | 1 << 14 | 1 << (TSTP - 1);
 
-fn signal_mask(pid: u32) -> u64 {
-    common::caught_signals(pid)
+fn handlers_installed(pid: u32) -> bool {
+    common::handlers_installed(pid, INSTALLED)
 }
 
 fn kill(sig: &str, pid: u32) {
@@ -256,7 +256,7 @@ fn signalled(sig: &str) -> (Option<i32>, String, String) {
     // `install_term_handlers` installs the five handlers one after the other; a signal
     // sent between two of them would meet the default action (the process dies of it, with no exit code), so the
     // test waits for every one. Signal n is bit n-1 of `SigCgt`.
-    while signal_mask(pid) & INSTALLED != INSTALLED && Instant::now() < end {
+    while !handlers_installed(pid) && Instant::now() < end {
         std::thread::sleep(Duration::from_millis(1));
     }
     kill("STOP", pid);
