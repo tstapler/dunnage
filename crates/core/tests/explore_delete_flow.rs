@@ -512,3 +512,48 @@ fn a_signal_exit_code_should_win_over_the_tally() {
     assert_eq!(err.exit_code(130), 130);
     assert_eq!(err.exit_code(143), 143);
 }
+
+// ----- the held plan's bookkeeping -----
+
+#[test]
+fn clear_should_drop_the_held_plan_and_is_empty_should_say_whether_one_is_held() {
+    let marks = marks_of(&["/h/code/a"]);
+    let mut set = ReviewedSet::new();
+    assert!(set.is_empty());
+    set.hold(&marks, reviewed_of(&paths(&marks), 10));
+    assert!(!set.is_empty());
+    assert!(set.covers(&marks));
+    set.clear();
+    assert!(set.is_empty());
+    assert!(!set.covers(&marks));
+    assert_eq!(set.press_d(&marks), DPress::ReviewFirst);
+}
+
+#[test]
+fn hold_should_replace_the_earlier_plan() {
+    let first = marks_of(&["/h/code/a"]);
+    let second = marks_of(&["/h/code/b"]);
+    let mut set = ReviewedSet::new();
+    set.hold(&first, reviewed_of(&paths(&first), 10));
+    set.hold(&second, reviewed_of(&paths(&second), 10));
+    assert!(!set.covers(&first));
+    assert!(set.covers(&second));
+}
+
+#[test]
+fn a_run_should_call_itself_interrupted_only_when_done_says_an_item_was_stopped() {
+    let mut running = DeleteRun::new(2);
+    running.apply(removed("/h/a", 1));
+    assert!(!running.interrupted(), "still running");
+    let mut stopped = DeleteRun::new(2);
+    stopped.apply(removed("/h/a", 1));
+    stopped.apply(done(1, 1, true));
+    assert!(stopped.interrupted());
+    let mut whole = DeleteRun::new(1);
+    whole.apply(removed("/h/a", 1));
+    whole.apply(done(1, 1, false));
+    assert!(!whole.interrupted());
+    let mut refused = DeleteRun::new(1);
+    refused.apply(DeleteMsg::Refused("x".into()));
+    assert!(!refused.interrupted());
+}

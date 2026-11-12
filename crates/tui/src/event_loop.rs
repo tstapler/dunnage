@@ -243,7 +243,7 @@ where
 
         if let Some(sig) = signals.interrupted() {
             let code = signal_exit_code(sig);
-            if app.delete_running() || app.is_aborting() {
+            if app.delete_running() {
                 // The delete stops at its next item boundary; the loop stays live and leaves, after the
                 // terminal is restored, once the worker reported (or after the bounded wait).
                 app.begin_abort(code, now);

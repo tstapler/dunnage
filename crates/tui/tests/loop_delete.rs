@@ -20,6 +20,8 @@ use disk_cleanup_core::explore::msg::{
 use disk_cleanup_core::explore::ports::{DELETE_NOT_IN_BUILD, NEEDS_TERMINAL};
 use disk_cleanup_tui::event_loop::SystemClock;
 
+/// Later than every scripted key of every test; only a run that stalls reaches it.
+const WATCHDOG_MS: u64 = 25_000;
 const AUDIT: &str = "/h/.local/state/disk-cleanup/audit.jsonl";
 const NODE_MODULES: &str = "/h/code/app/node_modules";
 const SRC: &str = "/h/code/app/src";
@@ -41,6 +43,8 @@ fn base(
     ));
     r.actions = actions.clone();
     r.signals = LogSignals::never(&r.log);
+    // A watchdog: a run whose script went wrong ends here instead of waiting for a key that never comes.
+    r.script.push((WATCHDOG_MS, key(Key::Ctrl('c'))));
     r.tweak = Box::new(|c| c.audit_log = Some(PathBuf::from(AUDIT)));
     r
 }
@@ -717,21 +721,253 @@ fn a_signal_at_the_prompt_leaves_at_once_without_a_delete() {
 
 #[test]
 fn the_quit_prompt_hand_off_after_a_delete_ends_with_the_closing_line_not_the_old_one() {
-    let a = Arc::new(ControlActions::new());
+    // The first item is removed and the second fails, so one mark stays and `q` offers the hand-off.
+    let mut a = ControlActions::new();
+    a.on_delete = Box::new(|paths, tx, _abort| {
+        std::thread::spawn(move || {
+            let _ = tx.send(removed_item(&paths[0], GIB));
+            let _ = tx.send(item(
+                paths[1].to_str().unwrap(),
+                DeleteItemOutcome::Failed {
+                    reason: "i/o error".into(),
+                },
+            ));
+            let _ = tx.send(DeleteMsg::Done(DeleteSummary {
+                removed: 1,
+                bytes: GIB,
+                interrupted: false,
+            }));
+        });
+    });
+    let a = Arc::new(a);
     let mut s = typed_two(to_prompt());
     at(&mut s, 2300, key(Key::Esc));
-    at(&mut s, 2400, ch(' ')); // mark the row under the cursor again
     at(&mut s, 2500, ch('q'));
     at(&mut s, 2600, key(Key::Enter));
-    at(&mut s, 3200, ch('q'));
     let out = run(base(&a, s));
+    assert_eq!(a.count("finish"), 1, "the hand-off ran");
     let lines = closing(&out);
-    assert!(!lines.contains(&CLOSED.to_string()), "{lines:?}");
+    assert_eq!(
+        lines.len(),
+        2,
+        "the hand-off's own lines are kept: {lines:?}"
+    );
+    assert_eq!(lines[0], "DRY RUN - nothing was deleted.");
+    assert_eq!(
+        lines[1],
+        format!("EXPLORE CLOSED - deleted 1 item, 1.0 GiB measured. Audit log: {AUDIT}")
+    );
+    assert_eq!(out.exit.code, 1, "an item ended in error");
+}
+
+// ----- a plan that was cancelled stays cancelled -----
+
+#[test]
+fn a_review_that_answers_after_its_plan_was_cancelled_is_dropped_not_taken_for_the_next_plan() {
+    let mut a = ControlActions::new();
+    a.review_fn = Box::new(|n, marks| {
+        if n == 1 {
+            std::thread::sleep(Duration::from_millis(700));
+            Err("STALE FIRST REVIEW".to_string())
+        } else {
+            std::thread::sleep(Duration::from_millis(1500));
+            Ok(disk_cleanup_core::explore::testing::reviewed_of(marks, GIB))
+        }
+    });
+    let a = Arc::new(a);
+    let mut s = mark_both();
+    at(&mut s, 400, ch('p')); // the first plan: its review answers at about 1100 ms
+    at(&mut s, 500, key(Key::Esc)); // cancelled
+    at(&mut s, 600, ch('p')); // the second plan: its review answers at about 2100 ms
+    at(&mut s, 3500, key(Key::Ctrl('c')));
+    let out = run(base(&a, s));
     assert!(
-        lines
-            .last()
-            .unwrap()
-            .starts_with("EXPLORE CLOSED - deleted 2 items, 2.0 GiB measured."),
-        "{lines:?}"
+        !out.screen.contains("STALE FIRST REVIEW"),
+        "the cancelled plan's answer was taken:\n{}",
+        out.screen
+    );
+    assert!(out.screen.contains("PLAN PREVIEW"), "{}", out.screen);
+    assert_eq!(a.count("review"), 2);
+}
+
+#[test]
+fn d_while_a_plan_is_in_flight_does_nothing() {
+    let mut a = ControlActions::new();
+    a.review_fn = Box::new(|_, marks| {
+        std::thread::sleep(Duration::from_millis(900));
+        Ok(disk_cleanup_core::explore::testing::reviewed_of(marks, GIB))
+    });
+    let a = Arc::new(a);
+    let mut s = mark_both();
+    at(&mut s, 400, ch('p'));
+    at(&mut s, 700, ch('d')); // the review is still running
+    at(&mut s, 2500, key(Key::Ctrl('c')));
+    let out = run(base(&a, s));
+    assert_eq!(a.count("review"), 1, "d started a second plan");
+    assert_eq!(a.count("preview"), 1);
+    assert!(out.screen.contains("PLAN PREVIEW"), "{}", out.screen);
+}
+
+#[test]
+fn a_plan_made_for_marks_that_changed_while_it_ran_is_not_the_review_of_the_new_marks() {
+    let mut a = ControlActions::new();
+    a.review_fn = Box::new(|n, marks| {
+        if n == 1 {
+            std::thread::sleep(Duration::from_millis(900));
+        }
+        Ok(disk_cleanup_core::explore::testing::reviewed_of(marks, GIB))
+    });
+    let a = Arc::new(a);
+    let mut s = mark_both();
+    at(&mut s, 400, ch('p')); // plans both marks; the review answers at about 1300 ms
+    at(&mut s, 700, ch(' ')); // the second mark goes while it runs
+    at(&mut s, 1800, key(Key::Esc));
+    at(&mut s, 2000, ch('d')); // the plan was for two marks: this is a first d again
+    at(&mut s, 3000, key(Key::Ctrl('c')));
+    let out = run(base(&a, s));
+    assert_eq!(
+        a.count("preview"),
+        2,
+        "d must plan again, not measure afresh"
+    );
+    assert!(
+        out.screen.contains("Review the plan, then press d again."),
+        "{}",
+        out.screen
+    );
+    assert!(!out.screen.contains("DELETE - this cannot be undone"));
+}
+
+#[test]
+fn a_signal_after_a_finished_delete_still_prints_the_closing_line() {
+    let a = Arc::new(ControlActions::new());
+    let s = typed_two(to_prompt());
+    let r = base(&a, s);
+    let signals = Arc::clone(&r.signals);
+    let trigger = std::thread::spawn(move || {
+        // the delete is done and the result list is up by 2.5 s
+        std::thread::sleep(Duration::from_millis(3000));
+        *signals.signal.lock().unwrap() = Some((0, 15));
+    });
+    let out = run(r);
+    trigger.join().unwrap();
+    assert_eq!(out.exit.code, 143);
+    assert_eq!(
+        closing(&out),
+        vec![format!(
+            "EXPLORE CLOSED - deleted 2 items, 2.0 GiB measured. Audit log: {AUDIT}"
+        )]
+    );
+}
+
+// ----- the rescan after a delete and the redraw when it ends -----
+
+/// `/h/code/app/node_modules/pkg` below the usual two directories.
+fn with_nested_dir(r: &Run) {
+    let extra = disk_cleanup_core::explore::msg::ScanMsg::Batch {
+        generation: 0,
+        mode: disk_cleanup_core::explore::msg::ScanMode::Fresh,
+        events: vec![dir_ev(
+            10,
+            1,
+            "pkg",
+            stats(1, 0, 1 << 20, 1 << 20),
+            0,
+            1_700_000_000,
+        )],
+    };
+    r.source.prefill.lock().unwrap().insert(1, extra);
+}
+
+fn location_line(screen: &str) -> &str {
+    screen.lines().nth(2).unwrap_or("")
+}
+
+#[test]
+fn the_rescan_after_a_delete_starts_at_the_parent_of_what_was_removed_and_the_view_stays_inside_it()
+{
+    let a = Arc::new(ControlActions::new());
+    // open node_modules, mark the directory in it, plan, confirm: the parent is node_modules, which the
+    // view already shows
+    let mut s = vec![(100, ch('l')), (200, ch('j')), (300, ch(' '))];
+    at(&mut s, 500, ch('d'));
+    at(&mut s, 1100, ch('d'));
+    at(&mut s, 1700, ch('1'));
+    at(&mut s, 1800, key(Key::Enter));
+    at(&mut s, 2600, key(Key::Esc));
+    at(&mut s, 3200, key(Key::Ctrl('c')));
+    let r = base(&a, s);
+    with_nested_dir(&r);
+    let source = Arc::clone(&r.source);
+    let out = run(r);
+    assert_eq!(a.count("delete"), 1, "{}", out.screen);
+    assert_eq!(
+        source.starts.lock().unwrap()[1].roots,
+        vec![PathBuf::from("/h/code/app/node_modules")]
+    );
+    assert!(
+        location_line(&out.screen).starts_with("~/code/app/node_modules"),
+        "the view moved away:\n{}",
+        out.screen
+    );
+}
+
+#[test]
+fn the_view_moves_to_the_rescanned_directory_when_it_was_somewhere_else() {
+    let a = Arc::new(ControlActions::new());
+    // mark pkg in node_modules, go up and into src, delete: the parent node_modules is not where the view is
+    let mut s = vec![
+        (100, ch('l')),
+        (200, ch('j')),
+        (300, ch(' ')),
+        (400, ch('h')),
+        (550, ch('j')),
+        (700, ch('l')),
+    ];
+    at(&mut s, 900, ch('d'));
+    at(&mut s, 1500, ch('d'));
+    at(&mut s, 2100, ch('1'));
+    at(&mut s, 2200, key(Key::Enter));
+    at(&mut s, 3000, key(Key::Esc));
+    at(&mut s, 3600, key(Key::Ctrl('c')));
+    let r = base(&a, s);
+    with_nested_dir(&r);
+    let out = run(r);
+    assert_eq!(a.count("delete"), 1, "{}", out.screen);
+    assert!(
+        location_line(&out.screen).starts_with("~/code/app/node_modules"),
+        "the view should follow the rescan:\n{}",
+        out.screen
+    );
+}
+
+#[test]
+fn the_result_is_drawn_when_the_delete_ends_without_any_key() {
+    // Nothing is removed, so there is no rescan whose progress would redraw the screen anyway.
+    let mut a = ControlActions::new();
+    a.on_delete = Box::new(|paths, tx, _abort| {
+        std::thread::spawn(move || {
+            let _ = tx.send(DeleteMsg::Progress { index: 1, total: 2 });
+            std::thread::sleep(Duration::from_millis(700));
+            for p in &paths {
+                let _ = tx.send(item(
+                    p.to_str().unwrap(),
+                    DeleteItemOutcome::Failed {
+                        reason: "i/o error".into(),
+                    },
+                ));
+            }
+            let _ = tx.send(DeleteMsg::Done(DeleteSummary::default()));
+        });
+    });
+    let a = Arc::new(a);
+    let mut s = typed_two(to_prompt());
+    at(&mut s, 3500, key(Key::Ctrl('c'))); // the only key after the Enter that started the delete
+    let out = run(base(&a, s));
+    assert!(
+        out.screen
+            .starts_with("DELETE RESULT - 0 removed, 0 skipped, 2 errors"),
+        "{}",
+        out.screen
     );
 }

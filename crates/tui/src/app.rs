@@ -554,9 +554,10 @@ impl App {
     /// Starts the planner for the preview (unless this is the measure before the prompt) and the review of
     /// the marks, each on its own worker; `advance_planning` finishes when both have answered.
     fn start_plan(&mut self, purpose: Purpose) {
-        if self.planning.is_some() || self.finishing.is_some() {
-            return;
-        }
+        debug_assert!(
+            !self.busy_planning(),
+            "the callers check for a plan in flight"
+        );
         self.planning_ticket += 1;
         let ticket = self.planning_ticket;
         let cancel = Arc::new(AtomicBool::new(false));
@@ -926,11 +927,6 @@ impl App {
 
     pub fn delete_running(&self) -> bool {
         matches!(self.stage, Stage::Deleting(_))
-    }
-
-    /// Whether Ctrl-C or a signal asked a running delete to stop and the run has not ended yet.
-    pub fn is_aborting(&self) -> bool {
-        self.abort_exit.is_some()
     }
 
     /// Asks the running delete to stop at the next item boundary and leaves with `code` once it reported,
