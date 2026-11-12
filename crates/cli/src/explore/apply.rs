@@ -309,11 +309,24 @@ fn end_record(
 
 /// Sets the run guard's flag from the caller's switch and from a terminal signal, until `done`.
 fn bridge_aborts(run: &ExplorerRun, env: &Env, done: &AtomicBool) {
-    while !done.load(Ordering::SeqCst) {
+    loop {
+        if done.load(Ordering::SeqCst) {
+            break;
+        }
         if run.abort.load(Ordering::SeqCst) || term_signal().is_some() {
             env.guard.abort_flag().set();
         }
         std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+/// Stops the bridge when the sequence ends, by returning or by unwinding (a panic must not leave the scope
+/// waiting for a thread that never ends).
+struct StopOnDrop<'a>(&'a AtomicBool);
+
+impl Drop for StopOnDrop<'_> {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::SeqCst);
     }
 }
 
@@ -328,9 +341,8 @@ pub fn compose_explorer_apply<D: DirOps + 'static>(
     let done = AtomicBool::new(false);
     std::thread::scope(|s| {
         s.spawn(|| bridge_aborts(run, w.env, &done));
-        let report = sequence(confirmed, w, run, trace);
-        done.store(true, Ordering::SeqCst);
-        report
+        let _stop = StopOnDrop(&done);
+        sequence(confirmed, w, run, trace)
     })
 }
 

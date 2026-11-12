@@ -22,4 +22,8 @@ exclude_re = [
   # changes no result; `target == "/"` never reaches this check because `/` has no file name and fails the
   # basename comparison before it.
   'floor_rule\.rs:74:13: replace \|\| with && in DeletePolicy::validate',
+  # Task 6.6.3b: without `StopOnDrop::drop` the scoped bridge thread of `compose_explorer_apply` never ends when
+  # the sequence panics, so the mutant hangs the run (a timeout) instead of failing a test; the hang is the
+  # detection, and a test that hangs on failure would be worse than the exclusion.
+  'apply\.rs:\d+:\d+: replace <impl Drop for StopOnDrop<.+>>::drop with \(\)',
 ]

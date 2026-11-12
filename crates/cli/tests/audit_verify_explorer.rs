@@ -105,6 +105,10 @@ fn assert_clean(log: &[Value], what: &str) {
     let r = verify(log);
     assert_eq!(r.exit_code(), 0, "{what}: {r:?}");
     assert!(r.violations.is_empty(), "{what}: {r:?}");
+    assert!(
+        r.unfinished.is_empty(),
+        "{what}: every run in these logs has its run_end: {r:?}"
+    );
 }
 
 fn assert_violation(log: &[Value], what: &str, needle: &str) {
@@ -545,4 +549,33 @@ fn own_dirs_should_name_the_three_tool_directories_and_their_canonical_spellings
     ];
     want.sort();
     assert_eq!(dirs, want);
+}
+
+#[test]
+fn verify_file_should_read_a_log_from_disk_like_verify_audit() {
+    let td = tempfile::tempdir().unwrap();
+    let path = td.path().join("audit.jsonl");
+    let mut log = finished();
+    log[1] = confirm("r", 2, "9", &[A, B]);
+    std::fs::write(
+        &path,
+        log.iter()
+            .map(Value::to_string)
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n",
+    )
+    .unwrap();
+    let table = AllowedTable::embedded();
+    let r = disk_cleanup_adapters::audit_verify::verify_file(
+        &path,
+        &VerifyInputs {
+            table: &table,
+            home: Path::new(HOME),
+            config_roots: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(r.exit_code(), 2, "{r:?}");
+    assert_eq!(r.runs, 1);
 }

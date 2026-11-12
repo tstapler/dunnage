@@ -130,3 +130,41 @@ fn review_should_refuse_an_overlapping_set_and_an_oversized_one() {
         .collect();
     assert!(review_marks(&ports, &w, &many).is_err());
 }
+
+#[test]
+fn plan_rows_should_explain_a_file_mark_and_say_nothing_extra_for_other_refusals() {
+    use disk_cleanup_core::plan::Planned;
+    use disk_cleanup_core::SkipReason;
+    let ex = Ex::new();
+    let dir = ex.tree("app/dist", 1, 100);
+    let file = ex.code.join("app/notes.txt");
+    std::fs::write(&file, b"n").unwrap();
+    let own = disk_cleanup_core::explore::mark_check::OwnState::new(
+        &disk_cleanup_core::Dirs {
+            state: dir.clone(),
+            ..ex.base_dirs.clone()
+        },
+        ex.p("bin/x"),
+    );
+    // `dist` is now the tool's own state (a refusal with no note); the file is not a folder.
+    let plan = ex.plan_with(
+        &[dir.clone(), file.clone()],
+        &ex.roots(),
+        &ex.real_sizer(),
+        &own,
+    );
+    let row = |p: &PathBuf| plan.rows.iter().find(|r| &r.path == p).unwrap().clone();
+    assert_eq!(
+        row(&file).planned,
+        Planned::WillNot(SkipReason::ProtectedPath)
+    );
+    assert_eq!(
+        row(&file).note.as_deref(),
+        Some("not a folder: the explorer deletes folders only")
+    );
+    assert_eq!(
+        row(&dir).planned,
+        Planned::WillNot(SkipReason::ProtectedPath)
+    );
+    assert_eq!(row(&dir).note, None);
+}

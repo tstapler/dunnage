@@ -156,10 +156,24 @@ impl Ex {
         roots: &RootSet,
         sizer: &dyn TreeSizer,
     ) -> ReviewedPlan {
-        let own = self.own_state();
+        let plan = self.plan_with(marks, roots, sizer, &self.own_state());
+        let euid = disk_cleanup_core::ports::SystemProbe::euid(&self.probe);
+        self.plans
+            .save_merged(vec![plan.saved_selection(euid, NOW)], euid, NOW);
+        ReviewedPlan::from_explorer_plan(&plan)
+    }
+
+    /// The explorer plan of `marks` (rows and all), not saved.
+    pub fn plan_with(
+        &self,
+        marks: &[PathBuf],
+        roots: &RootSet,
+        sizer: &dyn TreeSizer,
+        own: &OwnState,
+    ) -> disk_cleanup_core::explorer_plan::ExplorerPlan {
         let ctx = ExplorerPlanCtx {
             roots,
-            own_state: &own,
+            own_state: own,
             fs: &self.fs,
             probe: &self.probe,
             clock: &self.clock,
@@ -167,11 +181,7 @@ impl Ex {
             extents: None,
             cleaner: &NoCleanerView,
         };
-        let plan = explorer_plan(marks, OnlyMode::Explorer, &ctx).unwrap();
-        let euid = disk_cleanup_core::ports::SystemProbe::euid(&self.probe);
-        self.plans
-            .save_merged(vec![plan.saved_selection(euid, NOW)], euid, NOW);
-        ReviewedPlan::from_explorer_plan(&plan)
+        explorer_plan(marks, OnlyMode::Explorer, &ctx).unwrap()
     }
 
     /// A reviewed plan for paths `p` could never have produced (a hostile list), saved so the plan-id gate
