@@ -851,8 +851,9 @@ fn stat_at_and_fstat_should_report_mode_nlink_blocks_size_kind_and_mnt_id_When_c
     assert_eq!(st.ident, Identity::of(&md));
     assert_eq!(st.mtime_secs, md.mtime());
     assert_eq!(i64::from(st.mtime_nsec), md.mtime_nsec());
+    // the mount id is statx's (Linux); macOS has no such field
     assert!(
-        st.mnt_id.is_some(),
+        st.mnt_id.is_some() || !cfg!(target_os = "linux"),
         "statx on this kernel reports the mount id"
     );
 
@@ -861,7 +862,7 @@ fn stat_at_and_fstat_should_report_mode_nlink_blocks_size_kind_and_mnt_id_When_c
     assert_eq!(ds.mode, fs::metadata(&base).unwrap().mode() & 0o7777);
     assert_eq!(ds.ident, Identity::of(&fs::metadata(&base).unwrap()));
     assert_eq!(ds.mnt_id, st.mnt_id, "same filesystem, same mount id");
-    assert!(ds.mnt_id.is_some());
+    assert!(ds.mnt_id.is_some() || !cfg!(target_os = "linux"));
 
     fs::set_permissions(&f, fs::Permissions::from_mode(0o4755)).unwrap();
     let st = ops.stat_at(&d, OsStr::new("file")).unwrap();

@@ -422,7 +422,13 @@ fn is_refusal(e: &DeleteError) -> bool {
 }
 
 fn fd_count() -> usize {
-    fs::read_dir("/proc/self/fd").unwrap().count()
+    // macOS has no /proc; /dev/fd lists the open descriptors there too
+    let dir = if cfg!(target_os = "linux") {
+        "/proc/self/fd"
+    } else {
+        "/dev/fd"
+    };
+    fs::read_dir(dir).unwrap().count()
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1010,6 +1016,10 @@ fn subdir_reported_on_other_dev_or_other_mnt_id_should_be_skipped_CrossDevice_an
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "10 000 nested levels take about 16 minutes on APFS (965 s measured on a macos-15 runner): Linux only"
+)]
 fn ten_thousand_level_nesting_should_complete_without_stack_overflow_When_deleting() {
     let fx = Fx::new();
     build_chain(&fx.nm, 10_000);
@@ -1182,12 +1192,19 @@ fn names_with_newlines_and_invalid_utf8_should_be_removed_exactly_When_in_tree()
         OsString::from_vec(b"\xc3\x28".to_vec()),
         OsString::from_vec(b"*".to_vec()),
     ];
+    // APFS refuses a name that is not valid UTF-8, so those names exist on Linux only
+    let on_linux = cfg!(target_os = "linux");
+    let weird: Vec<OsString> = weird
+        .into_iter()
+        .filter(|n| on_linux || n.to_str().is_some())
+        .collect();
+    let inner: &[u8] = if on_linux { b"in\nner\xff" } else { b"in\nner" };
     for (i, n) in weird.iter().enumerate() {
         if i % 2 == 0 {
             fs::write(nm.join(n), b"data").unwrap();
         } else {
             fs::create_dir(nm.join(n)).unwrap();
-            fs::write(nm.join(n).join(OsStr::from_bytes(b"in\nner\xff")), b"x").unwrap();
+            fs::write(nm.join(n).join(OsStr::from_bytes(inner)), b"x").unwrap();
         }
     }
     // a decoy next to the tree whose name equals a lossy rendering of one of the names inside it
