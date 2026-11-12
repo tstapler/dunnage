@@ -8,8 +8,8 @@ use std::io;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::ports::{Cmd, CommandRunner, RunState};
-use disk_cleanup_core::DeleteError;
+use dunnage_core::ports::{Cmd, CommandRunner, RunState};
+use dunnage_core::DeleteError;
 use rustix::fs::{flock, FlockOperation};
 
 #[cfg(not(target_os = "linux"))]
@@ -188,8 +188,8 @@ mod tests {
     use std::process::{Child, Command, Stdio};
     use std::time::Duration;
 
-    use disk_cleanup_core::ports::CmdOutput;
-    use disk_cleanup_core::testing::FakeCommandRunner;
+    use dunnage_core::ports::CmdOutput;
+    use dunnage_core::testing::FakeCommandRunner;
 
     use super::*;
 

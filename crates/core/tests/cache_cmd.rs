@@ -4,10 +4,10 @@
 
 mod common;
 
-use disk_cleanup_core::cache_targets::{cache_command, root_decision, CACHE_COMMANDS};
-use disk_cleanup_core::plan::destructive_gate;
-use disk_cleanup_core::ports::{classify, Class, Cmd};
-use disk_cleanup_core::{
+use dunnage_core::cache_targets::{cache_command, root_decision, CACHE_COMMANDS};
+use dunnage_core::plan::destructive_gate;
+use dunnage_core::ports::{classify, Class, Cmd};
+use dunnage_core::{
     AllocatedBytes, CacheFacts, Candidate, Identity, Intent, KindFacts, Locator, SelectorId,
     SkipReason,
 };
@@ -76,6 +76,6 @@ fn intent_should_record_the_argv_of_a_command_cache_and_nothing_for_a_path_cache
 #[test]
 fn cache_apt_should_need_no_plan_id_even_when_another_uid_saved_the_dry_run() {
     let sel = common::selection(&[SelectorId::CacheApt]);
-    let re = disk_cleanup_core::plan::PlanId::from_hex("c4410aa2").unwrap();
+    let re = dunnage_core::plan::PlanId::from_hex("c4410aa2").unwrap();
     assert!(destructive_gate(&sel, None, None, re, &[], 1_000).is_ok());
 }

@@ -9,10 +9,10 @@ use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_adapters::audit::{unclean_run_warning, unfinished_run, RealAuditSink};
-use disk_cleanup_adapters::state::{sudo_state_dir, Owner};
-use disk_cleanup_core::ports::AuditSink;
-use disk_cleanup_core::*;
+use dunnage_adapters::audit::{unclean_run_warning, unfinished_run, RealAuditSink};
+use dunnage_adapters::state::{sudo_state_dir, Owner};
+use dunnage_core::ports::AuditSink;
+use dunnage_core::*;
 
 #[path = "support/fullfs.rs"]
 mod fullfs;
@@ -173,19 +173,19 @@ fn sudo_state_dir_should_resolve_to_sudo_user_home_0600_and_chowned_When_euid_0_
     let root_state = Path::new("/root/.local/state");
     assert_eq!(
         sudo_state_dir(0, Some("tstapler"), root_state, &passwd),
-        Path::new("/home/tstapler/.local/state/disk-cleanup")
+        Path::new("/home/tstapler/.local/state/dunnage")
     );
     assert_eq!(
         sudo_state_dir(0, None, root_state, &passwd),
-        Path::new("/root/.local/state/disk-cleanup")
+        Path::new("/root/.local/state/dunnage")
     );
     assert_eq!(
         sudo_state_dir(1000, Some("tstapler"), Path::new("/x"), &passwd),
-        Path::new("/x/disk-cleanup")
+        Path::new("/x/dunnage")
     );
     assert_eq!(
         sudo_state_dir(0, Some("nobody-here"), root_state, &passwd),
-        Path::new("/root/.local/state/disk-cleanup")
+        Path::new("/root/.local/state/dunnage")
     );
 
     // Files are chowned to the owner of the user's state dir only when running as root.
@@ -218,7 +218,7 @@ fn first_intent_enospc_should_release_reserve_log_reserve_released_and_continue_
 }
 
 fn enospc_child(dir: &Path) {
-    use disk_cleanup_adapters::state::{StateDir, RESERVE_BYTES};
+    use dunnage_adapters::state::{StateDir, RESERVE_BYTES};
     let (sd, init) = StateDir::open(dir, 1000, &|_| Ok(1 << 30)).unwrap();
     assert!(init.reserves_created);
     assert_eq!(
@@ -280,7 +280,7 @@ fn run_start_without_run_end_in_previous_run_should_print_the_warning_previous_r
         w.text()
     );
     assert!(
-        w.text().contains("disk-cleanup audit verify")
+        w.text().contains("dunnage audit verify")
             && w.text().contains("git -C <repo> worktree prune")
     );
     // A torn last line does not hide it, and a following run's end closes it.

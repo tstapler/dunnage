@@ -14,7 +14,7 @@ case "${1:-}" in
   D | E | F | d | gate-d) cfg=(--config=gate-d) ;;
   *) echo "usage: $0 <A-F|none|gate-b|gate-c|gate-d>" >&2; exit 64 ;;
 esac
-target=//crates/cli:disk-cleanup
+target=//crates/cli:dunnage
 "$bz" build -c opt "${cfg[@]}" "$target" >&2
 rel=$("$bz" cquery -c opt "${cfg[@]}" --output=files "$target" 2>/dev/null | head -1)
 exec_root=$("$bz" info -c opt "${cfg[@]}" execution_root 2>/dev/null)

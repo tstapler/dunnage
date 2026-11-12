@@ -9,8 +9,8 @@
 
 use std::ffi::OsStr;
 
-use disk_cleanup_scan::estimate::Stats;
-use disk_cleanup_scan::index::DirInfo;
+use dunnage_scan::estimate::Stats;
+use dunnage_scan::index::DirInfo;
 
 use super::msg::{NodeEvent, ScanMode, NO_PARENT, PAINT_ID_BASE};
 use super::names::Entry;

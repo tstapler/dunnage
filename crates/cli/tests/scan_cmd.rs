@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
-//! Story 1.2.5, Task 1.2.5b: `disk-cleanup scan` through the spawned binary. Parity is against the oracle the
+//! Story 1.2.5, Task 1.2.5b: `dunnage scan` through the spawned binary. Parity is against the oracle the
 //! old `metascope scan` produced (`crates/scan/tests/fixtures/parity`, Story 0.1.5); every run goes through
 //! `fixture_cmd()` so HOME and the XDG directories are the fixture's.
 
@@ -236,16 +236,16 @@ fn scan_should_write_only_its_own_cache_file_and_nothing_in_the_state_directory_
     let tree_before = tree_manifest(&t.root);
     let first = scan(&f, &[&root, "--backend", "walker", "--json"]);
     assert_eq!(first.status.code(), Some(0), "{}", stderr(&first));
-    let cache = f.xdg("cache").join("disk-cleanup/scan.cache");
+    let cache = f.xdg("cache").join("dunnage/scan.cache");
     assert!(cache.is_file(), "scan.cache missing at {}", cache.display());
     assert_eq!(
-        fs::read_dir(f.xdg("cache").join("disk-cleanup"))
+        fs::read_dir(f.xdg("cache").join("dunnage"))
             .unwrap()
             .count(),
         1
     );
     assert!(
-        !f.xdg("state").join("disk-cleanup").exists(),
+        !f.xdg("state").join("dunnage").exists(),
         "state directory was created"
     );
     assert_eq!(fs::read_dir(f.xdg("state")).unwrap().count(), 0);
@@ -276,7 +276,7 @@ fn scan_should_refuse_apply_and_the_cleaner_flags_When_given_them() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(64));
-    assert!(!f.xdg("state").join("disk-cleanup").exists());
+    assert!(!f.xdg("state").join("dunnage").exists());
 }
 
 #[test]
@@ -291,7 +291,7 @@ fn scan_should_exit_64_with_a_usage_message_When_a_root_does_not_exist() {
         "{}",
         stderr(&out)
     );
-    assert!(!f.xdg("cache").join("disk-cleanup").exists());
+    assert!(!f.xdg("cache").join("dunnage").exists());
     // A file is not a root either.
     let file = f.root().join("file");
     fs::write(&file, "x").unwrap();
@@ -328,7 +328,7 @@ fn scan_should_say_the_two_things_in_help_and_list_no_status_subcommand() {
         help.contains("not the schema_version 1 agent contract"),
         "{help}"
     );
-    assert!(help.contains("`disk-cleanup status`"), "{help}");
+    assert!(help.contains("`dunnage status`"), "{help}");
     assert!(
         !help.contains("Commands:"),
         "scan lists a subcommand: {help}"

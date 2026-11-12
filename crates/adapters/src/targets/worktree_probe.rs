@@ -12,15 +12,15 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
-use disk_cleanup_core::ports::{Cmd, CommandRunner, SystemProbe};
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::targets::worktree_guard::{
+use dunnage_core::guard::{decide_path_common, Facts, GuardDecision};
+use dunnage_core::ports::{Cmd, CommandRunner, SystemProbe};
+use dunnage_core::roots::RootSet;
+use dunnage_core::targets::worktree_guard::{
     decide_worktree, IgnoredFiles, PushState, WorktreeCandidate, WorktreeGuard, WorktreeOpts,
     WORKTREE_MIN_AGE,
 };
-use disk_cleanup_core::{Identity, Kind, RootDev, Tri};
-use disk_cleanup_scan::classify::classify_path;
+use dunnage_core::{Identity, Kind, RootDev, Tri};
+use dunnage_scan::classify::classify_path;
 
 use crate::dirops::{open_verified_root, DirOps};
 use crate::discover_build::symlink_between;

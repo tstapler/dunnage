@@ -7,11 +7,11 @@
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::cache_targets::{cache_table, root_decision, CacheRow, CacheSource};
-use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
-use disk_cleanup_core::ports::{Cmd, CommandRunner, SystemProbe};
-use disk_cleanup_core::roots::{CacheTool, RootSet};
-use disk_cleanup_core::{
+use dunnage_core::cache_targets::{cache_table, root_decision, CacheRow, CacheSource};
+use dunnage_core::guard::{decide_path_common, Facts, GuardDecision};
+use dunnage_core::ports::{Cmd, CommandRunner, SystemProbe};
+use dunnage_core::roots::{CacheTool, RootSet};
+use dunnage_core::{
     AllocatedBytes, Allowed, CacheFacts, Candidate, Identity, Kind, KindFacts, Locator, RootDev,
     SkipReason,
 };

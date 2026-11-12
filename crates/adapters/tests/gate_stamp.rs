@@ -8,10 +8,10 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-use disk_cleanup_adapters::gate_stamp::{
+use dunnage_adapters::gate_stamp::{
     break_glass, confirm_bypass, open_controlling_tty, read_stamp, sha256_file, BreakGlassRefusal,
 };
-use disk_cleanup_core::STAMP_SCHEMA;
+use dunnage_core::STAMP_SCHEMA;
 
 const CHILD: &str = "DC_BG_CHILD";
 
@@ -21,7 +21,7 @@ fn child_probe() {
     if std::env::var_os(CHILD).is_none() {
         return;
     }
-    let var = std::env::var("DISK_CLEANUP_UNGATED").ok();
+    let var = std::env::var("DUNNAGE_UNGATED").ok();
     let r = break_glass(var.as_deref(), &open_controlling_tty);
     let (word, code) = match r {
         Ok(bg) => (
@@ -41,7 +41,7 @@ fn child_cmd() -> Command {
     let mut c = Command::new(std::env::current_exe().unwrap());
     c.args(["--exact", "child_probe", "--nocapture", "--test-threads=1"])
         .env(CHILD, "1")
-        .env("DISK_CLEANUP_UNGATED", "rebuilt locally for Gate B");
+        .env("DUNNAGE_UNGATED", "rebuilt locally for Gate B");
     c
 }
 
@@ -70,7 +70,7 @@ fn under_pty(typed: &str) -> (Option<i32>, String) {
     let mut c = Command::new("script");
     c.args(["-qec", &inner, "/dev/null"])
         .env(CHILD, "1")
-        .env("DISK_CLEANUP_UNGATED", "rebuilt locally for Gate B")
+        .env("DUNNAGE_UNGATED", "rebuilt locally for Gate B")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
@@ -94,7 +94,7 @@ fn break_glass_should_exit_64_without_a_controlling_terminal_and_proceed_only_wi
         .arg(std::env::current_exe().unwrap())
         .args(["--exact", "child_probe", "--nocapture", "--test-threads=1"])
         .env(CHILD, "1")
-        .env("DISK_CLEANUP_UNGATED", "rebuilt locally for Gate B")
+        .env("DUNNAGE_UNGATED", "rebuilt locally for Gate B")
         .stdin(Stdio::null())
         .output()
         .unwrap();
@@ -103,7 +103,7 @@ fn break_glass_should_exit_64_without_a_controlling_terminal_and_proceed_only_wi
 
     // The same child with no variable never reaches the terminal.
     let out = child_cmd()
-        .env_remove("DISK_CLEANUP_UNGATED")
+        .env_remove("DUNNAGE_UNGATED")
         .stdin(Stdio::null())
         .output()
         .unwrap();
@@ -198,13 +198,13 @@ fn read_stamp_and_sha256_file_should_read_what_gate_sh_writes() {
 
 #[test]
 fn stamp_refusal_should_offer_both_the_rebuild_and_the_audited_break_glass() {
-    let t = disk_cleanup_core::StampRefusal::Absent.text();
+    let t = dunnage_core::StampRefusal::Absent.text();
     assert!(
         t.contains("If the disk has room for a build, run 'make gate"),
         "{t}"
     );
     assert!(
-        t.contains("DISK_CLEANUP_UNGATED=<reason>") && t.contains("type BYPASS"),
+        t.contains("DUNNAGE_UNGATED=<reason>") && t.contains("type BYPASS"),
         "{t}"
     );
 }

@@ -5,8 +5,8 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::{Dirs, Identity};
+use dunnage_core::roots::RootSet;
+use dunnage_core::{Dirs, Identity};
 
 pub struct Fixture {
     pub _tmp: tempfile::TempDir,

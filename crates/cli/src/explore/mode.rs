@@ -58,10 +58,10 @@ fn blocker(
         }
         Some(_) => {}
     }
-    plain_env.then(|| "DISK_CLEANUP_PLAIN is set".to_string())
+    plain_env.then(|| "DUNNAGE_PLAIN is set".to_string())
 }
 
-/// `size` is `(columns, rows)` from the ioctl, `None` when it failed. `plain_env` is "`DISK_CLEANUP_PLAIN`
+/// `size` is `(columns, rows)` from the ioctl, `None` when it failed. `plain_env` is "`DUNNAGE_PLAIN`
 /// is set". `--json` wins over everything, `--text` over the terminal checks.
 pub fn choose_mode(
     stdin_tty: bool,

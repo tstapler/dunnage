@@ -11,20 +11,20 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use disk_cleanup_adapters::targets::btrfs_balance::{balance_mount, BtrfsBalanceTarget};
-use disk_cleanup_core::audit_types::{AuditRecord, RunRoots};
-use disk_cleanup_core::executor::{
+use dunnage_adapters::targets::btrfs_balance::{balance_mount, BtrfsBalanceTarget};
+use dunnage_core::audit_types::{AuditRecord, RunRoots};
+use dunnage_core::executor::{
     AbortCause, Executor, ExitClass, Mode, RunMeta, RunOptions, RunReport,
 };
-use disk_cleanup_core::ports::{CmdOutput, Env};
-use disk_cleanup_core::selector::{KindSelector, Selection};
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::targets::btrfs_guard::BALANCE_STILL_RUNNING;
-use disk_cleanup_core::testing::{
+use dunnage_core::ports::{CmdOutput, Env};
+use dunnage_core::selector::{KindSelector, Selection};
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::targets::btrfs_guard::BALANCE_STILL_RUNNING;
+use dunnage_core::testing::{
     CallKind, FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe,
     FakeRunGuard, FakeSpaceMeter,
 };
-use disk_cleanup_core::{
+use dunnage_core::{
     AllocSnapshot, ApplyToken, BuildInfo, DeleteError, Dirs, FsSnapshot, MountEntry, Platform,
     SelectorId, SkipReason, SpaceUse, Status,
 };
@@ -131,7 +131,7 @@ impl Rig {
         self.runner
             .calls_of(CallKind::RunMutating)
             .iter()
-            .map(disk_cleanup_core::testing::RecordedCall::rendered)
+            .map(dunnage_core::testing::RecordedCall::rendered)
             .collect()
     }
 }
@@ -233,7 +233,7 @@ fn apply(rig: &Rig, target: &BtrfsBalanceTarget) -> RunReport {
         .unwrap_or_else(|r| panic!("apply refused: {}", r.text))
 }
 
-fn only_outcome(r: &RunReport) -> &disk_cleanup_core::Outcome {
+fn only_outcome(r: &RunReport) -> &dunnage_core::Outcome {
     assert_eq!(r.summary.outcomes.len(), 1, "{:?}", r.summary.outcomes);
     &r.summary.outcomes[0]
 }
@@ -611,7 +611,7 @@ fn sigint_during_balance_should_stop_waiting_print_the_cancel_command_exit_130_a
         .runner
         .calls()
         .iter()
-        .map(disk_cleanup_core::testing::RecordedCall::rendered)
+        .map(dunnage_core::testing::RecordedCall::rendered)
         .collect();
     assert_eq!(
         rig.mutating_argvs().last().unwrap(),
@@ -743,15 +743,14 @@ fn safety_btrfs_balance_is_never_cancelled_by_the_tool() {
         .runner
         .calls()
         .iter()
-        .map(disk_cleanup_core::testing::RecordedCall::rendered)
+        .map(dunnage_core::testing::RecordedCall::rendered)
         .collect();
     assert!(all.iter().all(|a| !a.contains("cancel")), "{all:?}");
     // and `balance cancel` is not a runnable argv in either class
     for mutating in [true, false] {
-        let mut cmd =
-            disk_cleanup_core::ports::Cmd::new("btrfs", ["balance", "cancel", "/"], mutating);
+        let mut cmd = dunnage_core::ports::Cmd::new("btrfs", ["balance", "cancel", "/"], mutating);
         cmd.mutating = mutating;
-        assert_eq!(disk_cleanup_core::ports::classify(&cmd), None);
+        assert_eq!(dunnage_core::ports::classify(&cmd), None);
     }
 }
 
@@ -774,7 +773,7 @@ fn safety_btrfs_balance_non_zero_steps_are_bounded_and_need_one_gib_unallocated(
     assert_eq!(rig.mutating_argvs(), ["btrfs balance start -dusage=0 /"]);
 
     for usage in [5u8, 10, 20, 40] {
-        let unbounded = disk_cleanup_core::ports::Cmd::new(
+        let unbounded = dunnage_core::ports::Cmd::new(
             "btrfs",
             [
                 "balance".to_string(),
@@ -785,7 +784,7 @@ fn safety_btrfs_balance_non_zero_steps_are_bounded_and_need_one_gib_unallocated(
             true,
         );
         assert_eq!(
-            disk_cleanup_core::ports::classify(&unbounded),
+            dunnage_core::ports::classify(&unbounded),
             None,
             "usage {usage}"
         );

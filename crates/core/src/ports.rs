@@ -250,7 +250,7 @@ pub fn allowlist_row_counts() -> (usize, usize) {
 /// There is no `run_mutating` without a token, so plan-mode code cannot even spell the call:
 ///
 /// ```compile_fail
-/// use disk_cleanup_core::ports::{Cmd, CommandRunner};
+/// use dunnage_core::ports::{Cmd, CommandRunner};
 /// fn plan_mode(r: &dyn CommandRunner) {
 ///     let cmd = Cmd::new("docker", ["image", "rm", "sha256:ab12"], true);
 ///     let _ = r.run_mutating(&cmd);

@@ -7,9 +7,9 @@ mod common;
 use std::collections::HashSet;
 
 use common::{cache, caches_selection, freed, run, FakeTarget, Rig};
-use disk_cleanup_core::delete_types::{DeleteError, DeleteFailure};
-use disk_cleanup_core::target::Guarded;
-use disk_cleanup_core::{SkipReason, Status};
+use dunnage_core::delete_types::{DeleteError, DeleteFailure};
+use dunnage_core::target::Guarded;
+use dunnage_core::{SkipReason, Status};
 use proptest::prelude::*;
 
 #[derive(Debug, Clone, Copy)]

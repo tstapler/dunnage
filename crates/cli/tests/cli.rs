@@ -10,7 +10,7 @@ use std::process::{Output, Stdio};
 use std::time::{Duration, Instant};
 
 use common::{tree_manifest, Fixture};
-use disk_cleanup_core::ports::{classify, Class, Cmd};
+use dunnage_core::ports::{classify, Class, Cmd};
 
 fn with_cache(f: &Fixture) -> PathBuf {
     let dir = f.home().join(".npm/_cacache");
@@ -20,7 +20,7 @@ fn with_cache(f: &Fixture) -> PathBuf {
 }
 
 fn state_listing(f: &Fixture) -> BTreeSet<String> {
-    std::fs::read_dir(f.xdg("state").join("disk-cleanup"))
+    std::fs::read_dir(f.xdg("state").join("dunnage"))
         .map(|rd| {
             rd.flatten()
                 .map(|e| e.file_name().to_string_lossy().into_owned())
@@ -97,8 +97,7 @@ fn plan_mode_should_write_only_the_state_files_and_no_audit_log_or_run_lock() {
         !text(&again).1.contains("created 2 reserve files"),
         "only the first run creates them"
     );
-    let outcome =
-        std::fs::read_to_string(f.xdg("state").join("disk-cleanup/outcome.jsonl")).unwrap();
+    let outcome = std::fs::read_to_string(f.xdg("state").join("dunnage/outcome.jsonl")).unwrap();
     assert_eq!(outcome.lines().count(), 2, "one outcome line per run");
     assert!(!state_listing(&f).contains("audit.jsonl"));
     assert!(!state_listing(&f).contains("run.lock"));
@@ -155,7 +154,7 @@ fn dry_run_flags_with_apply_should_exit_64_and_delete_nothing() {
         assert!(stdout.is_empty(), "{argv:?}: {stdout}");
         assert_eq!(
             stderr,
-            "error: -n/--dry-run and --apply contradict each other; drop one. Dry run is the default, so plain 'disk-cleanup' is the dry run.\n"
+            "error: -n/--dry-run and --apply contradict each other; drop one. Dry run is the default, so plain 'dunnage' is the dry run.\n"
         );
         assert!(dir.join("blob").is_file(), "{argv:?}");
     }
@@ -216,7 +215,7 @@ fn a_named_kind_this_build_does_not_ship_should_exit_64_with_the_catalogue_text(
         assert!(stdout.is_empty());
         assert!(
             stderr.contains(&format!(
-                "'{unshipped}' is not available in this build (see 'disk-cleanup kinds')"
+                "'{unshipped}' is not available in this build (see 'dunnage kinds')"
             )),
             "{stderr}"
         );
@@ -407,7 +406,7 @@ fn status_should_exit_74_when_the_fs_directory_is_unreadable_and_write_only_rese
         .map(ToString::to_string)
         .collect();
     assert_eq!(state_listing(&g), want);
-    let line = std::fs::read_to_string(g.xdg("state").join("disk-cleanup/outcome.jsonl")).unwrap();
+    let line = std::fs::read_to_string(g.xdg("state").join("dunnage/outcome.jsonl")).unwrap();
     assert_eq!(line.lines().count(), 1);
     assert!(line.contains("\"mode\":\"status\""), "{line}");
 }
@@ -428,7 +427,7 @@ fn status_text_should_use_the_s4_block_and_a_missing_path_should_exit_64() {
         "{stdout}"
     );
     assert!(stdout.contains("unallocated    9.8 GiB"), "{stdout}");
-    assert!(stdout.contains("Hint: 'disk-cleanup' (dry run) lists what could be freed."));
+    assert!(stdout.contains("Hint: 'dunnage' (dry run) lists what could be freed."));
     let out = f
         .fixture_cmd()
         .args(["status", "/no/such/path"])
@@ -510,7 +509,7 @@ fn help_and_version_should_exit_0_on_stdout_and_a_usage_error_should_exit_64() {
         .starts_with("Free disk space. Dry run by default: nothing is deleted without --apply."));
     let out = f.fixture_cmd().arg("--version").output().unwrap();
     assert_eq!(out.status.code(), Some(0));
-    assert!(text(&out).0.starts_with("disk-cleanup "));
+    assert!(text(&out).0.starts_with("dunnage "));
     let out = f.fixture_cmd().arg("frobnicate").output().unwrap();
     assert_eq!(out.status.code(), Some(64));
     assert!(out.stdout.is_empty());

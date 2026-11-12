@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-core-deps.sh [repo-root] | --selftest
-# disk-cleanup-core must not depend directly on rustix or libc, nor use them or raw deletion calls in source.
-# Direct dependencies only: disk-cleanup-scan (a read-only library) lists both transitively and that is accepted.
+# dunnage-core must not depend directly on rustix or libc, nor use them or raw deletion calls in source.
+# Direct dependencies only: dunnage-scan (a read-only library) lists both transitively and that is accepted.
 set -u -o pipefail
 forbidden_deps='rustix libc'
 forbidden_src='rustix::|libc::|std::fs::remove|unlinkat'
@@ -10,9 +10,9 @@ check() {
   local root=${1:-.} bad=0 deps dep hits
   command -v jq >/dev/null || { echo "check-core-deps: jq is required" >&2; return 2; }
   deps=$(cd "$root" && cargo metadata --no-deps --offline --format-version 1 \
-    | jq -r '.packages[] | select(.name == "disk-cleanup-core") | .dependencies[].name') || { echo "check-core-deps: cargo metadata failed" >&2; return 2; }
+    | jq -r '.packages[] | select(.name == "dunnage-core") | .dependencies[].name') || { echo "check-core-deps: cargo metadata failed" >&2; return 2; }
   for dep in $forbidden_deps; do
-    if grep -qx "$dep" <<<"$deps"; then echo "FAIL: disk-cleanup-core depends directly on $dep"; bad=1; fi
+    if grep -qx "$dep" <<<"$deps"; then echo "FAIL: dunnage-core depends directly on $dep"; bad=1; fi
   done
   if [ -d "$root/crates/core" ]; then
     # Comment lines are stripped first so docs in core may name unlinkat.
@@ -22,7 +22,7 @@ check() {
           { line = $0; sub(/^[ \t]*\/\/.*/, "", line); if (line ~ pat) printf "%s:%d: %s\n", FILENAME, FNR, $0 }')
     if [ -n "$hits" ]; then echo "FAIL: forbidden use in core source:"; echo "$hits"; bad=1; fi
   fi
-  [ $bad = 0 ] && echo "ok: disk-cleanup-core has no direct rustix/libc dependency or source use"
+  [ $bad = 0 ] && echo "ok: dunnage-core has no direct rustix/libc dependency or source use"
   return $bad
 }
 
@@ -34,7 +34,7 @@ selftest() {
     if [ "$rc" = "$want" ] && grep -q -- "$pat" <<<"$out"; then n=$((n+1)); echo "ok: $name"; else echo "SELFTEST BAD: $name (rc=$rc): $out"; bad=$((bad+1)); fi; }
   mkdir -p "$d/r/crates/core/src"
   printf '[workspace]\nresolver = "2"\nmembers = ["crates/core"]\n' > "$d/r/Cargo.toml"
-  printf '[package]\nname = "disk-cleanup-core"\nversion = "0.1.0"\nedition = "2021"\n' > "$d/r/crates/core/Cargo.toml"
+  printf '[package]\nname = "dunnage-core"\nversion = "0.1.0"\nedition = "2021"\n' > "$d/r/crates/core/Cargo.toml"
   printf '//! mentions unlinkat in a doc comment only\npub fn f() {}\n' > "$d/r/crates/core/src/lib.rs"
   expect 0 "clean fixture passes (doc comment naming unlinkat is ignored)" "^ok:" "$self" "$d/r"
   printf '\n[dependencies]\nlibc = "0.2"\n' >> "$d/r/crates/core/Cargo.toml"

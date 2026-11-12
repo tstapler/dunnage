@@ -57,12 +57,12 @@ ALLOWED_PATHS = {  # every external path the file may spell, as a `use` leaf or 
     "core::mem::size_of", "core::mem::zeroed",
     "std::io", "std::io::Error", "std::os::fd::AsRawFd", "std::os::fd::OwnedFd", "std::path::Path",
     "std::time::Duration", "std::time::Instant", "std::sync::atomic::AtomicBool", "std::sync::atomic::Ordering",
-    "disk_cleanup_core::ports::ExtentProbe", "disk_cleanup_core::ports::ExtentAttribution",
-    "disk_cleanup_core::ports::Unavailable", "disk_cleanup_core::ports::ItemExtents",
-    "disk_cleanup_core::ports::SharedExtent", "disk_cleanup_core::explore::SharedEstimate",
+    "dunnage_core::ports::ExtentProbe", "dunnage_core::ports::ExtentAttribution",
+    "dunnage_core::ports::Unavailable", "dunnage_core::ports::ItemExtents",
+    "dunnage_core::ports::SharedExtent", "dunnage_core::explore::SharedEstimate",
     # Story 6.3.2: the explorer's shared-bytes estimate lists one directory (read-only) and keeps the top N.
     # The plan names the port type `explore::SharedEstimate`; it lives in `ports` (plan defect, see findings).
-    "disk_cleanup_core::ports::SharedEstimate", "std::fs::read_dir", "std::path::PathBuf",
+    "dunnage_core::ports::SharedEstimate", "std::fs::read_dir", "std::path::PathBuf",
     "std::collections::BinaryHeap", "std::cmp::Reverse", "std::os::unix::fs::MetadataExt",
 }
 ALLOWED_MEMBERS = {  # Type::member of a name imported from rustix or libc
@@ -71,8 +71,8 @@ ALLOWED_MEMBERS = {  # Type::member of a name imported from rustix or libc
 }
 ALLOWED_MACROS = {"matches", "debug_assert", "debug_assert_eq", "assert", "assert_eq", "cfg", "format", "vec"}
 ALLOWED_ATTRS = {"repr", "derive", "cfg", "allow", "inline", "must_use", "test"}
-EXTERNAL_ROOTS = {"rustix", "libc", "std", "core", "alloc", "nix", "crate", "super", "disk_cleanup_core",
-                  "disk_cleanup_adapters", "metascope_core"}
+EXTERNAL_ROOTS = {"rustix", "libc", "std", "core", "alloc", "nix", "crate", "super", "dunnage_core",
+                  "dunnage_adapters", "metascope_core"}
 CAPABILITY_ROOTS = {"rustix", "libc"}
 SECOND_LAYER = ("unlink", "rename", "remove", "write", "trunc", "fallocate", "chmod", "chown", "syscall", "wronly", "rdwr",
                 "creat", "append", "applytoken", "allowedtarget", "delete", "dirops", "mkdir", "symlink", "linkat",
@@ -277,7 +277,7 @@ use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
-use disk_cleanup_core::ports::{ExtentAttribution, ExtentProbe, SharedEstimate, Unavailable};
+use dunnage_core::ports::{ExtentAttribution, ExtentProbe, SharedEstimate, Unavailable};
 fn list(d: &std::path::Path) -> u64 {
     let mut h: BinaryHeap<Reverse<(u64, PathBuf)>> = BinaryHeap::new();
     for e in std::fs::read_dir(d).unwrap().flatten() { let m = e.metadata().unwrap(); h.push(Reverse((m.blocks(), e.path()))); }
@@ -297,7 +297,7 @@ fn probe(p: &std::path::Path, budget: Duration) -> bool {
     r == 0 && t0.elapsed() < budget && fm.fm_extent_count & FIEMAP_EXTENT_SHARED == 0
 }
 '''
-CLEAN_MIN = 'use disk_cleanup_core::ports::ExtentProbe;\nfn f() { let _ = "std::fs::remove_file"; /* rustix::fs::unlinkat */ }\n'
+CLEAN_MIN = 'use dunnage_core::ports::ExtentProbe;\nfn f() { let _ = "std::fs::remove_file"; /* rustix::fs::unlinkat */ }\n'
 EVASIONS = {
     "01_renameat": 'fn f(){ rustix::fs::renameat(a, b, c, d); }',
     "02_remove_file": 'use std::fs::remove_file; fn f(){ remove_file("a"); }',
@@ -767,11 +767,11 @@ selftest() {
     if [ "${4:-append}" = replace ]; then printf '%s\n' "$3" > "$d/$2"; else mkdir -p "$(dirname "$d/$2")"; printf '%s\n' "$3" >> "$d/$2"; fi
     expect_fail "$1" "$d"
   }
-  neg macro-arg crates/adapters/src/x.rs 'macro_rules! tok { ($f:ident) => { disk_cleanup_core::ApplyToken::$f() } }
+  neg macro-arg crates/adapters/src/x.rs 'macro_rules! tok { ($f:ident) => { dunnage_core::ApplyToken::$f() } }
 fn a() { let _ = tok!(grant); }'
-  neg use-as crates/adapters/src/x.rs 'use disk_cleanup_core::ApplyToken as Tok;
+  neg use-as crates/adapters/src/x.rs 'use dunnage_core::ApplyToken as Tok;
 fn a() { let _ = Tok::grant(); }'
-  neg type-alias crates/adapters/src/x.rs 'type T = disk_cleanup_core::ApplyToken;
+  neg type-alias crates/adapters/src/x.rs 'type T = dunnage_core::ApplyToken;
 fn a() { let _ = <T>::grant(); }'
   neg fn-pointer crates/adapters/src/x.rs 'fn a() { let f = ApplyToken::grant; let _ = f(); }'
   neg multi-line crates/adapters/src/x.rs 'fn a() { let _ = ApplyToken

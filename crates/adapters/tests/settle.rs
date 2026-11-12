@@ -9,11 +9,11 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use disk_cleanup_adapters::settle::settle;
-use disk_cleanup_adapters::space_meter::SysfsAllocSource;
-use disk_cleanup_adapters::RealSpaceMeter;
-use disk_cleanup_core::ports::SpaceMeter;
-use disk_cleanup_core::Platform;
+use dunnage_adapters::settle::settle;
+use dunnage_adapters::space_meter::SysfsAllocSource;
+use dunnage_adapters::RealSpaceMeter;
+use dunnage_core::ports::SpaceMeter;
+use dunnage_core::Platform;
 
 const GIB: u64 = 1 << 30;
 

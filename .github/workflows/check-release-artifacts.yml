@@ -1,5 +1,5 @@
 # Called by the tag-triggered release workflow before its release job (RELEASE.md), and runnable by hand. Builds the
-# dist binary exactly as the release does (`bazel build --config=dist //crates/cli:disk-cleanup`) on each release
+# dist binary exactly as the release does (`bazel build --config=dist //crates/cli:dunnage`) on each release
 # runner and checks that binary: no `test-support` marker, and `main` reaches `build_flavor()` so the marker leg is
 # not blind (scripts/check-release-features.sh --artifact). The Cargo and Bazel graph legs run in ci.yml.
 name: Check release features
@@ -33,9 +33,9 @@ jobs:
           repository-cache: true
           cache-save: ${{ github.event_name != 'pull_request' }}
       - name: build the release binary
-        run: bazel build --config=ci --config=dist //crates/cli:disk-cleanup
+        run: bazel build --config=ci --config=dist //crates/cli:dunnage
       - name: no test-support in the release binary
-        run: scripts/check-release-features.sh --artifact bazel-bin/crates/cli/disk-cleanup
+        run: scripts/check-release-features.sh --artifact bazel-bin/crates/cli/dunnage
       # Last: it builds tainted binaries into the same output path.
       - name: the Bazel selftest (a tainted build must fail every leg)
         run: scripts/check-release-features.sh --bazel-selftest

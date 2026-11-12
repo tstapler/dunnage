@@ -13,7 +13,7 @@
 //! Every case ends with the fixture tree intact and no deletion without an `intent` line in the audit log,
 //! except the one allowed directory, which is deleted and logged.
 //!
-//! Run: `GATE=D TMPDIR=/tmp cargo test -p disk-cleanup --features disk-cleanup/gate-d --test explore_hostile`.
+//! Run: `GATE=D TMPDIR=/tmp cargo test -p dunnage --features dunnage/gate-d --test explore_hostile`.
 //! Mount cases re-run themselves under `unshare -rm` (a named SKIP where that does not work;
 //! `DC_REQUIRE_UNSHARE=1` or `DC_REQUIRE_BIND_MOUNT=1` makes the skip a failure).
 #![cfg(feature = "gate-d")]
@@ -40,32 +40,32 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use common::Fixture;
-use disk_cleanup_adapters::dirops::{DirOps, RealDir, RealReadDir};
-use disk_cleanup_adapters::{RealDirOps, RealProbe};
-use disk_cleanup_cli::explore::apply::{
+use dunnage_adapters::dirops::{DirOps, RealDir, RealReadDir};
+use dunnage_adapters::{RealDirOps, RealProbe};
+use dunnage_cli::explore::apply::{
     compose_explorer_apply, skip_text, ExplorerApplyPorts, ExplorerReport, ExplorerRun,
 };
-use disk_cleanup_cli::wiring::audit::StampOutcome;
-use disk_cleanup_cli::wiring::compose::Trace;
-use disk_cleanup_cli::wiring::env::{tool_dirs, RealFs, SystemClock, Wired};
-use disk_cleanup_cli::wiring::explore::canonical_lenient;
-use disk_cleanup_core::audit_types::{ExplorerConfirm, Intent, ItemResult, RunEnd, RunStart};
-use disk_cleanup_core::delete_types::{DirEntryInfo, StatInfo};
-use disk_cleanup_core::dirs::Dirs;
-use disk_cleanup_core::explore::confirm::{Confirm, ConfirmedPlan, ReviewedItem, ReviewedPlan};
-use disk_cleanup_core::explore::mark_check::OwnState;
-use disk_cleanup_core::explorer_plan::{
+use dunnage_cli::wiring::audit::StampOutcome;
+use dunnage_cli::wiring::compose::Trace;
+use dunnage_cli::wiring::env::{tool_dirs, RealFs, SystemClock, Wired};
+use dunnage_cli::wiring::explore::canonical_lenient;
+use dunnage_core::audit_types::{ExplorerConfirm, Intent, ItemResult, RunEnd, RunStart};
+use dunnage_core::delete_types::{DirEntryInfo, StatInfo};
+use dunnage_core::dirs::Dirs;
+use dunnage_core::explore::confirm::{Confirm, ConfirmedPlan, ReviewedItem, ReviewedPlan};
+use dunnage_core::explore::mark_check::OwnState;
+use dunnage_core::explorer_plan::{
     explorer_plan, ExplorerPlan, ExplorerPlanCtx, NoCleanerView, TreeSize, TreeSizer,
 };
-use disk_cleanup_core::ids::AllocatedBytes;
-use disk_cleanup_core::kind::Kind;
-use disk_cleanup_core::outcome::Status;
-use disk_cleanup_core::plan::{ItemIdentity, OnlyMode, Planned};
-use disk_cleanup_core::plan_state::{BuildInfo, ItemKey, SaveOutcome, SavedSelection};
-use disk_cleanup_core::ports::{AuditSink, Clock, Env, Fs, SystemProbe};
-use disk_cleanup_core::roots::{RootIdentity, RootSet};
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::{ApplyToken, Identity};
+use dunnage_core::ids::AllocatedBytes;
+use dunnage_core::kind::Kind;
+use dunnage_core::outcome::Status;
+use dunnage_core::plan::{ItemIdentity, OnlyMode, Planned};
+use dunnage_core::plan_state::{BuildInfo, ItemKey, SaveOutcome, SavedSelection};
+use dunnage_core::ports::{AuditSink, Clock, Env, Fs, SystemProbe};
+use dunnage_core::roots::{RootIdentity, RootSet};
+use dunnage_core::selector::Selection;
+use dunnage_core::{ApplyToken, Identity};
 
 // ---------------------------------------------------------------------------------------------------------
 // Namespace plumbing
@@ -291,7 +291,7 @@ impl Rig {
                 std::fs::create_dir_all(r).unwrap();
             }
         }
-        let binary = root.join("opt/disk-cleanup/bin/disk-cleanup");
+        let binary = root.join("opt/dunnage/bin/dunnage");
         Rig {
             fx,
             base,
@@ -1103,8 +1103,8 @@ fn safety_explorer_hostile_should_refuse_the_audit_log_directory_When_it_is_mark
 #[test]
 fn safety_explorer_hostile_should_refuse_the_cache_and_config_directories_When_they_are_marked() {
     let rig = xdg_rig();
-    let cache = rig.dir(rig.base.cache.join("disk-cleanup"));
-    let cfg = rig.dir(rig.base.config.join("disk-cleanup"));
+    let cache = rig.dir(rig.base.cache.join("dunnage"));
+    let cfg = rig.dir(rig.base.config.join("dunnage"));
     let cache_file = rig.file(cache.join("explorer.cache"), b"cache");
     let cfg_file = rig.file(cfg.join("config.toml"), b"roots = []");
     for mark in [&cache, &cfg, &rig.base.cache, &rig.base.config] {
@@ -1129,7 +1129,7 @@ fn safety_explorer_hostile_should_refuse_the_running_binary_and_its_ancestors_Wh
     let mut rig = Rig::new();
     let app = rig.dir(rig.home().join("code/app"));
     let debug = rig.dir(app.join("target/debug"));
-    rig.binary = debug.join("disk-cleanup");
+    rig.binary = debug.join("dunnage");
     rig.file(&rig.binary, b"\x7fELF");
     let dist = rig.victim("app/dist");
     assert_hostile_mark(&rig, &debug, "directory of the running binary");
@@ -1154,7 +1154,7 @@ fn safety_explorer_hostile_should_refuse_own_state_When_xdg_state_home_is_a_syml
     let link = rig.top().join("xdg-state-link");
     symlink(&real, &link).unwrap();
     rig.base.state = link;
-    let own = real.join("disk-cleanup");
+    let own = real.join("dunnage");
     let a0 = Wired::build(&rig.base, true);
     drop(a0);
     rig.dir(&own);
@@ -1412,11 +1412,7 @@ fn rustc_check(src: &str) -> (bool, String) {
     .arg(dir.path().join("probe.rmeta"))
     .arg("-L")
     .arg(format!("dependency={}", deps.display()));
-    for k in [
-        "disk_cleanup_core",
-        "disk_cleanup_cli",
-        "disk_cleanup_adapters",
-    ] {
+    for k in ["dunnage_core", "dunnage_cli", "dunnage_adapters"] {
         c.arg("--extern")
             .arg(format!("{k}={}", newest_rlib(&deps, k).display()));
     }
@@ -1427,7 +1423,8 @@ fn rustc_check(src: &str) -> (bool, String) {
     )
 }
 
-const CONFIRM_PRELUDE: &str = "use disk_cleanup_core::explore::confirm::{Confirm, ConfirmRecord, ConfirmedPlan, ReviewedPlan};\n";
+const CONFIRM_PRELUDE: &str =
+    "use dunnage_core::explore::confirm::{Confirm, ConfirmRecord, ConfirmedPlan, ReviewedPlan};\n";
 
 #[test]
 fn safety_explorer_hostile_should_not_compile_a_forged_confirmation_When_it_does_not_come_from_accepts(
@@ -1457,7 +1454,7 @@ fn safety_explorer_hostile_should_not_compile_a_forged_confirmation_When_it_does
         ("a second accepts on one Confirm", "pub fn f(c: Confirm) { let _ = c.accepts(\"1\"); let _ = c.accepts(\"1\"); }", "E0382"),
         (
             "a ConfirmRecord where a ConfirmedPlan is required",
-            "use disk_cleanup_adapters::dirops::DirOps;\nuse disk_cleanup_cli::explore::apply::{compose_explorer_apply, ExplorerApplyPorts, ExplorerReport, ExplorerRun};\nuse disk_cleanup_cli::wiring::compose::Trace;\npub fn f<D: DirOps + 'static>(r: ConfirmRecord, w: &ExplorerApplyPorts<'_, D>, run: &ExplorerRun, t: &mut Trace) -> ExplorerReport { compose_explorer_apply(r, w, run, t) }",
+            "use dunnage_adapters::dirops::DirOps;\nuse dunnage_cli::explore::apply::{compose_explorer_apply, ExplorerApplyPorts, ExplorerReport, ExplorerRun};\nuse dunnage_cli::wiring::compose::Trace;\npub fn f<D: DirOps + 'static>(r: ConfirmRecord, w: &ExplorerApplyPorts<'_, D>, run: &ExplorerRun, t: &mut Trace) -> ExplorerReport { compose_explorer_apply(r, w, run, t) }",
             "E0308",
         ),
     ];
@@ -1467,7 +1464,7 @@ fn safety_explorer_hostile_should_not_compile_a_forged_confirmation_When_it_does
         assert!(err.contains(code), "{what}: expected {code}, got {err}");
     }
     let (ok, err) = rustc_check(&format!(
-        "{CONFIRM_PRELUDE}use disk_cleanup_adapters::dirops::DirOps;\nuse disk_cleanup_cli::explore::apply::{{compose_explorer_apply, ExplorerApplyPorts, ExplorerReport, ExplorerRun}};\nuse disk_cleanup_cli::wiring::compose::Trace;\npub fn f<D: DirOps + 'static>(r: ReviewedPlan, w: &ExplorerApplyPorts<'_, D>, run: &ExplorerRun, t: &mut Trace) -> ExplorerReport {{ compose_explorer_apply(r, w, run, t) }}"
+        "{CONFIRM_PRELUDE}use dunnage_adapters::dirops::DirOps;\nuse dunnage_cli::explore::apply::{{compose_explorer_apply, ExplorerApplyPorts, ExplorerReport, ExplorerRun}};\nuse dunnage_cli::wiring::compose::Trace;\npub fn f<D: DirOps + 'static>(r: ReviewedPlan, w: &ExplorerApplyPorts<'_, D>, run: &ExplorerRun, t: &mut Trace) -> ExplorerReport {{ compose_explorer_apply(r, w, run, t) }}"
     ));
     assert!(
         !ok && err.contains("E0308"),

@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 //! The verified test list of the command allowlist (prototype `implementation/prototypes/command-allowlist/`).
 
-use disk_cleanup_core::ports::{allowlist_row_counts, classify, Class, Cmd};
+use dunnage_core::ports::{allowlist_row_counts, classify, Class, Cmd};
 
 fn allowed_mutating(c: &Cmd) -> bool {
     classify(c) == Some(Class::Mutating)

@@ -41,12 +41,12 @@ run_gate() {
     # The kinds a gate registers are a build setting (Story 2.3.4): gate B and later build with the gate's feature,
     # so the binary the gate stamps is the one whose registry matches ci/safety/kinds-by-gate.txt. Gate A has none.
     local cfg=() feat=()
-    case $gate in B) cfg=(--config=gate-b); feat=(--features disk-cleanup/gate-b) ;; C) cfg=(--config=gate-c); feat=(--features disk-cleanup/gate-c) ;;
-      D|E|F) cfg=(--config=gate-d); feat=(--features disk-cleanup/gate-d) ;; esac
+    case $gate in B) cfg=(--config=gate-b); feat=(--features dunnage/gate-b) ;; C) cfg=(--config=gate-c); feat=(--features dunnage/gate-c) ;;
+      D|E|F) cfg=(--config=gate-d); feat=(--features dunnage/gate-d) ;; esac
     step "bazel build //..." scripts/bazel.sh build //... "${cfg[@]}"
     step "bazel lint (rustfmt + clippy -D warnings)" scripts/bazel.sh build --config=lint //... "${cfg[@]}"
     step "bazel test //..." scripts/bazel.sh test //... "${cfg[@]}" --test_env=GATE="$gate"
-    step "cargo-only tests (release profile builds)" env GATE="$gate" cargo test -p disk-cleanup "${feat[@]}" --test kind_registry --test e2e_apply_caches --test explore_hostile
+    step "cargo-only tests (release profile builds)" env GATE="$gate" cargo test -p dunnage "${feat[@]}" --test kind_registry --test e2e_apply_caches --test explore_hostile
     step "cargo build --release (Cargo/Bazel drift leg)" cargo build --release --locked --workspace "${feat[@]}"
     if [ -z "$bin" ] && [ "$fails" = 0 ]; then
       if bin=$(scripts/gate-binary.sh "$gate" 2>/dev/null); then ok=$((ok+1)); echo "ok:   bazel -c opt gate binary $bin"; else fails=$((fails+1)); echo "FAIL: bazel -c opt gate binary"; fi

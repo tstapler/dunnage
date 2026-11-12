@@ -387,9 +387,8 @@ impl RunSummary {
             unattributed_text: unattributed.map(signed_gib),
             measured_line,
             attribution_line,
-            followup_line: provisional.then(|| {
-                "Run 'disk-cleanup status' in a minute for the settled figure".to_string()
-            }),
+            followup_line: provisional
+                .then(|| "Run 'dunnage status' in a minute for the settled figure".to_string()),
             docker_line: (docker_removed && docker_delta > 0).then(|| {
                 format!(
                     "docker: {} (daemon-side; not in btrfs terms)",

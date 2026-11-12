@@ -9,12 +9,12 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use disk_cleanup_core::docker::{parse_docker_time, DockerClient, DockerContainer, DockerImage};
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::targets::docker_image_guard::decide_dangling_image;
-use disk_cleanup_core::{
+use dunnage_core::docker::{parse_docker_time, DockerClient, DockerContainer, DockerImage};
+use dunnage_core::ports::Env;
+use dunnage_core::selector::Selection;
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::targets::docker_image_guard::decide_dangling_image;
+use dunnage_core::{
     AllocatedBytes, ApplyToken, Candidate, CandidateId, DeleteFailure, DockerFacts, DockerId,
     Freed, KindFacts, Locator, Outcome, SelectorId, SkipReason, Status,
 };
@@ -219,7 +219,7 @@ impl Target for DockerImagesTarget {
                 Ok(freed_of(bytes))
             }
             _ => Err(crate::targets::docker_common::failure(
-                disk_cleanup_core::DeleteError::Refused,
+                dunnage_core::DeleteError::Refused,
             )),
         }
     }

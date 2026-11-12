@@ -13,19 +13,19 @@ use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use disk_cleanup_adapters::steam::{library_roots, target::SteamTarget};
-use disk_cleanup_adapters::RealDirOps;
-use disk_cleanup_core::audit_types::{AuditRecord, RunRoots};
-use disk_cleanup_core::executor::{Executor, Mode, RunMeta, RunOptions, RunReport};
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::selector::{Discard, KindSelector, Selection};
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::testing::{
+use dunnage_adapters::steam::{library_roots, target::SteamTarget};
+use dunnage_adapters::RealDirOps;
+use dunnage_core::audit_types::{AuditRecord, RunRoots};
+use dunnage_core::executor::{Executor, Mode, RunMeta, RunOptions, RunReport};
+use dunnage_core::ports::Env;
+use dunnage_core::roots::RootSet;
+use dunnage_core::selector::{Discard, KindSelector, Selection};
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::testing::{
     FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe, FakeRunGuard,
     FakeSpaceMeter,
 };
-use disk_cleanup_core::{
+use dunnage_core::{
     AppId, ApplyToken, BuildInfo, Candidate, DeleteError, Dirs, Identity, Kind, KindFacts, Locator,
     SelectorId, SkipReason, Status, SteamFacts, Tri,
 };
@@ -775,7 +775,7 @@ fn safety_steam_remnant_names_outside_scope_refused() {
                     .file_name()
                     .map_or(String::new(), |n| n.to_string_lossy().into_owned()),
             }),
-            disk_cleanup_core::AllocatedBytes(0),
+            dunnage_core::AllocatedBytes(0),
             None,
             Identity { dev: 1, ino: 1 },
         );

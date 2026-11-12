@@ -4,13 +4,13 @@
 
 use std::sync::Mutex;
 
-use disk_cleanup_core::docker::{
+use dunnage_core::docker::{
     DockerClient, DockerContainer, DockerImage, DockerInventory, DockerProbe,
 };
-use disk_cleanup_core::ports::{Cmd, Env};
-use disk_cleanup_core::target::KindGate;
-use disk_cleanup_core::targets::docker_image_guard::ImageFacts;
-use disk_cleanup_core::{
+use dunnage_core::ports::{Cmd, Env};
+use dunnage_core::target::KindGate;
+use dunnage_core::targets::docker_image_guard::ImageFacts;
+use dunnage_core::{
     AllocatedBytes, ApparentBytes, ApplyToken, DeleteError, DeleteFailure, Freed, Identity,
     SkipReason,
 };
@@ -138,8 +138,8 @@ fn container_uses(c: &DockerContainer, rows: &[&DockerImage]) -> bool {
     })
 }
 
-pub fn skip_of(r: SkipReason) -> disk_cleanup_core::target::Guarded {
-    disk_cleanup_core::target::Guarded::Skip(r)
+pub fn skip_of(r: SkipReason) -> dunnage_core::target::Guarded {
+    dunnage_core::target::Guarded::Skip(r)
 }
 
 /// Re-reads the inventory for a guard asked right before a removal. A daemon that stopped answering is not
@@ -149,7 +149,7 @@ pub fn fresh(env: &Env, docker_host: Option<&str>) -> Result<DockerInventory, Op
     let cli = DockerCli::new(env.runner, docker_host.map(str::to_string));
     match cli.inventory() {
         Ok(i) => Ok(i),
-        Err(disk_cleanup_core::docker::DockerError::Daemon(_)) => Err(None),
+        Err(dunnage_core::docker::DockerError::Daemon(_)) => Err(None),
         Err(_) => Err(Some(SkipReason::UnrecognisedOutput)),
     }
 }

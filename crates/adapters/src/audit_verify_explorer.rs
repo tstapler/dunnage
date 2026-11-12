@@ -338,9 +338,15 @@ pub fn own_dirs(
 ) -> Vec<PathBuf> {
     let mut v = vec![
         state.to_path_buf(),
+        cache_base.join("dunnage"),
+        config_base.join("dunnage"),
+        // The pre-rename directories stay protected until the owner moves them.
         cache_base.join("disk-cleanup"),
         config_base.join("disk-cleanup"),
     ];
+    if let Some(parent) = state.parent() {
+        v.push(parent.join("disk-cleanup"));
+    }
     let canon: Vec<PathBuf> = v
         .iter()
         .filter_map(|p| {

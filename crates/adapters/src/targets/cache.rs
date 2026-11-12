@@ -12,13 +12,13 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use disk_cleanup_core::cache_targets::{cache_command, cache_table, root_decision, CacheSource};
-use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
-use disk_cleanup_core::ports::{Env, SystemProbe};
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::{
+use dunnage_core::cache_targets::{cache_command, cache_table, root_decision, CacheSource};
+use dunnage_core::guard::{decide_path_common, Facts, GuardDecision};
+use dunnage_core::ports::{Env, SystemProbe};
+use dunnage_core::roots::RootSet;
+use dunnage_core::selector::Selection;
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::{
     AbortFlag, Allowed, AllowedTarget, ApplyToken, CacheFacts, Candidate, CandidateId, DeleteError,
     DeleteFailure, DeletePolicy, Freed, Identity, Kind, KindFacts, Locator, Outcome, RootDev,
     SelectorId, SkipReason,
@@ -231,13 +231,13 @@ impl<D: DirOps> CacheTarget<D> {
         let platform = env.probe.platform();
         let row = cache_table(platform).into_iter().find(|r| {
             matches!(r.source, CacheSource::Tool(t) if
-                (t == disk_cleanup_core::roots::CacheTool::Go) == (tool == "go"))
+                (t == dunnage_core::roots::CacheTool::Go) == (tool == "go"))
         })?;
         let program = cache_command(row.label)?.programs.last().copied()?;
         let dir = default_dir(
             self.roots().home(),
             tool,
-            platform == disk_cleanup_core::Platform::Macos,
+            platform == dunnage_core::Platform::Macos,
         );
         let c = Candidate::new(
             Locator::Path(dir),
@@ -245,7 +245,7 @@ impl<D: DirOps> CacheTarget<D> {
                 label: row.label.to_string(),
                 apt: false,
             }),
-            disk_cleanup_core::AllocatedBytes(0),
+            dunnage_core::AllocatedBytes(0),
             None,
             Identity { dev: 0, ino: 0 },
         );

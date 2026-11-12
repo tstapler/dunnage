@@ -3,15 +3,15 @@
 
 mod support;
 
-use disk_cleanup_cli::render_json::{
+use dunnage_cli::render_json::{
     apply_doc, fatal_doc, fatal_entry, gate_refusal_doc, kind_rows, kinds_doc, plan_doc, reason_id,
     status_doc, to_text,
 };
-use disk_cleanup_cli::view::PlanView;
-use disk_cleanup_core::outcome::SkipReason;
-use disk_cleanup_core::plan::{destructive_gate, GateRefusal, GateRenderCtx, PlanId};
-use disk_cleanup_core::reasons::FatalError;
-use disk_cleanup_core::SelectorId;
+use dunnage_cli::view::PlanView;
+use dunnage_core::outcome::SkipReason;
+use dunnage_core::plan::{destructive_gate, GateRefusal, GateRenderCtx, PlanId};
+use dunnage_core::reasons::FatalError;
+use dunnage_core::SelectorId;
 use serde_json::Value;
 use support::*;
 
@@ -276,7 +276,7 @@ fn gate_refusal_should_be_one_document_with_the_code_and_detail_under_json() {
     assert_eq!(d["errors"][0]["code"], "plan_id_missing");
     assert_eq!(
         d["errors"][0]["detail"]["dry_run_command"],
-        "disk-cleanup --kinds build-dirs"
+        "dunnage --kinds build-dirs"
     );
     assert!(d["errors"][0]["message"]
         .as_str()

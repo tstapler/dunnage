@@ -88,24 +88,24 @@ impl std::fmt::Display for SelectorError {
                 suggestion: Some(s),
             } => write!(
                 f,
-                "unknown kind '{id}'. Did you mean '{s}'? See 'disk-cleanup kinds'."
+                "unknown kind '{id}'. Did you mean '{s}'? See 'dunnage kinds'."
             ),
             SelectorError::Unknown {
                 id,
                 suggestion: None,
             } => {
-                write!(f, "unknown kind '{id}'. See 'disk-cleanup kinds'.")
+                write!(f, "unknown kind '{id}'. See 'dunnage kinds'.")
             }
             SelectorError::NotBuilt { id } => write!(
                 f,
-                "error: '{id}' is not available in this build (see 'disk-cleanup kinds')"
+                "error: '{id}' is not available in this build (see 'dunnage kinds')"
             ),
             SelectorError::Empty => {
-                write!(f, "a kind list is empty. See 'disk-cleanup kinds'.")
+                write!(f, "a kind list is empty. See 'dunnage kinds'.")
             }
             SelectorError::Unnameable { id } => write!(
                 f,
-                "error: {id} is not a kind you can name; it exists only inside 'disk-cleanup explore'. Nothing was deleted."
+                "error: {id} is not a kind you can name; it exists only inside 'dunnage explore'. Nothing was deleted."
             ),
         }
     }

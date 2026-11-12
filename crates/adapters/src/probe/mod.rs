@@ -5,8 +5,8 @@
 use std::io;
 use std::path::Path;
 
-use disk_cleanup_core::ports::{RunState, SystemProbe};
-use disk_cleanup_core::{MountEntry, Platform, Tri};
+use dunnage_core::ports::{RunState, SystemProbe};
+use dunnage_core::{MountEntry, Platform, Tri};
 
 pub mod basic;
 pub mod cwd;

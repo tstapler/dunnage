@@ -7,13 +7,13 @@
 mod scene;
 use scene::*;
 
-use disk_cleanup_adapters::targets::docker_images::DockerImagesTarget;
-use disk_cleanup_adapters::targets::docker_unused_images::DockerUnusedImagesTarget;
-use disk_cleanup_adapters::targets::docker_volumes::DockerVolumesTarget;
-use disk_cleanup_core::selector::{DockerVolumes, Selection};
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::testing::{CallKind, FakeCommandRunner};
-use disk_cleanup_core::{Candidate, SelectorId, SkipReason, Status};
+use dunnage_adapters::targets::docker_images::DockerImagesTarget;
+use dunnage_adapters::targets::docker_unused_images::DockerUnusedImagesTarget;
+use dunnage_adapters::targets::docker_volumes::DockerVolumesTarget;
+use dunnage_core::selector::{DockerVolumes, Selection};
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::testing::{CallKind, FakeCommandRunner};
+use dunnage_core::{Candidate, SelectorId, SkipReason, Status};
 
 fn anon() -> Vol {
     Vol::anon(60)
@@ -38,7 +38,7 @@ fn find<'a>(cs: &'a [Candidate], name: &str) -> &'a Candidate {
 fn volume_rms(r: &FakeCommandRunner) -> Vec<String> {
     r.calls_of(CallKind::RunMutating)
         .iter()
-        .map(disk_cleanup_core::testing::RecordedCall::rendered)
+        .map(dunnage_core::testing::RecordedCall::rendered)
         .collect()
 }
 

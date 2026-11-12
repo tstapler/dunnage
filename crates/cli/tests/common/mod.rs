@@ -294,7 +294,7 @@ use std::time::{Duration, SystemTime};
 pub fn bin_path() -> PathBuf {
     std::env::current_dir()
         .expect("cwd")
-        .join(env!("CARGO_BIN_EXE_disk-cleanup"))
+        .join(env!("CARGO_BIN_EXE_dunnage"))
 }
 
 /// The repository root (`CARGO_MANIFEST_DIR` is `crates/cli`).
@@ -320,7 +320,7 @@ pub fn aged_dir(dir: &Path, bytes: usize, days: u64) {
     }
 }
 
-/// The command lines of the first `Next:` block of a dry run: `^  (disk-cleanup|sudo ...) `; the explanation
+/// The command lines of the first `Next:` block of a dry run: `^  (dunnage|sudo ...) `; the explanation
 /// under each line is indented by six spaces and never matches.
 pub fn next_commands(stdout: &str) -> Vec<String> {
     let mut in_next = false;
@@ -336,7 +336,7 @@ pub fn next_commands(stdout: &str) -> Vec<String> {
         if line.is_empty() {
             break;
         }
-        let is_command = line.starts_with("  disk-cleanup ") || line.starts_with("  sudo ");
+        let is_command = line.starts_with("  dunnage ") || line.starts_with("  sudo ");
         // The balance hint appears only when the fixture HOME is on btrfs (TMPDIR on a btrfs volume), so it
         // is not part of what these flows count (Story 4.3.2).
         let host_btrfs_hint =
@@ -356,7 +356,7 @@ pub fn run_line(fx: &Fixture, line: &str) -> Output {
         "a fixture run cannot take this line: {line}"
     );
     let mut words = line.split_whitespace();
-    assert_eq!(words.next(), Some("disk-cleanup"), "{line}");
+    assert_eq!(words.next(), Some("dunnage"), "{line}");
     fx.fixture_cmd()
         .args(words)
         .stdin(std::process::Stdio::null())

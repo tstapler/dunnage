@@ -82,10 +82,8 @@ fn extract_plan_id_should_read_the_json_field_or_the_next_command_and_refuse_mal
         Some("91be04d7")
     );
     assert_eq!(
-        extract_plan_id(
-            r#"{"next":["disk-cleanup --kinds build-dirs --apply --plan-id 91be04d7"]}"#
-        )
-        .as_deref(),
+        extract_plan_id(r#"{"next":["dunnage --kinds build-dirs --apply --plan-id 91be04d7"]}"#)
+            .as_deref(),
         Some("91be04d7")
     );
     assert_eq!(extract_plan_id(r#"{"plan_id":"zzzzzzzz"}"#), None);

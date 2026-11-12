@@ -7,20 +7,20 @@ mod common;
 use std::path::PathBuf;
 
 use common::*;
-use disk_cleanup_core::explore::confirm::Confirm;
-use disk_cleanup_core::explore::delete_flow::{DeleteRun, Prompt, Submitted};
-use disk_cleanup_core::explore::help::help_lines;
-use disk_cleanup_core::explore::keymap::Key;
-use disk_cleanup_core::explore::marks::{Mark, Marks};
-use disk_cleanup_core::explore::msg::{
+use dunnage_core::explore::confirm::Confirm;
+use dunnage_core::explore::delete_flow::{DeleteRun, Prompt, Submitted};
+use dunnage_core::explore::help::help_lines;
+use dunnage_core::explore::keymap::Key;
+use dunnage_core::explore::marks::{Mark, Marks};
+use dunnage_core::explore::msg::{
     DeleteItemOutcome, DeleteItemResult, DeleteMsg, DeleteSummary, PlanPreview,
 };
-use disk_cleanup_core::explore::ports::{DELETE_NOT_IN_BUILD, NEEDS_TERMINAL};
-use disk_cleanup_core::explore::testing::reviewed_of;
-use disk_cleanup_tui::view::DeleteScreen;
+use dunnage_core::explore::ports::{DELETE_NOT_IN_BUILD, NEEDS_TERMINAL};
+use dunnage_core::explore::testing::reviewed_of;
+use dunnage_tui::view::DeleteScreen;
 use std::path::Path;
 
-const AUDIT: &str = "/home/u/.local/state/disk-cleanup/audit.jsonl";
+const AUDIT: &str = "/home/u/.local/state/dunnage/audit.jsonl";
 
 fn marks_of(paths: &[&str]) -> Marks {
     let mut m = Marks::new();
@@ -57,7 +57,7 @@ fn fixture() -> Fixture {
     f
 }
 
-fn screen_of<'a>(fx: &'a Fixture, which: DeleteScreen<'a>) -> disk_cleanup_tui::view::Screen<'a> {
+fn screen_of<'a>(fx: &'a Fixture, which: DeleteScreen<'a>) -> dunnage_tui::view::Screen<'a> {
     let mut screen = fx.screen();
     screen.delete = Some(which);
     screen.audit_log = Some(Path::new(AUDIT));
@@ -100,7 +100,7 @@ fn the_prompt_states_the_count_the_items_the_total_the_filesystem_and_the_audit_
         "~/code/app/node_modules",
         "~/code/app/dist.old",
         "Total 22.8 GiB (attributed) on / (btrfs).",
-        "Audit log: ~/.local/state/disk-cleanup/audit.jsonl",
+        "Audit log: ~/.local/state/dunnage/audit.jsonl",
         "Type 2 and press Enter to delete, Esc to cancel: _",
     ] {
         assert!(text.contains(needle), "{needle}\n{text}");
@@ -345,7 +345,7 @@ fn every_refusal_shows_its_ready_made_text_and_says_nothing_was_deleted() {
         ),
         (
             "lock",
-            "another disk-cleanup apply is running (pid 4242). Nothing was deleted.",
+            "another dunnage apply is running (pid 4242). Nothing was deleted.",
         ),
         (
             "changed",
@@ -353,7 +353,7 @@ fn every_refusal_shows_its_ready_made_text_and_says_nothing_was_deleted() {
         ),
         (
             "audit",
-            "The audit log cannot be written (/home/u/.local/state/disk-cleanup/audit.jsonl: No space left on device). Nothing was deleted.",
+            "The audit log cannot be written (/home/u/.local/state/dunnage/audit.jsonl: No space left on device). Nothing was deleted.",
         ),
         ("not_in_build", DELETE_NOT_IN_BUILD),
         ("needs_terminal", NEEDS_TERMINAL),

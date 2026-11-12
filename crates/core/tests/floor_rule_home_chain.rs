@@ -5,9 +5,9 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::{Dirs, Identity, Kind, RootDev, SkipReason};
+use dunnage_core::guard::{decide_path_common, Facts, GuardDecision};
+use dunnage_core::roots::RootSet;
+use dunnage_core::{Dirs, Identity, Kind, RootDev, SkipReason};
 
 fn id(path: &str) -> Identity {
     let mut ino: u64 = 0xcbf2_9ce4_8422_2325;

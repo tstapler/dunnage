@@ -1,4 +1,4 @@
-# The owner-reviewed table `disk-cleanup audit verify` compares every logged deletion with (Story 1.2.4, E-10).
+# The owner-reviewed table `dunnage audit verify` compares every logged deletion with (Story 1.2.4, E-10).
 # It is embedded in the binary (include_str!) and pinned by ci/gate.d/1.2.4.required: a one-line edit fails
 # every later gate until the owner re-pins it with `sha256sum ci/allowed-roots.txt`.
 #

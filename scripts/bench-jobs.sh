@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # bench-jobs.sh [--bin PATH] [--dirs N] [--pkgs N] [--reps N] [--jobs "1 4 8 16"]   (Story 3.2.4, Task 3.2.4b)
-# Times `disk-cleanup --apply --kinds build-dirs --jobs J` on a fixture of N node_modules trees that lives on a
+# Times `dunnage --apply --kinds build-dirs --jobs J` on a fixture of N node_modules trees that lives on a
 # btrfs filesystem under "$HOME/.cache/dc-fixtures" (the fixture-location rule of Task 0.2.4a: the directory is
 # made with `mktemp -d -p`, and only after `stat -f -c %T` says btrfs). Every run gets a fresh copy of one aged
 # template, a dry run for the plan-id, and then the timed apply. Prints one row per (jobs, repetition) and the
 # median per jobs value. Everything it deletes is a copy below the fixture root; it never reads a real HOME.
 set -u -o pipefail
 
-BIN=${DC_BENCH_BIN:-${CARGO_TARGET_DIR:-target}/release/disk-cleanup}
+BIN=${DC_BENCH_BIN:-${CARGO_TARGET_DIR:-target}/release/dunnage}
 DIRS=16 PKGS=400 REPS=3 JOBS="1 4 8 16"
 while [ $# -gt 0 ]; do
   case $1 in

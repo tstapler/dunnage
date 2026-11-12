@@ -4,8 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::floor_rule::floor_protected;
-use disk_cleanup_core::WrongKind;
+use dunnage_core::floor_rule::floor_protected;
+use dunnage_core::WrongKind;
 
 #[test]
 fn floor_protected_should_protect_slash_even_when_home_is_not_an_absolute_path() {

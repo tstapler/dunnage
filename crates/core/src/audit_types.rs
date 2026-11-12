@@ -1,4 +1,4 @@
-//! Records of the audit JSONL log (`$XDG_STATE_HOME/disk-cleanup/audit.jsonl`), schema 1. The writer is
+//! Records of the audit JSONL log (`$XDG_STATE_HOME/dunnage/audit.jsonl`), schema 1. The writer is
 //! Story 2.2.1; this is only the data.
 
 use std::path::PathBuf;
@@ -38,7 +38,7 @@ pub struct RunRoots {
     pub steam_libraries: Vec<PathBuf>,
 }
 
-/// `DISK_CLEANUP_UNGATED` used, and whether a person confirmed it on the terminal.
+/// `DUNNAGE_UNGATED` used, and whether a person confirmed it on the terminal.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BreakGlass {
     pub reason: String,

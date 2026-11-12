@@ -1,9 +1,9 @@
-//! `$XDG_CONFIG_HOME/disk-cleanup/config.toml` reader (Task 1.1.5b). Only `roots` is read; other keys are
+//! `$XDG_CONFIG_HOME/dunnage/config.toml` reader (Task 1.1.5b). Only `roots` is read; other keys are
 //! ignored so a newer file does not break an older binary. A missing file is the empty config.
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::Dirs;
+use dunnage_core::Dirs;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Config {
@@ -24,8 +24,15 @@ pub enum ConfigError {
     RootsShape { path: PathBuf },
 }
 
+/// `<config>/dunnage/config.toml`; a config that still sits under the pre-rename `disk-cleanup` directory is
+/// read from there until the owner moves it.
 pub fn config_path(dirs: &Dirs) -> PathBuf {
-    dirs.config.join("disk-cleanup").join("config.toml")
+    let new = dirs.config.join("dunnage").join("config.toml");
+    let old = dirs.config.join("disk-cleanup").join("config.toml");
+    if !new.exists() && old.exists() {
+        return old;
+    }
+    new
 }
 
 pub fn read_config(path: &Path) -> Result<Config, ConfigError> {

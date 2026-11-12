@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use disk_cleanup_core::*;
+use dunnage_core::*;
 
 fn node_modules_candidate() -> Candidate {
     let path = PathBuf::from("/home/u/code/app/node_modules");

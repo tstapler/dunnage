@@ -4,11 +4,11 @@
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::candidate::Locator;
-use disk_cleanup_core::ids::{AllocatedBytes, CandidateId, DockerId};
-use disk_cleanup_core::ports::{ExtentAttribution, ItemExtents, SharedExtent, Unavailable};
-use disk_cleanup_core::testing::FakeSpaceMeter;
-use disk_cleanup_core::{
+use dunnage_core::candidate::Locator;
+use dunnage_core::ids::{AllocatedBytes, CandidateId, DockerId};
+use dunnage_core::ports::{ExtentAttribution, ItemExtents, SharedExtent, Unavailable};
+use dunnage_core::testing::FakeSpaceMeter;
+use dunnage_core::{
     AllocSnapshot, CauseKind, DiskVerdict, FinishInput, Freed, FsSnapshot, Held, HeldItem, Kind,
     Outcome, PreDeleteSample, RunSummary, SelectorId, Settled, SkipReason, SnapshotFacts, SpaceUse,
     StageTimings, Status, WalkerCounters,
@@ -201,7 +201,7 @@ fn unsettled_counter_should_label_provisional_and_point_at_status_and_never_clai
     );
     assert_eq!(
         s.followup_line.as_deref(),
-        Some("Run 'disk-cleanup status' in a minute for the settled figure")
+        Some("Run 'dunnage status' in a minute for the settled figure")
     );
     assert!(s.attribution_line.contains("provisional"));
     for t in [&s.measured_line, &s.attribution_line] {

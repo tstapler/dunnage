@@ -5,13 +5,13 @@
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::escape::{escape_os, needs_escape};
-use disk_cleanup_core::explore::delete_flow::{DeleteRun, Prompt, RunEnd};
-use disk_cleanup_core::explore::fmt::fmt_size_cell;
-use disk_cleanup_core::explore::layout::{cells, cut_name, cut_name_left, split_atoms, title_left};
-use disk_cleanup_core::explore::msg::{DeleteItemOutcome, PlanPreview};
-use disk_cleanup_core::shell_quote::shell_quote;
-use disk_cleanup_core::snapshot_types::FsSnapshot;
+use dunnage_core::escape::{escape_os, needs_escape};
+use dunnage_core::explore::delete_flow::{DeleteRun, Prompt, RunEnd};
+use dunnage_core::explore::fmt::fmt_size_cell;
+use dunnage_core::explore::layout::{cells, cut_name, cut_name_left, split_atoms, title_left};
+use dunnage_core::explore::msg::{DeleteItemOutcome, PlanPreview};
+use dunnage_core::shell_quote::shell_quote;
+use dunnage_core::snapshot_types::FsSnapshot;
 
 /// Replaces every control or format character with `\u{HEX}`, so no raw ESC, C1 or bidi character reaches
 /// a buffer cell whatever text a caller built.

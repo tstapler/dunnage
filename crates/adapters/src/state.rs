@@ -1,4 +1,4 @@
-//! The state directory (`$XDG_STATE_HOME/disk-cleanup`): the two reserve files, `last_plan` behind the
+//! The state directory (`$XDG_STATE_HOME/dunnage`): the two reserve files, `last_plan` behind the
 //! `PlanStore` port, the unclean-run notice's inputs and `outcome.jsonl` (Story 2.2.1, Tasks 2.2.1b, c, e).
 //!
 //! Nothing here reads a home directory: the caller resolves the path (`cli/src/wiring/dirs.rs`), and under
@@ -11,9 +11,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use disk_cleanup_core::ports::merge_saved;
-use disk_cleanup_core::ports::PlanStore;
-use disk_cleanup_core::{DiskVerdict, SaveOutcome, SavedPlan, SavedSelection, Warning};
+use dunnage_core::ports::merge_saved;
+use dunnage_core::ports::PlanStore;
+use dunnage_core::{DiskVerdict, SaveOutcome, SavedPlan, SavedSelection, Warning};
 use rustix::fs::{flock, FlockOperation};
 use serde::{Deserialize, Serialize};
 
@@ -49,7 +49,7 @@ pub fn sudo_state_dir(
         ),
         None => default_state_home.to_path_buf(),
     };
-    base.join("disk-cleanup")
+    base.join("dunnage")
 }
 
 /// The files of one state directory.
@@ -367,7 +367,7 @@ pub struct OutcomeLine {
     pub verdict: DiskVerdict,
     pub free_bytes: u64,
     pub unallocated_bytes: Option<u64>,
-    /// The `DISK_CLEANUP_VIA` value, or null.
+    /// The `DUNNAGE_VIA` value, or null.
     pub via: Option<String>,
 }
 

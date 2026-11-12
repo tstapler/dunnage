@@ -11,7 +11,7 @@
 use std::cmp::Ordering;
 use std::ffi::{OsStr, OsString};
 
-use disk_cleanup_scan::estimate::Stats;
+use dunnage_scan::estimate::Stats;
 
 use super::msg::{FileRow, FileRows};
 use super::tree::{stats_add, stats_sub, ExploreTree, NodeId};

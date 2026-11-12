@@ -4,8 +4,8 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::roots::{RootError, RootSet};
-use disk_cleanup_core::{Dirs, Identity};
+use dunnage_core::roots::{RootError, RootSet};
+use dunnage_core::{Dirs, Identity};
 
 fn dirs() -> Dirs {
     Dirs {

@@ -17,10 +17,10 @@ use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use disk_cleanup_adapters::signals::install_term_handlers;
-use disk_cleanup_adapters::testing::{Event, FaultDirOps};
-use disk_cleanup_adapters::RealDirOps;
-use disk_cleanup_core::AuditRecord;
+use dunnage_adapters::signals::install_term_handlers;
+use dunnage_adapters::testing::{Event, FaultDirOps};
+use dunnage_adapters::RealDirOps;
+use dunnage_core::AuditRecord;
 use explore_rig::{kinds_of, Ex};
 
 const VAR: &str = "DC_EX_SIGNAL";
@@ -72,7 +72,7 @@ fn child_signal_mid_apply() {
     let confirmed = ex.confirmed(&[a.clone(), b.clone(), c.clone()]);
     let hits = Arc::new(AtomicUsize::new(0));
     let sig = sig.clone();
-    let ops = |_: &disk_cleanup_core::ApplyToken| {
+    let ops = |_: &dunnage_core::ApplyToken| {
         let hits = Arc::clone(&hits);
         FaultDirOps::wrap(RealDirOps::confined_to(&ex.base))
             .hook(Event::BeforeUnlinkat, {

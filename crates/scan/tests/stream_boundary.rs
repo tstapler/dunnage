@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 //! Story 6.1.2: boundaries, unreadable and vanished directories are events, not silence.
 
-use disk_cleanup_scan::index::{Backend, CollectRequest, DirEvent, StreamRequest};
-use disk_cleanup_scan::walker::{CacheConfig, WalkerBackend};
+use dunnage_scan::index::{Backend, CollectRequest, DirEvent, StreamRequest};
+use dunnage_scan::walker::{CacheConfig, WalkerBackend};
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};

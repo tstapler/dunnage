@@ -17,16 +17,16 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use disk_cleanup_adapters::mtime_probe::NewestStore;
-use disk_cleanup_adapters::targets::worktree_discover::{discover_worktrees, WorktreeSite};
-use disk_cleanup_adapters::targets::worktree_probe::{guard_worktree, ProbeEnv, WorktreeProbed};
-use disk_cleanup_adapters::{RealCommandRunner, RealDirOps, RealProbe};
-use disk_cleanup_core::ports::{Cmd, CmdOutput, CommandRunner, SystemProbe};
-use disk_cleanup_core::targets::worktree_guard::{
+use dunnage_adapters::mtime_probe::NewestStore;
+use dunnage_adapters::targets::worktree_discover::{discover_worktrees, WorktreeSite};
+use dunnage_adapters::targets::worktree_probe::{guard_worktree, ProbeEnv, WorktreeProbed};
+use dunnage_adapters::{RealCommandRunner, RealDirOps, RealProbe};
+use dunnage_core::ports::{Cmd, CmdOutput, CommandRunner, SystemProbe};
+use dunnage_core::targets::worktree_guard::{
     WorktreeGuard, WorktreeOpts, FLOOR_DETAIL, WORKTREE_MIN_AGE,
 };
-use disk_cleanup_core::testing::FakeProbe;
-use disk_cleanup_core::{ApplyToken, DeleteError, SkipReason, Tri, WorktreeRemoval};
+use dunnage_core::testing::FakeProbe;
+use dunnage_core::{ApplyToken, DeleteError, SkipReason, Tri, WorktreeRemoval};
 
 const DAY_SECS: u64 = 24 * 3600;
 
@@ -229,7 +229,7 @@ fn guard_should_allow_a_clean_pushed_old_worktree_whose_only_ignored_entry_is_ta
     assert!(ig.build_output_bytes >= 8192);
     assert_eq!(
         p.candidate.push,
-        disk_cleanup_core::targets::worktree_guard::PushState::Pushed
+        dunnage_core::targets::worktree_guard::PushState::Pushed
     );
 }
 
@@ -489,7 +489,7 @@ fn guard_should_run_the_path_checks_before_any_git_command() {
     let elsewhere = repo.f.home.parent().unwrap().join("elsewhere");
     fs::create_dir_all(&elsewhere).unwrap();
     outside.entry.path = elsewhere.clone();
-    outside.ident = Some(disk_cleanup_core::Identity::of(
+    outside.ident = Some(dunnage_core::Identity::of(
         &fs::metadata(&elsewhere).unwrap(),
     ));
     let (_, g) = run_with(

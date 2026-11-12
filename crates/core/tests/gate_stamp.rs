@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 //! The gate-stamp check (Story 2.2.1, Task 2.2.1d; validation T-442, T-444, T-516 text half).
 
-use disk_cleanup_core::{
+use dunnage_core::{
     break_glass_reason, break_glass_warning, check_stamp, required_gate, BreakGlass, BuildInfo,
     GateStamp, Kind, StampRefusal, STAMP_SCHEMA,
 };
@@ -127,7 +127,7 @@ fn stamp_refusal_text_should_offer_both_the_rebuild_and_the_audited_break_glass_
             "{t}"
         );
         assert!(
-            t.contains("DISK_CLEANUP_UNGATED=<reason>") && t.contains("type BYPASS"),
+            t.contains("DUNNAGE_UNGATED=<reason>") && t.contains("type BYPASS"),
             "{t}"
         );
         assert!(

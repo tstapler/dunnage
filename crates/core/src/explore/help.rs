@@ -14,7 +14,7 @@ pub const DELETE_RULE: &str =
 pub const DELETE_STEPS: &str =
     "Deleting is permanent: mark, press p, read the plan, press d, type the count";
 pub const SCREEN_READER: &str =
-    "This view is not screen-reader friendly: use 'disk-cleanup explore --text'.";
+    "This view is not screen-reader friendly: use 'dunnage explore --text'.";
 
 const LABEL_WIDTH: usize = 10;
 

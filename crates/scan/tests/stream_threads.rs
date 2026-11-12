@@ -4,9 +4,9 @@
 
 mod stream_common;
 
-use disk_cleanup_scan::cache::Rec;
-use disk_cleanup_scan::index::{CollectRequest, StreamRequest};
-use disk_cleanup_scan::walker::{DirStat, WalkHooks, WalkerBackend};
+use dunnage_scan::cache::Rec;
+use dunnage_scan::index::{CollectRequest, StreamRequest};
+use dunnage_scan::walker::{DirStat, WalkHooks, WalkerBackend};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
-use disk_cleanup_core::roots::{CacheTool, RootError, RootSet, SteamLibraryRoot};
-use disk_cleanup_core::{AllowedTarget, Dirs, Identity, Kind, NamePattern, SkipReason};
+use dunnage_core::roots::{CacheTool, RootError, RootSet, SteamLibraryRoot};
+use dunnage_core::{AllowedTarget, Dirs, Identity, Kind, NamePattern, SkipReason};
 
 /// A tiny filesystem for `canon`: directories with inode numbers, plus symlinks. Paths are normalised
 /// lexically first (as `realpath` does for `.` and `..`), then symlinks are followed.

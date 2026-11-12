@@ -10,12 +10,12 @@
 
 use std::path::PathBuf;
 
-use disk_cleanup_adapters::targets::cache::CacheTarget;
-use disk_cleanup_adapters::targets::fixture_kind::fixture_destructive_target;
-use disk_cleanup_adapters::RealDirOps;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::target::Target;
-use disk_cleanup_core::SelectorId;
+use dunnage_adapters::targets::cache::CacheTarget;
+use dunnage_adapters::targets::fixture_kind::fixture_destructive_target;
+use dunnage_adapters::RealDirOps;
+use dunnage_core::roots::RootSet;
+use dunnage_core::target::Target;
+use dunnage_core::SelectorId;
 
 mod btrfs;
 mod build_dirs;

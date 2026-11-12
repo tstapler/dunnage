@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use disk_cleanup_core::{
+use dunnage_core::{
     AbortFlag, AllocatedBytes, ApparentBytes, ApplyToken, DeleteError, DeleteFailure, Freed,
     Identity, RootDev,
 };
@@ -71,7 +71,7 @@ fn apply_token_for_tests_should_exist_under_test_support() {
 #[test]
 fn build_flavor_should_name_test_support_in_test_builds() {
     assert_eq!(
-        disk_cleanup_core::build_flavor(),
+        dunnage_core::build_flavor(),
         "dc-flavor=test-support;9f3ac7e1"
     );
 }

@@ -9,13 +9,13 @@ use std::io;
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::explore::mark_check::{
+use dunnage_core::explore::mark_check::{
     mark_check, MarkCtx, MarkEnv, MarkFacts, MarkMount, MarkOk, MountTable, OwnState, SymlinkFact,
 };
-use disk_cleanup_core::explore::marks::{Mark, Marks, MARK_LIMIT};
-use disk_cleanup_core::explore::msg::MarkRefusal;
-use disk_cleanup_core::roots::{strictly_below, RootSet};
-use disk_cleanup_core::{
+use dunnage_core::explore::marks::{Mark, Marks, MARK_LIMIT};
+use dunnage_core::explore::msg::MarkRefusal;
+use dunnage_core::roots::{strictly_below, RootSet};
+use dunnage_core::{
     AllowedTarget, DeleteError, DeletePolicy, Dirs, Identity, Kind, RootDev, SkipReason,
 };
 use proptest::prelude::*;
@@ -85,7 +85,7 @@ fn world(home: &str, roots: &[&str]) -> World {
                 cache: format!("{home}/.cache").into(),
                 config: format!("{home}/.config").into(),
             },
-            "/usr/local/bin/disk-cleanup".into(),
+            "/usr/local/bin/dunnage".into(),
         ),
         facts: Fake::default(),
     }
@@ -384,9 +384,9 @@ fn m4_should_refuse_a_symlink_row_and_a_path_with_a_symlinked_component() {
 #[test]
 fn m5_should_refuse_every_file_of_the_tools_own_state_its_directories_ancestors_and_the_binary() {
     let w = world("/home/u", &["/"]);
-    let state = "/home/u/.local/state/disk-cleanup";
-    let cache = "/home/u/.cache/disk-cleanup";
-    let config = "/home/u/.config/disk-cleanup";
+    let state = "/home/u/.local/state/dunnage";
+    let cache = "/home/u/.cache/dunnage";
+    let config = "/home/u/.config/dunnage";
     let mut paths: Vec<String> = [
         "audit.jsonl",
         "last_plan",
@@ -410,7 +410,7 @@ fn m5_should_refuse_every_file_of_the_tools_own_state_its_directories_ancestors_
             cache,
             config,
             "/home/u/.local/state",
-            "/usr/local/bin/disk-cleanup",
+            "/usr/local/bin/dunnage",
         ]
         .map(String::from),
     );
@@ -435,7 +435,7 @@ fn m5_should_follow_a_relocated_state_directory_and_refuse_a_root_that_holds_it(
         "/bin/dc".into(),
     );
     assert_eq!(
-        w.refusal("/mnt/big/xdg-state/disk-cleanup/audit.jsonl"),
+        w.refusal("/mnt/big/xdg-state/dunnage/audit.jsonl"),
         Some(MarkRefusal::OwnState)
     );
     // The root that contains the state is refused by M1 (and would be by M5).
@@ -610,7 +610,7 @@ proptest! {
     fn mark_check_should_agree_with_decide_path_common_and_the_below_scan_root_target(
         path in abs_path(7), home in abs_path(5), r1 in abs_path(4), r2 in abs_path(4),
     ) {
-        use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
+        use dunnage_core::guard::{decide_path_common, Facts, GuardDecision};
         prop_assume!(path != Path::new("/") && home != Path::new("/"));
         let dirs = Dirs {
             home: home.clone(),
@@ -618,7 +618,7 @@ proptest! {
             cache: home.join(".cache"),
             config: home.join(".config"),
         };
-        let Ok(rs) = disk_cleanup_core::roots::RootSet::resolve(
+        let Ok(rs) = dunnage_core::roots::RootSet::resolve(
             &dirs, &[], Some(&[r1, r2]), Path::new("/"), &identity_canon,
         ) else {
             return Ok(());
@@ -760,11 +760,11 @@ fn safety_explorer_cannot_mark_a_symlink_or_the_tools_own_state() {
     assert_eq!(w.refusal("/home/u/code/l"), Some(MarkRefusal::SymlinkRow));
     let w = world("/home/u", &["/"]);
     assert_eq!(
-        w.refusal("/home/u/.local/state/disk-cleanup/audit.jsonl"),
+        w.refusal("/home/u/.local/state/dunnage/audit.jsonl"),
         Some(MarkRefusal::OwnState)
     );
     assert_eq!(
-        w.refusal("/home/u/.config/disk-cleanup/config.toml"),
+        w.refusal("/home/u/.config/dunnage/config.toml"),
         Some(MarkRefusal::OwnState)
     );
 }

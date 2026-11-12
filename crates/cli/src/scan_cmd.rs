@@ -1,4 +1,4 @@
-//! `disk-cleanup scan`, the read-only scanner (Story 1.2.5, ADR-007): the former `metascope scan`, ported
+//! `dunnage scan`, the read-only scanner (Story 1.2.5, ADR-007): the former `metascope scan`, ported
 //! from `crates/cli/src/main.rs` of metascope at 3d36581 (lines 234-388).
 //!
 //! It is dispatched before any `Env`, lock, audit sink or `RunGuard` exists. Its only write is the walker
@@ -9,8 +9,8 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use disk_cleanup_scan::scan::{self, BackendChoice, CategoryStats, ScanOptions, ScanReport};
-use disk_cleanup_scan::walker::CacheConfig;
+use dunnage_scan::scan::{self, BackendChoice, CategoryStats, ScanOptions, ScanReport};
+use dunnage_scan::walker::CacheConfig;
 
 use crate::app::Io;
 use crate::args::{ScanArgs, ScanBackend, ScanBy, ScanSort};
@@ -114,14 +114,14 @@ fn options(
     opts
 }
 
-/// `$XDG_CACHE_HOME/disk-cleanup/scan.cache`, else `$HOME/.cache/...`.
+/// `$XDG_CACHE_HOME/dunnage/scan.cache`, else `$HOME/.cache/...`.
 pub fn default_cache_file(env: &dyn Fn(&str) -> Option<std::ffi::OsString>) -> PathBuf {
     env("XDG_CACHE_HOME")
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
         .or_else(|| env("HOME").map(|h| PathBuf::from(h).join(".cache")))
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("disk-cleanup/scan.cache")
+        .join("dunnage/scan.cache")
 }
 
 fn default_roots(env: &dyn Fn(&str) -> Option<std::ffi::OsString>) -> Vec<PathBuf> {

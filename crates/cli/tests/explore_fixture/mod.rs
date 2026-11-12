@@ -7,13 +7,13 @@ use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use disk_cleanup_cli::explore::text::ExploreEnv;
-use disk_cleanup_core::explore::msg::{NodeEvent, ScanMode, ScanMsg, ScanSummary, NO_PARENT};
-use disk_cleanup_core::explore::testing::{DirInfo, FakeScanSource, FakeTermSignals, Stats};
-use disk_cleanup_core::ids::Identity;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::snapshot_types::{AllocSnapshot, FsSnapshot, SpaceUse};
-use disk_cleanup_core::Dirs;
+use dunnage_cli::explore::text::ExploreEnv;
+use dunnage_core::explore::msg::{NodeEvent, ScanMode, ScanMsg, ScanSummary, NO_PARENT};
+use dunnage_core::explore::testing::{DirInfo, FakeScanSource, FakeTermSignals, Stats};
+use dunnage_core::ids::Identity;
+use dunnage_core::roots::RootSet;
+use dunnage_core::snapshot_types::{AllocSnapshot, FsSnapshot, SpaceUse};
+use dunnage_core::Dirs;
 
 pub const GIB: u64 = 1 << 30;
 

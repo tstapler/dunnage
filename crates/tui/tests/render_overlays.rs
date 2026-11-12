@@ -9,12 +9,12 @@ use std::os::unix::ffi::OsStringExt;
 use std::path::PathBuf;
 
 use common::*;
-use disk_cleanup_core::explore::input::Mode;
-use disk_cleanup_core::explore::msg::{NodeEvent, PlanPreview, PreviewRow, ScanMode, NO_PARENT};
-use disk_cleanup_core::explore::rows::{Sort, SortKey};
-use disk_cleanup_core::explore::tree::ExploreTree;
-use disk_cleanup_core::ports::SharedEstimate;
-use disk_cleanup_tui::overlays::{errno_words, UnreadableEntry};
+use dunnage_core::explore::input::Mode;
+use dunnage_core::explore::msg::{NodeEvent, PlanPreview, PreviewRow, ScanMode, NO_PARENT};
+use dunnage_core::explore::rows::{Sort, SortKey};
+use dunnage_core::explore::tree::ExploreTree;
+use dunnage_core::ports::SharedEstimate;
+use dunnage_tui::overlays::{errno_words, UnreadableEntry};
 
 fn collapse(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
@@ -133,7 +133,7 @@ fn the_e_overlay_lists_each_unreadable_path_with_its_reason_ls_and_the_no_sudo_s
 
 #[test]
 fn the_ls_line_delivers_each_hostile_path_as_one_argument_in_bash_and_zsh() {
-    use disk_cleanup_core::shell_quote::sandbox::run_printed_line;
+    use dunnage_core::shell_quote::sandbox::run_printed_line;
     let names: Vec<Vec<u8>> = vec![
         b"/x/plain".to_vec(),
         b"/x/a\nb".to_vec(),
@@ -276,7 +276,7 @@ fn the_too_small_message_is_centred_and_a_zero_by_zero_terminal_does_not_panic()
     let f = Fixture::new(sample_tree(true));
     let text = draw_text(&f.screen(), 40, 10);
     assert!(text.contains("Too small: need 60x12, have 40x10."));
-    assert!(text.contains("or run: disk-cleanup explore --text"));
+    assert!(text.contains("or run: dunnage explore --text"));
     for (w, h) in [(1u16, 1u16), (60, 11), (59, 30), (2, 2)] {
         let _ = draw_text(&f.screen(), w, h);
     }
@@ -309,7 +309,7 @@ fn a_huge_directory_says_that_name_sort_covers_the_kept_entries() {
     {
         let Fixture { tree, state, .. } = &mut f;
         state.view.press_sort(SortKey::Name, tree, 40_000, &|_| {
-            disk_cleanup_core::explore::rows::Badge::None
+            dunnage_core::explore::rows::Badge::None
         });
     }
     assert_eq!(f.state.view.sort(), Sort::new(SortKey::Name));
@@ -343,7 +343,7 @@ fn the_boundary_row_footer_prints_a_pasteable_explore_command_only_when_it_fits(
     f.state.view.move_cursor(1, 1);
     let wide = draw_text(&f.screen(), 120, 24);
     assert!(
-        wide.contains("From the shell: disk-cleanup explore /r/mnt"),
+        wide.contains("From the shell: dunnage explore /r/mnt"),
         "{wide}"
     );
     let narrow = draw_text(&f.screen(), 60, 24);
@@ -352,7 +352,7 @@ fn the_boundary_row_footer_prints_a_pasteable_explore_command_only_when_it_fits(
         "{narrow}"
     );
     assert!(
-        !narrow.contains("disk-cleanup explore"),
+        !narrow.contains("dunnage explore"),
         "a cut command is never printed: {narrow}"
     );
 }

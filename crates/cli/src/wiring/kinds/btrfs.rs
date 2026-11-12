@@ -2,8 +2,8 @@
 //! `fstrim`, listed and apply-capable from Gate D,
 //! so the shipped binary (no `gate-*` feature) does not register it until the owner's Gate D review.
 
-use disk_cleanup_adapters::targets::btrfs_balance::BtrfsBalanceTarget;
-use disk_cleanup_adapters::targets::btrfs_trim::BtrfsTrimTarget;
+use dunnage_adapters::targets::btrfs_balance::BtrfsBalanceTarget;
+use dunnage_adapters::targets::btrfs_trim::BtrfsTrimTarget;
 
 use super::{KindCtx, Registrar};
 

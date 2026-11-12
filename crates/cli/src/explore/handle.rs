@@ -1,7 +1,7 @@
 //! The in-session reviewed plan (Task 6.6.3e, ADR-006 A5 and A6): what `p` produces and `d` consumes.
 //!
 //! [`review_marks`] plans the marks as the kind `explorer-selection`, saves the plan in `last_plan` and returns
-//! a [`ReviewedPlan`] holding the exact [`ItemIdentity`](disk_cleanup_core::plan::ItemIdentity) of every item,
+//! a [`ReviewedPlan`] holding the exact [`ItemIdentity`](dunnage_core::plan::ItemIdentity) of every item,
 //! each scan root's `(dev, ino)` and the plan-id. The session keeps that value in memory; `Confirm::new`
 //! consumes it, `Confirm::accepts` turns it into a `ConfirmedPlan`, and the delete takes only that. A matching
 //! `last_plan` entry alone never authorises a delete: a restart plans again (review C10).
@@ -9,15 +9,15 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use disk_cleanup_adapters::treestat::TreestatSizer;
-use disk_cleanup_adapters::RealDirOps;
-use disk_cleanup_core::explore::confirm::ReviewedPlan;
-use disk_cleanup_core::explore::mark_check::OwnState;
-use disk_cleanup_core::explorer_plan::{explorer_plan, ExplorerPlanCtx, NoCleanerView};
-use disk_cleanup_core::plan::{ExplorerGateRefusal, OnlyMode};
-use disk_cleanup_core::plan_state::SaveOutcome;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::Dirs;
+use dunnage_adapters::treestat::TreestatSizer;
+use dunnage_adapters::RealDirOps;
+use dunnage_core::explore::confirm::ReviewedPlan;
+use dunnage_core::explore::mark_check::OwnState;
+use dunnage_core::explorer_plan::{explorer_plan, ExplorerPlanCtx, NoCleanerView};
+use dunnage_core::plan::{ExplorerGateRefusal, OnlyMode};
+use dunnage_core::plan_state::SaveOutcome;
+use dunnage_core::roots::RootSet;
+use dunnage_core::Dirs;
 
 use super::actions::ExplorerPorts;
 use crate::wiring::env::read_root;

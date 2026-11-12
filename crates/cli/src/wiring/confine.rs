@@ -6,10 +6,10 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_adapters::command_confined::ConfinedCommandRunner;
-use disk_cleanup_adapters::{RealCommandRunner, RealDirOps};
-use disk_cleanup_core::ports::CommandRunner;
-use disk_cleanup_core::ApplyToken;
+use dunnage_adapters::command_confined::ConfinedCommandRunner;
+use dunnage_adapters::{RealCommandRunner, RealDirOps};
+use dunnage_core::ports::CommandRunner;
+use dunnage_core::ApplyToken;
 
 /// The sentinel the test harness writes into a fixture root; nothing else in the workspace creates it.
 pub const SENTINEL: &str = ".dc-test-root";
@@ -99,11 +99,7 @@ pub fn startup_refusal(vars: &Vars, apply: bool) -> Option<&'static str> {
     if !apply && !vars.contains_key(&OsString::from("DC_TEST_ROOT")) {
         return None;
     }
-    match confine_mode(
-        vars,
-        disk_cleanup_core::build_flavor(),
-        cfg!(debug_assertions),
-    ) {
+    match confine_mode(vars, dunnage_core::build_flavor(), cfg!(debug_assertions)) {
         Confine::Refuse(msg) => Some(msg),
         _ => None,
     }

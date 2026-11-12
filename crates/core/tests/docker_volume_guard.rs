@@ -2,15 +2,15 @@
 //! The pure volume decision (Story 4.1.4; validation T-186, T-402, T-403, T-405) and the image decisions of
 //! Stories 4.1.2 and 4.1.3.
 
-use disk_cleanup_core::selector::DockerVolumes;
-use disk_cleanup_core::targets::docker_image_guard::{
+use dunnage_core::selector::DockerVolumes;
+use dunnage_core::targets::docker_image_guard::{
     decide_dangling_image, decide_unused_image, ImageFacts,
 };
-use disk_cleanup_core::targets::docker_volume_guard::{
+use dunnage_core::targets::docker_volume_guard::{
     database_signature, decide_volume, evidence_text, Contents, VolumeFacts, VolumeOpts,
     COMPOSE_DETAIL,
 };
-use disk_cleanup_core::SkipReason;
+use dunnage_core::SkipReason;
 
 const NOW: i64 = 1_800_000_000;
 const DAY: i64 = 86_400;
@@ -239,7 +239,7 @@ fn dangling_image_should_be_stopped_only_by_a_reference_When_decided() {
 
 #[test]
 fn docker_refusals_should_map_by_message_to_skips_and_other_failures_stay_errors() {
-    use disk_cleanup_core::DeleteError;
+    use dunnage_core::DeleteError;
     let f = |m: &str| DeleteError::CommandFailed {
         status: 1,
         message: m.into(),

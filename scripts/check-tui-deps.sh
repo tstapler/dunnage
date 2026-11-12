@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-tui-deps.sh [repo-root] | --selftest
 # Containment of crates/tui (ADR-005, Story 6.5.1), the sibling of check-core-deps.sh. Two halves:
-#   manifest: the direct dependencies of disk-cleanup-tui stay within an allowlist, and the crate has no build.rs,
+#   manifest: the direct dependencies of dunnage-tui stay within an allowlist, and the crate has no build.rs,
 #             no [build-dependencies] and no target whose source path leaves the crate;
 #   source:   crates/tui/src (production code only; tests and examples may spawn processes) holds none of the
 #             forbidden path segments and constructs. An allow-list of constructs, not a deny-list of function
@@ -9,29 +9,29 @@
 #             file:line: rule: text.
 # shellcheck disable=SC2016
 set -u -o pipefail
-allowed_deps='disk-cleanup-core ratatui crossterm unicode-width'
-allowed_dev_deps='insta proptest expectrl disk-cleanup-adapters'
+allowed_deps='dunnage-core ratatui crossterm unicode-width'
+allowed_dev_deps='insta proptest expectrl dunnage-adapters'
 
 manifest_half() { # $1 = root
   local root=$1 meta pkg bad=0 line kind name dir
   meta=$(cd "$root" && cargo metadata --no-deps --offline --format-version 1) || { echo "check-tui-deps: cargo metadata failed" >&2; return 2; }
-  pkg=$(jq -c '.packages[] | select(.name == "disk-cleanup-tui")' <<<"$meta")
-  [ -n "$pkg" ] || { echo "FAIL: no workspace member named disk-cleanup-tui"; return 1; }
+  pkg=$(jq -c '.packages[] | select(.name == "dunnage-tui")' <<<"$meta")
+  [ -n "$pkg" ] || { echo "FAIL: no workspace member named dunnage-tui"; return 1; }
   while read -r kind name; do
     case $kind in
-      build) echo "FAIL: disk-cleanup-tui has a [build-dependencies] table (build dependency $name)"; bad=1 ;;
-      dev) grep -qwF -- "$name" <<<"$allowed_deps $allowed_dev_deps" || { echo "FAIL: disk-cleanup-tui dev-depends on $name, which is not on the allowlist"; bad=1; } ;;
-      *) grep -qwF -- "$name" <<<"$allowed_deps" || { echo "FAIL: disk-cleanup-tui depends directly on $name, which is not on the allowlist ($allowed_deps)"; bad=1; } ;;
+      build) echo "FAIL: dunnage-tui has a [build-dependencies] table (build dependency $name)"; bad=1 ;;
+      dev) grep -qwF -- "$name" <<<"$allowed_deps $allowed_dev_deps" || { echo "FAIL: dunnage-tui dev-depends on $name, which is not on the allowlist"; bad=1; } ;;
+      *) grep -qwF -- "$name" <<<"$allowed_deps" || { echo "FAIL: dunnage-tui depends directly on $name, which is not on the allowlist ($allowed_deps)"; bad=1; } ;;
     esac
   done < <(jq -r '.dependencies[] | "\(.kind // "normal") \(.name)"' <<<"$pkg")
   dir=$(realpath -m -- "$(dirname "$(jq -r '.manifest_path' <<<"$pkg")")")
   if jq -e '.targets[] | select(.kind | index("custom-build"))' <<<"$pkg" >/dev/null || [ -e "$dir/build.rs" ]; then
-    echo "FAIL: disk-cleanup-tui has a build script (build.rs)"; bad=1
+    echo "FAIL: dunnage-tui has a build script (build.rs)"; bad=1
   fi
   while read -r line; do
     [ -n "$line" ] || continue
     line=$(realpath -m -- "$line")
-    case $line in "$dir"/*) ;; *) echo "FAIL: disk-cleanup-tui has a target whose path leaves the crate: $line"; bad=1 ;; esac
+    case $line in "$dir"/*) ;; *) echo "FAIL: dunnage-tui has a target whose path leaves the crate: $line"; bad=1 ;; esac
   done < <(jq -r '.targets[].src_path' <<<"$pkg")
   return $bad
 }
@@ -74,7 +74,7 @@ check() {
   [ $rc = 0 ] || bad=1
   hits=$(cd "$root" && scan_src crates/tui/src)
   if [ -n "$hits" ]; then echo "FAIL: forbidden construct in crates/tui/src:"; echo "$hits"; bad=1; fi
-  [ $bad = 0 ] && echo "ok: disk-cleanup-tui keeps to its dependency allowlist and its source holds no forbidden construct"
+  [ $bad = 0 ] && echo "ok: dunnage-tui keeps to its dependency allowlist and its source holds no forbidden construct"
   return $bad
 }
 
@@ -86,7 +86,7 @@ selftest() {
   fixture() { # $1 = dir: a workspace whose crates/tui is clean
     mkdir -p "$1/crates/tui/src"
     printf '[workspace]\nresolver = "2"\nmembers = ["crates/tui"]\n' > "$1/Cargo.toml"
-    printf '[package]\nname = "disk-cleanup-tui"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\nratatui = "0.30"\ncrossterm = "0.29"\n' > "$1/crates/tui/Cargo.toml"
+    printf '[package]\nname = "dunnage-tui"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\nratatui = "0.30"\ncrossterm = "0.29"\n' > "$1/crates/tui/Cargo.toml"
     printf '// std::fs::remove_file in a comment is fine\n/* use std::process::Command; */\nuse std::io::Write;\nuse std::sync::mpsc;\nuse std::time::Duration;\nfn f(w: &mut impl Write) { let _ = Duration::from_millis(5); crossterm::terminal::window_size(); }\n' > "$1/crates/tui/src/lib.rs"
     printf 'use std::io::{self, stdout};\nfn enter() { let _ = stdout(); }\n' > "$1/crates/tui/src/terminal.rs"
   }
@@ -102,14 +102,14 @@ selftest() {
     expect 1 "$1" "$2" "$self" "$d/m"; }
   mfx "a libc dependency fails naming it" "depends directly on libc" 'libc = "0.2"\n'
   mfx "a rustix dependency fails naming it" "depends directly on rustix" 'rustix = "1"\n'
-  mfx "a disk-cleanup-adapters dependency fails naming it" "depends directly on disk-cleanup-adapters" 'disk-cleanup-adapters = "0.1"\n'
+  mfx "a dunnage-adapters dependency fails naming it" "depends directly on dunnage-adapters" 'dunnage-adapters = "0.1"\n'
   mfx "a tokio dependency fails naming it" "depends directly on tokio" 'tokio = "1"\n'
   mfx "a nix dev-dependency off the allowlist fails" "dev-depends on nix" '\n[dev-dependencies]\nnix = "0.29"\n'
   mfx "a [build-dependencies] table fails" "build dependency cc" '\n[build-dependencies]\ncc = "1"\n'
   mfx "a build.rs fails" "has a build script" '' crates/tui/build.rs
   mfx "a [lib] path that leaves the crate fails" "leaves the crate" '\n[lib]\npath = "../core/src/lib.rs"\n'
   mfx "a [[bin]] path that leaves the crate fails" "leaves the crate" '\n[[bin]]\nname = "x"\npath = "../cli/src/main.rs"\n'
-  rm -rf "$d/m"; fixture "$d/m"; printf '\n[dev-dependencies]\ninsta = "1"\nproptest = "1"\nexpectrl = "0.7"\ndisk-cleanup-adapters = "0.1"\n' >> "$d/m/crates/tui/Cargo.toml"
+  rm -rf "$d/m"; fixture "$d/m"; printf '\n[dev-dependencies]\ninsta = "1"\nproptest = "1"\nexpectrl = "0.7"\ndunnage-adapters = "0.1"\n' >> "$d/m/crates/tui/Cargo.toml"
   expect 0 "the allowed dev-dependencies pass (adapters only for the pty probe example)" "^ok:" "$self" "$d/m"
   printf '\n[dependencies]\n[dependencies]\n' >> "$d/m/crates/tui/Cargo.toml"
   expect 2 "an unparsable manifest fails closed instead of passing" "cargo metadata failed" "$self" "$d/m"

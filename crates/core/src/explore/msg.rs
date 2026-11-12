@@ -4,7 +4,7 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use disk_cleanup_scan::index::{DirEvent, DirInfo};
+use dunnage_scan::index::{DirEvent, DirInfo};
 
 use crate::ids::AppId;
 use crate::kind::SelectorId;
@@ -13,10 +13,10 @@ use crate::ports::SharedEstimate;
 use crate::snapshot_types::FsSnapshot;
 
 /// `parent` of a root event (the walker's `NO_PARENT`).
-pub const NO_PARENT: u64 = disk_cleanup_scan::index::NO_PARENT;
+pub const NO_PARENT: u64 = dunnage_scan::index::NO_PARENT;
 
 /// Ids of painted events start here, so they never collide with the live walk's dense ids from 0.
-pub const PAINT_ID_BASE: u64 = disk_cleanup_scan::index::PAINT_ID_BASE;
+pub const PAINT_ID_BASE: u64 = dunnage_scan::index::PAINT_ID_BASE;
 
 /// How the reducer treats a batch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -12,19 +12,17 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use disk_cleanup_core::explore::fmt::{fmt_items_cell, fmt_size_cell, share_cell};
-use disk_cleanup_core::explore::hint::hint_of_node;
-use disk_cleanup_core::explore::msg::{
-    ClassifyFacts, Hint, NodeEvent, ScanMsg, ScanSummary, StopCause,
-};
-use disk_cleanup_core::explore::ports::{ScanOpts, ScanSource, TermSignals};
-use disk_cleanup_core::explore::rows::{
+use dunnage_core::explore::fmt::{fmt_items_cell, fmt_size_cell, share_cell};
+use dunnage_core::explore::hint::hint_of_node;
+use dunnage_core::explore::msg::{ClassifyFacts, Hint, NodeEvent, ScanMsg, ScanSummary, StopCause};
+use dunnage_core::explore::ports::{ScanOpts, ScanSource, TermSignals};
+use dunnage_core::explore::rows::{
     build_rows, Badge, Filter, Row, RowId, RowKind, RowSource, Sort,
 };
-use disk_cleanup_core::explore::tree::{ExploreTree, NodeId};
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::snapshot_types::FsSnapshot;
-use disk_cleanup_core::SelectorId;
+use dunnage_core::explore::tree::{ExploreTree, NodeId};
+use dunnage_core::roots::RootSet;
+use dunnage_core::snapshot_types::FsSnapshot;
+use dunnage_core::SelectorId;
 
 use crate::escape::{escape_os, shell_quote};
 use crate::layout::{hard_wrap, word_wrap};
@@ -292,18 +290,16 @@ impl Builder<'_> {
                 Hint::No(_) => {
                     let (roots, facts) = (&self.env.classify, &self.env.facts);
                     let found: std::cell::Cell<Option<SelectorId>> = std::cell::Cell::new(None);
-                    let n =
-                        disk_cleanup_core::explore::refusal::count_items_below(tree, id, &|c| {
-                            let y = is_yes(tree, roots, facts, c);
-                            if y && found.get().is_none() {
-                                if let Hint::Yes { selector, .. } =
-                                    hint_of_node(tree, c, roots, facts)
-                                {
-                                    found.set(Some(selector));
-                                }
+                    let n = dunnage_core::explore::refusal::count_items_below(tree, id, &|c| {
+                        let y = is_yes(tree, roots, facts, c);
+                        if y && found.get().is_none() {
+                            if let Hint::Yes { selector, .. } = hint_of_node(tree, c, roots, facts)
+                            {
+                                found.set(Some(selector));
                             }
-                            y
-                        });
+                        }
+                        y
+                    });
                     if let (true, Some(sel)) = (n > 0, found.get()) {
                         words.push(format!("{} inside", sel.id()));
                         self.candidates.push(sel);
@@ -502,7 +498,7 @@ fn filesystem_block(out: &mut Vec<String>, env: &ExploreEnv) {
             ),
         ),
         Ok(snap) => {
-            let (verdict, _) = disk_cleanup_adapters::status::assess(snap);
+            let (verdict, _) = dunnage_adapters::status::assess(snap);
             wrapped(
                 out,
                 w,
@@ -701,7 +697,7 @@ pub fn run_text(env: &ExploreEnv, out: &mut dyn Write, err: &mut dyn Write) -> i
     let mut text = lines.join("\n");
     text.push('\n');
     if let Some(dir) = &model.next_dir {
-        text.push_str("Next: disk-cleanup explore ");
+        text.push_str("Next: dunnage explore ");
         text.push_str(&shell_quote(dir.as_os_str(), true));
         text.push('\n');
     }
@@ -712,7 +708,7 @@ pub fn run_text(env: &ExploreEnv, out: &mut dyn Write, err: &mut dyn Write) -> i
             .map(|k| k.id())
             .collect::<Vec<_>>()
             .join(",");
-        text.push_str("Next: disk-cleanup --kinds ");
+        text.push_str("Next: dunnage --kinds ");
         text.push_str(&kinds);
         text.push('\n');
     }

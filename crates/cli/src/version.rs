@@ -3,14 +3,14 @@
 
 use std::ffi::OsString;
 
-use disk_cleanup_cli::wiring::audit::build_info;
+use dunnage_cli::wiring::audit::build_info;
 
 pub fn line() -> String {
     let b = build_info();
     format!(
-        "disk-cleanup {} {} commit {}{}{}",
+        "dunnage {} {} commit {}{}{}",
         b.bin_version,
-        disk_cleanup_core::build_flavor(),
+        dunnage_core::build_flavor(),
         b.git_commit,
         if b.dirty { " dirty" } else { "" },
         if b.metascope_dirty { " scan-dirty" } else { "" },

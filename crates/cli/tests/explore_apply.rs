@@ -14,13 +14,13 @@ mod explore_rig;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use disk_cleanup_adapters::testing::{Event, FaultDirOps};
-use disk_cleanup_adapters::RealDirOps;
-use disk_cleanup_cli::explore::apply::{
+use dunnage_adapters::testing::{Event, FaultDirOps};
+use dunnage_adapters::RealDirOps;
+use dunnage_cli::explore::apply::{
     changed_text, exit_for_signal, grew_too_much, skip_text, STAMP_REFUSED,
 };
-use disk_cleanup_core::testing::{AuditCall, FakeAuditSink, FakeRunGuard};
-use disk_cleanup_core::{AuditRecord, SkipReason, Status};
+use dunnage_core::testing::{AuditCall, FakeAuditSink, FakeRunGuard};
+use dunnage_core::{AuditRecord, SkipReason, Status};
 use explore_rig::{kinds_of, manifest, Ex, FixedSizer, Knobs, Ran, NOW};
 
 const ORDER: [&str; 11] = [
@@ -59,7 +59,7 @@ fn result_statuses(ex: &Ex) -> Vec<Status> {
 /// and refuses the whole set) or in the window after the gate (only the per-item identity compare can see it).
 fn run_swapped(
     ex: &Ex,
-    confirmed: disk_cleanup_core::explore::confirm::ConfirmedPlan,
+    confirmed: dunnage_core::explore::confirm::ConfirmedPlan,
     change: impl FnOnce() + Send + 'static,
     after_gate: bool,
 ) -> Ran {
@@ -140,7 +140,7 @@ fn apply_should_refuse_before_any_state_or_capability_When_no_plan_was_saved() {
     let mut ex = Ex::new();
     let (a, _) = two_marks(&ex);
     let confirmed = ex.confirmed(&[a.clone()]);
-    ex.plans = disk_cleanup_core::testing::FakePlanStore::new();
+    ex.plans = dunnage_core::testing::FakePlanStore::new();
     let before = manifest(&ex.code);
     let ran = ex.run(confirmed, ex.confined_ops());
     assert_eq!(ran.steps, ["check_plan_id"]);
@@ -176,7 +176,7 @@ fn apply_should_refuse_When_the_plan_in_the_store_is_for_other_marks() {
     let (a, _) = two_marks(&ex);
     let confirmed_for_a = ex.confirmed(&[a.clone()]);
     // The store now holds only the plan of `out`: a's confirmation finds none of its own.
-    ex.plans = disk_cleanup_core::testing::FakePlanStore::new();
+    ex.plans = dunnage_core::testing::FakePlanStore::new();
     let _only_out = ex.review(&[ex.code.join("app/out")]);
     let ran = ex.run(confirmed_for_a, ex.confined_ops());
     assert_eq!(ran.minted, 0);
@@ -218,7 +218,7 @@ fn apply_should_name_the_holder_and_delete_nothing_When_the_run_lock_is_held() {
     assert_eq!(ran.minted, 0);
     assert_eq!(
         ran.report.refused.as_deref(),
-        Some("another disk-cleanup apply is running (pid 4242). Nothing was deleted.")
+        Some("another dunnage apply is running (pid 4242). Nothing was deleted.")
     );
     assert_eq!(ran.report.exit, 2);
     assert!(a.exists());
@@ -626,7 +626,7 @@ fn safety_apply_should_skip_an_item_that_is_now_inside_the_tools_own_state_M5_ag
     let a = ex.tree("app/dist", 2, 300);
     let confirmed = ex.confirmed(&[a.clone()]);
     // The state directory is relocated onto the item between the plan and the apply.
-    let moved = disk_cleanup_core::Dirs {
+    let moved = dunnage_core::Dirs {
         state: a.clone(),
         ..ex.base_dirs.clone()
     };
@@ -634,7 +634,7 @@ fn safety_apply_should_skip_an_item_that_is_now_inside_the_tools_own_state_M5_ag
         confirmed,
         ex.confined_ops(),
         &Knobs {
-            own_state: Some(disk_cleanup_core::explore::mark_check::OwnState::new(
+            own_state: Some(dunnage_core::explore::mark_check::OwnState::new(
                 &moved,
                 ex.p("bin/x"),
             )),
@@ -660,7 +660,7 @@ fn safety_apply_should_leave_an_intent_with_a_result_and_a_run_end_When_the_abor
     let abort = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let flag = std::sync::Arc::clone(&abort);
     let hits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let ops = |_: &disk_cleanup_core::ApplyToken| {
+    let ops = |_: &dunnage_core::ApplyToken| {
         let flag = std::sync::Arc::clone(&flag);
         let hits = std::sync::Arc::clone(&hits);
         FaultDirOps::wrap(RealDirOps::confined_to(&ex.base))
@@ -777,7 +777,7 @@ fn the_explorer_apply_should_share_named_steps_with_the_cleaner_and_keep_their_r
 
 #[test]
 fn apply_should_send_progress_item_and_done_messages_in_order_to_the_loop() {
-    use disk_cleanup_core::explore::msg::{DeleteItemOutcome, DeleteMsg, DeleteSummary};
+    use dunnage_core::explore::msg::{DeleteItemOutcome, DeleteMsg, DeleteSummary};
     let ex = Ex::new();
     let (a, b) = two_marks(&ex);
     let (tx, rx) = std::sync::mpsc::sync_channel(64);
@@ -809,7 +809,7 @@ fn apply_should_send_progress_item_and_done_messages_in_order_to_the_loop() {
 
 #[test]
 fn apply_should_send_exactly_one_refused_message_and_nothing_else_When_a_gate_stops_it() {
-    use disk_cleanup_core::explore::msg::DeleteMsg;
+    use dunnage_core::explore::msg::DeleteMsg;
     let ex = Ex::new();
     let (a, _) = two_marks(&ex);
     let (tx, rx) = std::sync::mpsc::sync_channel(64);
@@ -828,8 +828,8 @@ fn apply_should_send_exactly_one_refused_message_and_nothing_else_When_a_gate_st
 
 #[test]
 fn explorer_run_refuse_should_send_the_text_to_the_loop() {
-    use disk_cleanup_cli::explore::apply::ExplorerRun;
-    use disk_cleanup_core::explore::msg::DeleteMsg;
+    use dunnage_cli::explore::apply::ExplorerRun;
+    use dunnage_core::explore::msg::DeleteMsg;
     let (tx, rx) = std::sync::mpsc::sync_channel(4);
     let run = ExplorerRun {
         abort: std::sync::Arc::default(),
@@ -898,7 +898,7 @@ fn apply_should_report_interrupted_When_the_abort_stops_the_last_item_part_way()
     let abort = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let flag = std::sync::Arc::clone(&abort);
     let hits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let ops = |_: &disk_cleanup_core::ApplyToken| {
+    let ops = |_: &dunnage_core::ApplyToken| {
         let flag = std::sync::Arc::clone(&flag);
         let hits = std::sync::Arc::clone(&hits);
         FaultDirOps::wrap(RealDirOps::confined_to(&ex.base))
@@ -949,11 +949,11 @@ fn apply_should_not_report_interrupted_When_the_abort_arrives_after_the_last_ite
     assert_eq!(ran.report.exit, 0);
 }
 
-fn fake_id() -> disk_cleanup_core::plan::ItemIdentity {
-    disk_cleanup_core::plan::ItemIdentity {
+fn fake_id() -> dunnage_core::plan::ItemIdentity {
+    dunnage_core::plan::ItemIdentity {
         dev: 1,
         ino: 1,
-        kind: disk_cleanup_core::FileKind::Dir,
+        kind: dunnage_core::FileKind::Dir,
     }
 }
 

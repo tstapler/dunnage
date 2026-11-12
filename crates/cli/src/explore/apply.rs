@@ -30,23 +30,21 @@ use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use disk_cleanup_adapters::dirops::DirOps;
-use disk_cleanup_adapters::signals::term_signal;
-use disk_cleanup_adapters::targets::explorer_selection::{candidate_of, ExplorerSelectionTarget};
-use disk_cleanup_core::audit_types::{ConfirmedItem, ExplorerConfirm};
-use disk_cleanup_core::explore::confirm::{ConfirmedPlan, ReviewedPlan};
-use disk_cleanup_core::explore::mark_check::OwnState;
-use disk_cleanup_core::explore::msg::{
-    DeleteItemOutcome, DeleteItemResult, DeleteMsg, DeleteSummary,
-};
-use disk_cleanup_core::explorer_plan::{measure_attributed, TreeSizer};
-use disk_cleanup_core::plan::{check_plan_id, ExplorerGateRefusal, ItemIdentity, PlanId};
-use disk_cleanup_core::plan_state::{BuildInfo, SaveOutcome};
-use disk_cleanup_core::ports::{Env, ExtentProbe};
-use disk_cleanup_core::roots::{strictly_below, RootSet};
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::target::{Guarded, Target};
-use disk_cleanup_core::{
+use dunnage_adapters::dirops::DirOps;
+use dunnage_adapters::signals::term_signal;
+use dunnage_adapters::targets::explorer_selection::{candidate_of, ExplorerSelectionTarget};
+use dunnage_core::audit_types::{ConfirmedItem, ExplorerConfirm};
+use dunnage_core::explore::confirm::{ConfirmedPlan, ReviewedPlan};
+use dunnage_core::explore::mark_check::OwnState;
+use dunnage_core::explore::msg::{DeleteItemOutcome, DeleteItemResult, DeleteMsg, DeleteSummary};
+use dunnage_core::explorer_plan::{measure_attributed, TreeSizer};
+use dunnage_core::plan::{check_plan_id, ExplorerGateRefusal, ItemIdentity, PlanId};
+use dunnage_core::plan_state::{BuildInfo, SaveOutcome};
+use dunnage_core::ports::{Env, ExtentProbe};
+use dunnage_core::roots::{strictly_below, RootSet};
+use dunnage_core::selector::Selection;
+use dunnage_core::target::{Guarded, Target};
+use dunnage_core::{
     ApplyToken, Candidate, DeleteError, DeleteFailure, DiskVerdict, FatalError, Freed, Intent,
     ItemResult, Locator, Outcome, RunEnd, RunStart, SkipReason, Status, AUDIT_SCHEMA,
 };
@@ -59,7 +57,7 @@ use crate::wiring::compose::Trace;
 const REQUIRED_GATE: char = 'D';
 
 /// What `d` says in a build that does not register `explorer-selection` (every build but Gate D).
-pub const NOT_IN_BUILD: &str = disk_cleanup_core::explore::ports::DELETE_NOT_IN_BUILD;
+pub const NOT_IN_BUILD: &str = dunnage_core::explore::ports::DELETE_NOT_IN_BUILD;
 
 pub const STAMP_REFUSED: &str =
     "Deleting is disabled in this build: run 'make gate' and 'make install-gated'. Nothing was deleted.";
@@ -185,7 +183,7 @@ fn refuse(run: &ExplorerRun, exit: i32, text: String) -> ExplorerReport {
 fn lock_text(e: &FatalError) -> String {
     match e {
         FatalError::LockHeld { pid } => {
-            format!("another disk-cleanup apply is running (pid {pid}). Nothing was deleted.")
+            format!("another dunnage apply is running (pid {pid}). Nothing was deleted.")
         }
         other => other.text(),
     }
@@ -204,8 +202,8 @@ fn set_refusal(sel: &Selection) -> Option<String> {
             .map(|outer| {
                 format!(
                     "error: {} is inside {}, which is also marked. Nothing was deleted.",
-                    disk_cleanup_core::escape::escape_os(inner.as_os_str(), false),
-                    disk_cleanup_core::escape::escape_os(outer.as_os_str(), false)
+                    dunnage_core::escape::escape_os(inner.as_os_str(), false),
+                    dunnage_core::escape::escape_os(outer.as_os_str(), false)
                 )
             })
     })
@@ -587,7 +585,7 @@ fn sequence<D: DirOps + 'static>(
 /// `DC_EXPLORE_DELETE_DELAY_MS` (test-support builds only): waits after an item so a journey can send a signal
 /// while the delete is running; the abort flag ends the wait.
 fn pause_unless_aborted(env: &Env) {
-    let Some(ms) = disk_cleanup_core::explore_delete_delay_ms() else {
+    let Some(ms) = dunnage_core::explore_delete_delay_ms() else {
         return;
     };
     let end = Instant::now() + Duration::from_millis(ms);
@@ -614,27 +612,25 @@ fn fresh_plan_id<D: DirOps>(
 }
 
 fn reviewed_roots(
-    reviewed: &disk_cleanup_core::explore::confirm::ReviewedPlan,
-) -> disk_cleanup_core::RunRoots {
-    disk_cleanup_core::RunRoots {
+    reviewed: &dunnage_core::explore::confirm::ReviewedPlan,
+) -> dunnage_core::RunRoots {
+    dunnage_core::RunRoots {
         scan_roots: reviewed.roots().iter().map(|r| r.path.clone()).collect(),
-        ..disk_cleanup_core::RunRoots::default()
+        ..dunnage_core::RunRoots::default()
     }
 }
 
 /// The candidate of a reviewed item from the `lstat` taken now; an entry that cannot be read gets the
 /// planned identity, and the guard then refuses it as changed.
-fn candidate_for(env: &Env, item: &disk_cleanup_core::explore::confirm::ReviewedItem) -> Candidate {
+fn candidate_for(env: &Env, item: &dunnage_core::explore::confirm::ReviewedItem) -> Candidate {
     match env.fs.lstat(&item.path) {
         Ok(st) => candidate_of(&item.path, &st),
         Err(_) => Candidate::new(
             Locator::Path(item.path.clone()),
-            disk_cleanup_core::KindFacts::Explorer(disk_cleanup_core::ExplorerFacts {
-                is_dir: true,
-            }),
-            disk_cleanup_core::AllocatedBytes(0),
+            dunnage_core::KindFacts::Explorer(dunnage_core::ExplorerFacts { is_dir: true }),
+            dunnage_core::AllocatedBytes(0),
             None,
-            disk_cleanup_core::Identity {
+            dunnage_core::Identity {
                 dev: item.identity.dev,
                 ino: item.identity.ino,
             },

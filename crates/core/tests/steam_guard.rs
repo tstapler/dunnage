@@ -5,13 +5,13 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use disk_cleanup_core::guard::Facts;
-use disk_cleanup_core::roots::{RootSet, SteamLibraryRoot};
-use disk_cleanup_core::selector::Discard;
-use disk_cleanup_core::targets::steam_guard::{
+use dunnage_core::guard::Facts;
+use dunnage_core::roots::{RootSet, SteamLibraryRoot};
+use dunnage_core::selector::Discard;
+use dunnage_core::targets::steam_guard::{
     decide_steam, SteamGuard, SteamGuardFacts, DETAIL_MTIME_UNKNOWN, DETAIL_NOW_INSTALLED,
 };
-use disk_cleanup_core::{Dirs, Identity, Kind, RootDev, SkipReason};
+use dunnage_core::{Dirs, Identity, Kind, RootDev, SkipReason};
 
 const NOW: i64 = 10_000_000;
 const DAY: i64 = 86_400;

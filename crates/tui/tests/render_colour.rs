@@ -8,15 +8,15 @@ use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 
 use common::*;
-use disk_cleanup_core::escape::needs_escape;
-use disk_cleanup_core::explore::layout::cells;
-use disk_cleanup_core::explore::msg::{NodeEvent, ScanMode, NO_PARENT};
-use disk_cleanup_core::explore::rows::Badge;
-use disk_cleanup_core::explore::tree::ExploreTree;
-use disk_cleanup_core::snapshot_types::FsSnapshot;
-use disk_cleanup_tui::terminal::fixed_terminal;
-use disk_cleanup_tui::theme::{color_on, ColorMode};
-use disk_cleanup_tui::view::render;
+use dunnage_core::escape::needs_escape;
+use dunnage_core::explore::layout::cells;
+use dunnage_core::explore::msg::{NodeEvent, ScanMode, NO_PARENT};
+use dunnage_core::explore::rows::Badge;
+use dunnage_core::explore::tree::ExploreTree;
+use dunnage_core::snapshot_types::FsSnapshot;
+use dunnage_tui::terminal::fixed_terminal;
+use dunnage_tui::theme::{color_on, ColorMode};
+use dunnage_tui::view::render;
 use ratatui::backend::CrosstermBackend;
 
 /// A writer the test can read back after the backend took ownership of a clone.
@@ -312,7 +312,7 @@ fn the_footer_cuts_a_long_path_from_the_left_and_the_info_pane_wraps_it_in_full(
 
 #[test]
 fn the_boundary_message_command_delivers_each_hostile_name_as_one_argument() {
-    use disk_cleanup_core::shell_quote::sandbox::run_printed_line;
+    use dunnage_core::shell_quote::sandbox::run_printed_line;
     let mut delivered = 0;
     for tty in [true, false] {
         for (i, name) in hostile_names().into_iter().enumerate() {
@@ -352,7 +352,7 @@ fn the_boundary_message_command_delivers_each_hostile_name_as_one_argument() {
                     p
                 };
                 assert_eq!(
-                    run.argv_of("disk-cleanup").map(<[Vec<u8>]>::to_vec),
+                    run.argv_of("dunnage").map(<[Vec<u8>]>::to_vec),
                     Some(vec![b"explore".to_vec(), want]),
                     "{shell} tty={tty}: {cmd:?}"
                 );

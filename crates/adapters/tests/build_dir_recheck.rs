@@ -15,13 +15,13 @@ use std::os::unix::fs::{symlink, MetadataExt};
 use std::path::Path;
 use std::time::Duration;
 
-use disk_cleanup_adapters::mtime_probe::NewestStore;
-use disk_cleanup_adapters::targets::build_dir::{recheck_build_dir, BuildRecheck, RecheckEnv};
-use disk_cleanup_adapters::testing::{At, FaultDirOps};
-use disk_cleanup_adapters::{delete_tree, open_parent, open_verified_root, RealDirOps};
-use disk_cleanup_core::targets::build_dir::BuildGuard;
-use disk_cleanup_core::testing::FakeProbe;
-use disk_cleanup_core::{
+use dunnage_adapters::mtime_probe::NewestStore;
+use dunnage_adapters::targets::build_dir::{recheck_build_dir, BuildRecheck, RecheckEnv};
+use dunnage_adapters::testing::{At, FaultDirOps};
+use dunnage_adapters::{delete_tree, open_parent, open_verified_root, RealDirOps};
+use dunnage_core::targets::build_dir::BuildGuard;
+use dunnage_core::testing::FakeProbe;
+use dunnage_core::{
     AbortFlag, AllowedTarget, ApplyToken, BuildDirFlavor, DeleteError, DeletePolicy, Identity,
     NamePattern, RootDev, SkipReason,
 };
@@ -50,7 +50,7 @@ fn ident(p: &Path) -> Identity {
     Identity::of(&fs::symlink_metadata(p).unwrap())
 }
 
-fn run<D: disk_cleanup_adapters::DirOps>(
+fn run<D: dunnage_adapters::DirOps>(
     f: &Fixture,
     ops: &D,
     flavor: BuildDirFlavor,

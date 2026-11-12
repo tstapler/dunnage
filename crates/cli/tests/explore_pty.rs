@@ -1,6 +1,6 @@
 #![cfg(feature = "explore")]
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
-//! Story 6.5.6, Task 6.5.6a (Gate F, UX-T1, UX-T23, UX-T34, UX-T35): the real `disk-cleanup explore` binary on a
+//! Story 6.5.6, Task 6.5.6a (Gate F, UX-T1, UX-T23, UX-T34, UX-T35): the real `dunnage explore` binary on a
 //! pty. After every way the session can end the transcript shows the alternate screen left and the cursor
 //! shown, `stty -a` equals the state saved before, and nothing but the closing text stands outside the
 //! alternate screen; a name holding `ESC[2J` never reaches the transcript raw; and a script that presses every
@@ -255,7 +255,7 @@ fn the_no_delete_script_should_leave_the_tree_byte_identical_and_write_no_audit_
     assert_eq!(p.exit_code(), 130, "{}", p.tail());
     assert_clean_end(&mut p);
     assert_eq!(tree_manifest(&f.home()), before, "the tree changed");
-    let audit = f.xdg("state").join("disk-cleanup/audit.jsonl");
+    let audit = f.xdg("state").join("dunnage/audit.jsonl");
     assert!(!audit.exists(), "an audit line was written");
     let text = String::from_utf8_lossy(&p.seen).into_owned();
     assert!(
@@ -286,5 +286,5 @@ fn d_then_a_wrong_count_then_esc_should_delete_nothing_and_write_no_audit_line()
     assert_eq!(p.exit_code(), 130, "{}", p.tail());
     assert_clean_end(&mut p);
     assert_eq!(tree_manifest(&f.home()), before, "the tree changed");
-    assert!(!f.xdg("state").join("disk-cleanup/audit.jsonl").exists());
+    assert!(!f.xdg("state").join("dunnage/audit.jsonl").exists());
 }

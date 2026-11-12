@@ -4,14 +4,14 @@
 mod common;
 
 use common::{docker_cache, run, selection, Rig};
-use disk_cleanup_core::candidate::Candidate;
-use disk_cleanup_core::delete_types::{DeleteError, DeleteFailure, Freed};
-use disk_cleanup_core::executor::ExitClass;
-use disk_cleanup_core::plan::Planned;
-use disk_cleanup_core::ports::{Cmd, Env};
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::{ApplyToken, Platform, SelectorId, SkipReason};
+use dunnage_core::candidate::Candidate;
+use dunnage_core::delete_types::{DeleteError, DeleteFailure, Freed};
+use dunnage_core::executor::ExitClass;
+use dunnage_core::plan::Planned;
+use dunnage_core::ports::{Cmd, Env};
+use dunnage_core::selector::Selection;
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::{ApplyToken, Platform, SelectorId, SkipReason};
 
 /// Asks the runner whether the daemon answers, the way a real Docker target will.
 struct DockerLike {
@@ -122,7 +122,7 @@ fn a_list_only_gate_should_show_the_items_without_making_them_removable() {
     let rig = Rig::new();
     rig.runner.on(
         &["docker", "info"],
-        Ok(disk_cleanup_core::ports::CmdOutput::default()),
+        Ok(dunnage_core::ports::CmdOutput::default()),
     );
     let t = DockerLike {
         items: vec![docker_cache(1, 1 << 20)],

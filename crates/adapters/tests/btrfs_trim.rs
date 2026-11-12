@@ -5,17 +5,17 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use disk_cleanup_adapters::targets::btrfs_trim::BtrfsTrimTarget;
-use disk_cleanup_core::audit_types::RunRoots;
-use disk_cleanup_core::executor::{Executor, Mode, RunMeta, RunOptions, RunReport};
-use disk_cleanup_core::ports::CmdOutput;
-use disk_cleanup_core::selector::{KindSelector, Selection};
-use disk_cleanup_core::target::Target;
-use disk_cleanup_core::testing::{
+use dunnage_adapters::targets::btrfs_trim::BtrfsTrimTarget;
+use dunnage_core::audit_types::RunRoots;
+use dunnage_core::executor::{Executor, Mode, RunMeta, RunOptions, RunReport};
+use dunnage_core::ports::CmdOutput;
+use dunnage_core::selector::{KindSelector, Selection};
+use dunnage_core::target::Target;
+use dunnage_core::testing::{
     CallKind, FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe,
     FakeRunGuard, FakeSpaceMeter,
 };
-use disk_cleanup_core::{
+use dunnage_core::{
     AllocSnapshot, ApplyToken, BuildInfo, DeleteError, Dirs, FsSnapshot, MountEntry, SelectorId,
     SkipReason, SpaceUse, Status,
 };
@@ -93,7 +93,7 @@ impl Rig {
     }
 
     fn run(&self, mode: &Mode) -> RunReport {
-        let env = disk_cleanup_core::ports::Env {
+        let env = dunnage_core::ports::Env {
             fs: &self.fs,
             runner: &self.runner,
             clock: &self.clock,
@@ -147,7 +147,7 @@ impl Rig {
         self.runner
             .calls_of(CallKind::RunMutating)
             .iter()
-            .map(disk_cleanup_core::testing::RecordedCall::rendered)
+            .map(dunnage_core::testing::RecordedCall::rendered)
             .collect()
     }
 }
@@ -233,7 +233,7 @@ fn safety_btrfs_trim_non_root_runs_no_command_and_never_sudo() {
 
 #[test]
 fn safety_btrfs_trim_runs_only_fstrim_v_on_the_mount() {
-    use disk_cleanup_core::ports::{classify, Cmd};
+    use dunnage_core::ports::{classify, Cmd};
     let rig = Rig::new(0, Ok("trimmed 1 GiB\n"));
     rig.apply();
     assert_eq!(rig.mutating_argvs(), ["fstrim -v /"]);

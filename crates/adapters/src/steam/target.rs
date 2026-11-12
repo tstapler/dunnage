@@ -16,15 +16,15 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use disk_cleanup_core::guard::Facts;
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::selector::{Discard, Selection};
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::targets::steam_guard::{
+use dunnage_core::guard::Facts;
+use dunnage_core::ports::Env;
+use dunnage_core::roots::RootSet;
+use dunnage_core::selector::{Discard, Selection};
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::targets::steam_guard::{
     decide_steam, SteamGuard, SteamGuardFacts, SAVES_BASE, SAVE_DIRS,
 };
-use disk_cleanup_core::{
+use dunnage_core::{
     AbortFlag, AllocatedBytes, Allowed, AllowedTarget, AppId, ApplyToken, Candidate, CandidateId,
     DeleteError, DeleteFailure, DeletePolicy, FileKind, Freed, Identity, Kind, KindFacts, Locator,
     MountEntry, NamePattern, RootDev, SelectorId, SkipReason, SteamFacts,

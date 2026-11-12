@@ -9,14 +9,14 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use disk_cleanup_adapters::explore::scan_source::{WalkerScanSource, QUEUE_DEPTH};
-use disk_cleanup_core::explore::msg::{NodeEvent, ScanMode, ScanMsg, StopCause, NO_PARENT};
-use disk_cleanup_core::explore::ports::{ScanHandle, ScanOpts, ScanSource};
-use disk_cleanup_core::explore::tree::ExploreTree;
-use disk_cleanup_scan::index::{
+use dunnage_adapters::explore::scan_source::{WalkerScanSource, QUEUE_DEPTH};
+use dunnage_core::explore::msg::{NodeEvent, ScanMode, ScanMsg, StopCause, NO_PARENT};
+use dunnage_core::explore::ports::{ScanHandle, ScanOpts, ScanSource};
+use dunnage_core::explore::tree::ExploreTree;
+use dunnage_scan::index::{
     Backend, CollectRequest, Collected, DirEvent, DirInfo, StreamRequest, StreamSummary,
 };
-use disk_cleanup_scan::walker::WalkerBackend;
+use dunnage_scan::walker::WalkerBackend;
 
 type Sink<'a> = &'a (dyn Fn(Vec<DirEvent>) + Sync);
 type Script = dyn Fn(&StreamRequest<'_>, Sink<'_>) -> io::Result<StreamSummary> + Send + Sync;
@@ -31,7 +31,7 @@ impl Backend for Scripted {
     fn extents_exact(&self) -> bool {
         false
     }
-    fn collect(&self, _req: &CollectRequest<'_>) -> disk_cleanup_scan::Result<Collected> {
+    fn collect(&self, _req: &CollectRequest<'_>) -> dunnage_scan::Result<Collected> {
         Ok(Collected::default())
     }
     fn collect_streaming(

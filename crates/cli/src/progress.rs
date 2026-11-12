@@ -99,7 +99,7 @@ impl<'a> Progress<'a> {
         let secs = now_ms.saturating_sub(self.last_progress_ms) / 1000;
         let _ = writeln!(
             self.sink,
-            "warning: no progress for {secs}s; a process may be blocked in an uninterruptible filesystem call (see 'cat /proc/<pid>/stack' for the disk-cleanup pid). Waiting."
+            "warning: no progress for {secs}s; a process may be blocked in an uninterruptible filesystem call (see 'cat /proc/<pid>/stack' for the dunnage pid). Waiting."
         );
         true
     }

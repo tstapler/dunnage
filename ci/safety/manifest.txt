@@ -4,7 +4,7 @@
 # The owning story names its test as listed (or edits the name here in the same commit). Raise active-gate when
 # the gate's work starts (it is the gate whose owner wait comes next, as in ci/safety/kinds-by-gate.txt).
 active-gate D
-B safety_bare_run_deletes_nothing            # a plain `disk-cleanup` run changes no file (Story 1.2.4 / 2.3.3)
+B safety_bare_run_deletes_nothing            # a plain `dunnage` run changes no file (Story 1.2.4 / 2.3.3)
 B safety_force_and_yes_flags_rejected        # --force and -y exit 64 (Story 1.2.4)
 B safety_out_of_root_cache_not_deleted       # caches: only Exact table paths (Story 1.1.5 oracle, 2.1.x)
 B safety_floor_rule_both_sides               # the floor rule F refuses on both sides (Story 2.1.2)

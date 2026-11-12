@@ -5,9 +5,9 @@ mod support;
 
 use std::path::PathBuf;
 
-use disk_cleanup_cli::reasontext::{next_action, reason, ReasonFacts, TextCtx};
-use disk_cleanup_core::kind::SelectorId;
-use disk_cleanup_core::outcome::SkipReason;
+use dunnage_cli::reasontext::{next_action, reason, ReasonFacts, TextCtx};
+use dunnage_core::kind::SelectorId;
+use dunnage_core::outcome::SkipReason;
 use support::*;
 
 fn has_placeholder(s: &str) -> bool {
@@ -103,7 +103,7 @@ fn facts_should_fill_the_clauses_of_the_reason_texts() {
     );
     assert_eq!(
         next_action(SkipReason::NeedsRoot, &f, &ctx),
-        "sudo /home/tstapler/.cargo/bin/disk-cleanup --apply --kinds worktrees"
+        "sudo /home/tstapler/.cargo/bin/dunnage --apply --kinds worktrees"
     );
     let mut sel2 = default_selection();
     sel2.min_age_secs = Some(3600);
@@ -122,7 +122,7 @@ fn facts_should_fill_the_clauses_of_the_reason_texts() {
 #[test]
 fn cache_apt_needs_root_should_name_the_finest_id_with_a_quoted_binary_path_and_never_caches() {
     let sel = default_selection();
-    let exe = PathBuf::from("/opt/my tools/disk-cleanup");
+    let exe = PathBuf::from("/opt/my tools/dunnage");
     let ctx = TextCtx {
         selection: &sel,
         selector: SelectorId::CacheApt,
@@ -132,7 +132,7 @@ fn cache_apt_needs_root_should_name_the_finest_id_with_a_quoted_binary_path_and_
     let text = next_action(SkipReason::NeedsRoot, &ReasonFacts::default(), &ctx);
     assert_eq!(
         text,
-        "sudo '/opt/my tools/disk-cleanup' --apply --kinds cache-apt"
+        "sudo '/opt/my tools/dunnage' --apply --kinds cache-apt"
     );
     assert!(!text.contains("--kinds caches"));
 }
@@ -140,7 +140,7 @@ fn cache_apt_needs_root_should_name_the_finest_id_with_a_quoted_binary_path_and_
 #[test]
 fn btrfs_needs_root_should_print_the_sudo_line_with_the_absolute_binary_path_and_the_finest_id() {
     let sel = default_selection();
-    let exe = PathBuf::from("/home/u/.cargo/bin/disk-cleanup");
+    let exe = PathBuf::from("/home/u/.cargo/bin/dunnage");
     let ctx = TextCtx {
         selection: &sel,
         selector: SelectorId::Btrfs,
@@ -149,14 +149,14 @@ fn btrfs_needs_root_should_print_the_sudo_line_with_the_absolute_binary_path_and
     };
     assert_eq!(
         next_action(SkipReason::NeedsRoot, &ReasonFacts::default(), &ctx),
-        "sudo /home/u/.cargo/bin/disk-cleanup --apply --kinds btrfs"
+        "sudo /home/u/.cargo/bin/dunnage --apply --kinds btrfs"
     );
 }
 
 #[test]
 fn already_running_should_name_which_job_is_in_the_way_when_the_target_gives_a_detail() {
     let sel = default_selection();
-    let exe = PathBuf::from("/x/disk-cleanup");
+    let exe = PathBuf::from("/x/dunnage");
     let ctx = TextCtx {
         selection: &sel,
         selector: SelectorId::Btrfs,

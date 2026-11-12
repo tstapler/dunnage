@@ -2,7 +2,7 @@
 //! Task 1.2.3c: the row layout of `design/ux.md` 3.6, property test over widths 20 to 200 (a port of the
 //! self-test of `implementation/prototypes/layout_rows.py`).
 
-use disk_cleanup_cli::layout::{hard_wrap, word_wrap, RowCells, Table, PLAN_COLS};
+use dunnage_cli::layout::{hard_wrap, word_wrap, RowCells, Table, PLAN_COLS};
 
 /// xorshift64: deterministic, no dependency.
 struct Rng(u64);

@@ -6,9 +6,9 @@ mod xfs;
 
 use std::path::PathBuf;
 
-use disk_cleanup_core::explore::confirm::{Confirm, ReviewedPlan};
-use disk_cleanup_core::explorer_plan::explorer_plan;
-use disk_cleanup_core::plan::OnlyMode;
+use dunnage_core::explore::confirm::{Confirm, ReviewedPlan};
+use dunnage_core::explorer_plan::explorer_plan;
+use dunnage_core::plan::OnlyMode;
 use xfs::{none, with_ctx, World};
 
 #[test]

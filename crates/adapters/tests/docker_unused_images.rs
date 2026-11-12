@@ -6,12 +6,12 @@
 mod scene;
 use scene::*;
 
-use disk_cleanup_adapters::targets::docker_images::DockerImagesTarget;
-use disk_cleanup_adapters::targets::docker_unused_images::DockerUnusedImagesTarget;
-use disk_cleanup_core::selector::KindSelector;
-use disk_cleanup_core::target::{Guarded, Target};
-use disk_cleanup_core::testing::{CallKind, FakeCommandRunner};
-use disk_cleanup_core::{Candidate, SelectorId, SkipReason, Status};
+use dunnage_adapters::targets::docker_images::DockerImagesTarget;
+use dunnage_adapters::targets::docker_unused_images::DockerUnusedImagesTarget;
+use dunnage_core::selector::KindSelector;
+use dunnage_core::target::{Guarded, Target};
+use dunnage_core::testing::{CallKind, FakeCommandRunner};
+use dunnage_core::{Candidate, SelectorId, SkipReason, Status};
 
 fn three_tagged() -> Scene {
     let mut s = Scene::default();
@@ -32,7 +32,7 @@ fn three_tagged() -> Scene {
     s
 }
 
-fn sel_images() -> disk_cleanup_core::selector::Selection {
+fn sel_images() -> dunnage_core::selector::Selection {
     let mut sel = select(&[SelectorId::DockerImages]);
     sel.min_age_secs = Some(30 * 86_400);
     sel
@@ -47,7 +47,7 @@ fn find<'a>(cs: &'a [Candidate], id: &str) -> &'a Candidate {
 fn mutating(r: &FakeCommandRunner) -> Vec<String> {
     r.calls_of(CallKind::RunMutating)
         .iter()
-        .map(disk_cleanup_core::testing::RecordedCall::rendered)
+        .map(dunnage_core::testing::RecordedCall::rendered)
         .collect()
 }
 

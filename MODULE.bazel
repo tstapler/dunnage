@@ -1,11 +1,11 @@
-"""Bazel build, test, lint and release-archive system for disk-cleanup (ADR-008).
+"""Bazel build, test, lint and release-archive system for dunnage (ADR-008).
 
 Cargo.toml / Cargo.lock stay the dependency source of truth: crate_universe reads them, and
 `cargo publish`, `cargo mutants` and plain `cargo build|test|clippy` keep working.
 """
 
 module(
-    name = "disk_cleanup",
+    name = "dunnage",
     version = "0.1.0",
 )
 

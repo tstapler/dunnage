@@ -5,7 +5,7 @@ use std::io::Write;
 
 use serde_json::{json, Value};
 
-use disk_cleanup_core::escape::path_hex;
+use dunnage_core::escape::path_hex;
 
 use super::text::{
     build_model, scan_to_completion, Entry, ExploreEnv, Model, ScanEnd, Scanned, INTERRUPTED,
@@ -50,7 +50,7 @@ fn entry_json(e: &Entry) -> Value {
 pub fn document(env: &ExploreEnv, s: &Scanned, model: &Model) -> Value {
     let fs = match &env.headroom {
         Ok(h) => {
-            let (verdict, _) = disk_cleanup_adapters::status::assess(h);
+            let (verdict, _) = dunnage_adapters::status::assess(h);
             let verdict = crate::render::verdict_text(verdict)
                 .trim_start_matches("verdict: ")
                 .to_lowercase();

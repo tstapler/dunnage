@@ -10,19 +10,19 @@ use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use disk_cleanup_adapters::targets::cache::{removal_via, CacheTarget, RemovalVia};
-use disk_cleanup_adapters::testing::{FaultDirOps, Op};
-use disk_cleanup_adapters::RealDirOps;
-use disk_cleanup_core::audit_types::RunRoots;
-use disk_cleanup_core::executor::{Executor, Mode, RunMeta, RunOptions};
-use disk_cleanup_core::ports::{CmdOutput, Env, RunGuard};
-use disk_cleanup_core::selector::{KindSelector, Selection};
-use disk_cleanup_core::target::{Guarded, Target};
-use disk_cleanup_core::testing::{
+use dunnage_adapters::targets::cache::{removal_via, CacheTarget, RemovalVia};
+use dunnage_adapters::testing::{FaultDirOps, Op};
+use dunnage_adapters::RealDirOps;
+use dunnage_core::audit_types::RunRoots;
+use dunnage_core::executor::{Executor, Mode, RunMeta, RunOptions};
+use dunnage_core::ports::{CmdOutput, Env, RunGuard};
+use dunnage_core::selector::{KindSelector, Selection};
+use dunnage_core::target::{Guarded, Target};
+use dunnage_core::testing::{
     FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe, FakeRunGuard,
     FakeSpaceMeter,
 };
-use disk_cleanup_core::{
+use dunnage_core::{
     ApplyToken, AuditRecord, BuildInfo, Candidate, DeleteError, KindFacts, SelectorId, SkipReason,
     Status,
 };
@@ -355,7 +355,7 @@ fn execute_should_run_the_tool_for_a_command_row_and_never_delete_the_path_itsel
     assert_eq!(freed.attributed_bytes.0, 0, "the fake tool removed nothing");
     assert_eq!(
         rig.runner
-            .calls_of(disk_cleanup_core::testing::CallKind::RunMutating)
+            .calls_of(dunnage_core::testing::CallKind::RunMutating)
             .len(),
         1
     );
@@ -384,7 +384,7 @@ fn execute_should_refuse_When_the_abort_flag_is_set() {
 
 #[test]
 fn removal_via_should_name_command_rows_and_path_rows() {
-    let row = |label: &str, apt: bool| disk_cleanup_core::CacheFacts {
+    let row = |label: &str, apt: bool| dunnage_core::CacheFacts {
         label: label.into(),
         apt,
     };

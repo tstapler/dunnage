@@ -15,8 +15,8 @@ mod explore_rig;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use disk_cleanup_adapters::audit::RealAuditSink;
-use disk_cleanup_adapters::audit_verify::{
+use dunnage_adapters::audit::RealAuditSink;
+use dunnage_adapters::audit_verify::{
     verify_audit_with, verify_file_with, AllowedTable, VerifyExtras, VerifyInputs, VerifyReport,
 };
 use explore_rig::{Ex, Knobs};
@@ -45,7 +45,7 @@ fn verify_text(text: &str) -> VerifyReport {
             config_roots: None,
         },
         &VerifyExtras {
-            own_dirs: vec![PathBuf::from("/home/u/.local/state/disk-cleanup")],
+            own_dirs: vec![PathBuf::from("/home/u/.local/state/dunnage")],
         },
     )
     .unwrap()
@@ -275,7 +275,7 @@ fn audit_verify_should_exit_2_When_a_refused_run_has_an_intent_or_an_unfinished_
 fn audit_verify_should_exit_2_for_a_result_an_intent_or_a_partial_outside_the_roots_or_inside_own_state(
 ) {
     let outside = "/data/else/dir";
-    let state = "/home/u/.local/state/disk-cleanup/keep";
+    let state = "/home/u/.local/state/dunnage/keep";
     let one_below = "/home/u/code";
     let git = "/home/u/code/app/.git/hooks";
     let ancestor = "/home";
@@ -311,11 +311,11 @@ fn audit_verify_should_apply_rule_f_and_the_state_rule_even_when_a_config_root_c
         PathBuf::from("/"),
     ];
     let extras = VerifyExtras {
-        own_dirs: vec![PathBuf::from("/home/u/.local/state/disk-cleanup")],
+        own_dirs: vec![PathBuf::from("/home/u/.local/state/dunnage")],
     };
     for (path, needle) in [
         ("/home/u/one", "fewer than 2 components"),
-        ("/home/u/.local/state/disk-cleanup/audit.jsonl", "own state"),
+        ("/home/u/.local/state/dunnage/audit.jsonl", "own state"),
         ("/home/u/.local/state", "own state"),
         ("/home", "ancestor of $HOME"),
     ] {
@@ -403,11 +403,11 @@ fn safety_audit_verify_should_read_back_a_real_explorer_run_written_by_the_real_
     let ex = Ex::new();
     let a = ex.tree("app/dist", 2, 2000);
     let b = ex.tree("app/out", 1, 2000);
-    let log = ex.p("state/disk-cleanup/audit.jsonl");
+    let log = ex.p("state/dunnage/audit.jsonl");
     std::fs::create_dir_all(log.parent().unwrap()).unwrap();
-    let sink: Arc<dyn disk_cleanup_core::ports::AuditSink> = Arc::new(RealAuditSink::new(
+    let sink: Arc<dyn dunnage_core::ports::AuditSink> = Arc::new(RealAuditSink::new(
         log.clone(),
-        ex.p("state/disk-cleanup/audit.reserve"),
+        ex.p("state/dunnage/audit.reserve"),
         None,
     ));
     let confirmed = ex.confirmed(&[a.clone(), b.clone()]);
@@ -430,7 +430,7 @@ fn safety_audit_verify_should_read_back_a_real_explorer_run_written_by_the_real_
             config_roots: Some(&roots),
         },
         &VerifyExtras {
-            own_dirs: disk_cleanup_adapters::own_dirs(
+            own_dirs: dunnage_adapters::own_dirs(
                 &ex.dirs.state,
                 &ex.base_dirs.cache,
                 &ex.base_dirs.config,
@@ -487,13 +487,13 @@ fn safety_explorer_confirm_should_be_synced_to_disk_when_it_is_written() {
 
 #[test]
 fn child_writes_one_explorer_confirm() {
-    use disk_cleanup_core::ports::AuditSink;
+    use dunnage_core::ports::AuditSink;
     let Some(log) = std::env::var_os(SYNC_CHILD) else {
         return;
     };
     let log = PathBuf::from(log);
     let sink = RealAuditSink::new(log.clone(), log.with_extension("reserve"), None);
-    sink.explorer_confirm(&disk_cleanup_core::ExplorerConfirm {
+    sink.explorer_confirm(&dunnage_core::ExplorerConfirm {
         run_id: "r".into(),
         ts: 1,
         plan_id: "abcd1234".into(),
@@ -501,7 +501,7 @@ fn child_writes_one_explorer_confirm() {
         bytes: 10,
         typed: "1".into(),
         tty: true,
-        items: vec![disk_cleanup_core::ConfirmedItem {
+        items: vec![dunnage_core::ConfirmedItem {
             path: PathBuf::from(A),
             path_hex: None,
             dev: 1,
@@ -544,12 +544,17 @@ fn own_dirs_should_name_the_three_tool_directories_and_their_canonical_spellings
     std::fs::create_dir_all(real.join("state")).unwrap();
     // `cache` is reached through a symlink: both spellings must be judged as the tool's own.
     std::os::unix::fs::symlink(real.join("data/cache"), real.join("cache")).unwrap();
-    let dirs = disk_cleanup_adapters::own_dirs(
-        &real.join("state/disk-cleanup"),
+    let dirs = dunnage_adapters::own_dirs(
+        &real.join("state/dunnage"),
         &real.join("cache"),
         &real.join("config"),
     );
     let mut want = vec![
+        real.join("state/dunnage"),
+        real.join("cache/dunnage"),
+        real.join("data/cache/dunnage"),
+        real.join("config/dunnage"),
+        // The pre-rename directories stay protected until the owner moves them.
         real.join("state/disk-cleanup"),
         real.join("cache/disk-cleanup"),
         real.join("data/cache/disk-cleanup"),
@@ -575,7 +580,7 @@ fn verify_file_should_read_a_log_from_disk_like_verify_audit() {
     )
     .unwrap();
     let table = AllowedTable::embedded();
-    let r = disk_cleanup_adapters::audit_verify::verify_file(
+    let r = dunnage_adapters::audit_verify::verify_file(
         &path,
         &VerifyInputs {
             table: &table,

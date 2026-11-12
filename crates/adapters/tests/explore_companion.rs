@@ -7,10 +7,10 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::Arc;
 use std::time::Duration;
 
-use disk_cleanup_adapters::explore::scan_source::WalkerScanSource;
-use disk_cleanup_core::explore::msg::ScanMsg;
-use disk_cleanup_core::explore::ports::{ScanOpts, ScanSource};
-use disk_cleanup_scan::walker::WalkerBackend;
+use dunnage_adapters::explore::scan_source::WalkerScanSource;
+use dunnage_core::explore::msg::ScanMsg;
+use dunnage_core::explore::ports::{ScanOpts, ScanSource};
+use dunnage_scan::walker::WalkerBackend;
 
 #[test]
 fn the_companion_should_send_on_the_scan_channel_and_the_counter_should_drop_before_finished() {

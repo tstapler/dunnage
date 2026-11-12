@@ -1,6 +1,6 @@
 # `--json` schema
 
-Every `disk-cleanup --json` run writes exactly one JSON document to stdout (pretty-printed, one trailing
+Every `dunnage --json` run writes exactly one JSON document to stdout (pretty-printed, one trailing
 newline) and nothing else there. A usage error writes nothing to stdout. The document is never coloured and
 never uses `~`, thousands separators or unit suffixes: bytes are exact integers, paths are absolute.
 
@@ -9,7 +9,7 @@ never uses `~`, thousands separators or unit suffixes: bytes are exact integers,
 `schema_version` is `1`. Adding a field never bumps it. Removing, renaming or retyping a field does.
 `crates/cli/tests/json_golden.rs` compares the key shape of each document with the golden files in
 `crates/cli/tests/golden/` and fails when a key disappears without a bump. Regenerate the files only with
-`cargo test -p disk-cleanup --test json_golden -- --ignored regen_golden`.
+`cargo test -p dunnage --test json_golden -- --ignored regen_golden`.
 
 ## Common keys
 
@@ -69,5 +69,5 @@ the version. A SIGINT during the scan prints no document and exits 130.
 ## Reading the report by column
 
 ```
-disk-cleanup --json | jq -r '.items[] | [.status, .kind, .est_bytes, .path] | @tsv'
+dunnage --json | jq -r '.items[] | [.status, .kind, .est_bytes, .path] | @tsv'
 ```

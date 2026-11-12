@@ -5,12 +5,12 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::candidate::Locator;
-use disk_cleanup_core::delete_types::FileKind;
-use disk_cleanup_core::kind::Kind;
-use disk_cleanup_core::plan::{PlanItem, Planned};
-use disk_cleanup_core::ports::Fs;
-use disk_cleanup_core::SkipReason;
+use dunnage_core::candidate::Locator;
+use dunnage_core::delete_types::FileKind;
+use dunnage_core::kind::Kind;
+use dunnage_core::plan::{PlanItem, Planned};
+use dunnage_core::ports::Fs;
+use dunnage_core::SkipReason;
 
 /// The first symlinked directory strictly between `home` and `path`, walking down from `home`.
 fn symlinked_ancestor(fs: &dyn Fs, home: &Path, path: &Path) -> Option<PathBuf> {

@@ -14,17 +14,17 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use common::Fixture;
-use disk_cleanup_cli::app::{ApplyMode, Ports};
-use disk_cleanup_cli::terminal::Terminal;
-use disk_cleanup_cli::wiring::audit::{GateExit, StampOutcome};
-use disk_cleanup_cli::wiring::compose::{compose_apply, ApplyState, ApplyWiring, Sink, Trace};
-use disk_cleanup_core::candidate::BuildDirFlavor;
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::snapshot_types::{AllocSnapshot, SpaceUse};
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::testing::{AuditCall, FakeAuditSink, FakeRunGuard, FakeSpaceMeter};
-use disk_cleanup_core::{
+use dunnage_cli::app::{ApplyMode, Ports};
+use dunnage_cli::terminal::Terminal;
+use dunnage_cli::wiring::audit::{GateExit, StampOutcome};
+use dunnage_cli::wiring::compose::{compose_apply, ApplyState, ApplyWiring, Sink, Trace};
+use dunnage_core::candidate::BuildDirFlavor;
+use dunnage_core::ports::Env;
+use dunnage_core::selector::Selection;
+use dunnage_core::snapshot_types::{AllocSnapshot, SpaceUse};
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::testing::{AuditCall, FakeAuditSink, FakeRunGuard, FakeSpaceMeter};
+use dunnage_core::{
     ApplyToken, Candidate, DeleteFailure, FatalError, Freed, RunRoots, SelectorId, SkipReason,
 };
 use rig::{build, FakeTarget, Rig};
@@ -73,7 +73,7 @@ impl ApplyState for FakeState {
         self.reserves.fetch_add(1, Ordering::SeqCst);
         match self.reserve_error {
             Some(errno) => Err(FatalError::AuditUnwritable {
-                path: PathBuf::from("/home/u/.local/state/disk-cleanup/audit.jsonl"),
+                path: PathBuf::from("/home/u/.local/state/dunnage/audit.jsonl"),
                 errno,
             }),
             None => Ok(None),
@@ -149,7 +149,7 @@ fn go(
         build: build(),
         roots: RunRoots::default(),
         scan_roots: 1,
-        exe: PathBuf::from("/usr/bin/disk-cleanup"),
+        exe: PathBuf::from("/usr/bin/dunnage"),
         term: Terminal::pipe(),
         stdout_tty: false,
         run_id: "run-1".into(),
@@ -160,7 +160,7 @@ fn go(
     };
     let (out, err) = (Shared::default(), Shared::default());
     let mut trace = Trace::default();
-    let mut args: Vec<OsString> = vec!["disk-cleanup".into()];
+    let mut args: Vec<OsString> = vec!["dunnage".into()];
     args.extend(argv.iter().map(OsString::from));
     let code = compose_apply(
         args.into_iter().skip(1).collect(),
@@ -374,7 +374,7 @@ fn a_held_run_lock_should_print_the_marker_and_the_closing_line_only_with_exit_2
     );
     assert!(
         r.stderr
-            .contains("another disk-cleanup run is active (pid 4242)"),
+            .contains("another dunnage run is active (pid 4242)"),
         "{}",
         r.stderr
     );
@@ -554,7 +554,7 @@ fn the_binary_should_print_two_lines_and_exit_2_when_another_process_holds_the_r
     let root = stale_fixture(&f);
     let id = dry_run_id(&f, &root);
     // A second process holds run.lock: `flock` from util-linux keeps it for the life of the child.
-    let lock = f.xdg("state").join("disk-cleanup/run.lock");
+    let lock = f.xdg("state").join("dunnage/run.lock");
     std::fs::create_dir_all(lock.parent().unwrap()).unwrap();
     let mut holder = std::process::Command::new("flock")
         .arg("--exclusive")
@@ -574,10 +574,7 @@ fn the_binary_should_print_two_lines_and_exit_2_when_another_process_holds_the_r
     assert_eq!(lines.len(), 2, "{stdout:?}");
     assert!(lines[0].starts_with("APPLYING - deleting. plan-id "));
     assert_eq!(lines[1], "APPLY FINISHED - exit 2.");
-    assert!(
-        stderr.contains("another disk-cleanup run is active"),
-        "{stderr}"
-    );
+    assert!(stderr.contains("another dunnage run is active"), "{stderr}");
     assert!(root.join("stale-a").is_dir(), "nothing was deleted");
 }
 
@@ -586,7 +583,7 @@ fn the_binary_should_print_two_lines_and_exit_2_when_the_audit_log_is_read_only(
     let f = Fixture::new();
     let root = stale_fixture(&f);
     let id = dry_run_id(&f, &root);
-    let audit = f.xdg("state").join("disk-cleanup/audit.jsonl");
+    let audit = f.xdg("state").join("dunnage/audit.jsonl");
     std::fs::write(&audit, "").unwrap();
     std::fs::set_permissions(&audit, std::os::unix::fs::PermissionsExt::from_mode(0o400)).unwrap();
     if std::fs::OpenOptions::new()
@@ -629,7 +626,7 @@ fn the_binary_should_print_two_lines_and_exit_3_when_the_filesystem_is_starved()
 fn a_refused_apply_should_leave_no_state_file_in_steps_1_to_4() {
     let f = Fixture::new();
     let root = stale_fixture(&f);
-    let state = f.xdg("state").join("disk-cleanup");
+    let state = f.xdg("state").join("dunnage");
     // Step 4: a destructive kind without a plan-id.
     let out = f
         .fixture_cmd()

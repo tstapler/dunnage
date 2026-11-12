@@ -15,24 +15,24 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use disk_cleanup_adapters::explore::cache_paint::{
+use dunnage_adapters::explore::cache_paint::{
     cache_config, explorer_cache_path, paints, save_guard, save_room, CacheMode, DEFAULT_MAX_AGE,
     NEARLY_FULL, STATE_UNREADABLE,
 };
-use disk_cleanup_adapters::explore::scan_source::WalkerScanSource;
-use disk_cleanup_adapters::RealSpaceMeter;
-use disk_cleanup_core::explore::msg::{ScanMode, ScanMsg, ScanSummary};
-use disk_cleanup_core::explore::ports::{ScanHandle, ScanOpts, ScanSource};
-use disk_cleanup_core::explore::tree::ExploreTree;
-use disk_cleanup_core::ports::SpaceMeter;
-use disk_cleanup_core::snapshot_types::{AllocSnapshot, SpaceUse};
-use disk_cleanup_core::testing::FakeSpaceMeter;
-use disk_cleanup_core::{Dirs, FsSnapshot, Platform};
-use disk_cleanup_scan::cache::{self, Rec};
-use disk_cleanup_scan::index::{
+use dunnage_adapters::explore::scan_source::WalkerScanSource;
+use dunnage_adapters::RealSpaceMeter;
+use dunnage_core::explore::msg::{ScanMode, ScanMsg, ScanSummary};
+use dunnage_core::explore::ports::{ScanHandle, ScanOpts, ScanSource};
+use dunnage_core::explore::tree::ExploreTree;
+use dunnage_core::ports::SpaceMeter;
+use dunnage_core::snapshot_types::{AllocSnapshot, SpaceUse};
+use dunnage_core::testing::FakeSpaceMeter;
+use dunnage_core::{Dirs, FsSnapshot, Platform};
+use dunnage_scan::cache::{self, Rec};
+use dunnage_scan::index::{
     Backend, CollectRequest, Collected, DirEvent, StreamRequest, StreamSummary,
 };
-use disk_cleanup_scan::walker::{CacheConfig, DirStat, WalkHooks, WalkerBackend};
+use dunnage_scan::walker::{CacheConfig, DirStat, WalkHooks, WalkerBackend};
 use stream_common::{FakeFs, FAKE_MTIME, ROOT};
 
 type Sink<'a> = &'a (dyn Fn(Vec<DirEvent>) + Sync);
@@ -68,7 +68,7 @@ impl Backend for Hooked {
     fn extents_exact(&self) -> bool {
         false
     }
-    fn collect(&self, _r: &CollectRequest<'_>) -> disk_cleanup_scan::Result<Collected> {
+    fn collect(&self, _r: &CollectRequest<'_>) -> dunnage_scan::Result<Collected> {
         Ok(Collected::default())
     }
     fn collect_streaming(
@@ -119,7 +119,7 @@ fn explorer_cache_should_be_separate_from_the_cleaners_walker_cache() {
         config: "/h/.config".into(),
     };
     let p = explorer_cache_path(&dirs);
-    assert_eq!(p, PathBuf::from("/h/.cache/disk-cleanup/explorer.cache"));
+    assert_eq!(p, PathBuf::from("/h/.cache/dunnage/explorer.cache"));
     assert_ne!(p.file_name(), Some("walker.cache".as_ref()));
 }
 
@@ -536,7 +536,7 @@ fn q_during_the_write_should_abort_the_save_remove_the_temp_and_leave_the_old_ca
     let at_save = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let a2 = Arc::clone(&at_save);
     // The guard runs just before the write; it holds the walk there until `q` has been pressed.
-    let guard: disk_cleanup_scan::index::SaveGuard = Arc::new(move |_p| {
+    let guard: dunnage_scan::index::SaveGuard = Arc::new(move |_p| {
         a2.store(true, Ordering::SeqCst);
         std::thread::sleep(Duration::from_millis(300));
         Ok(())

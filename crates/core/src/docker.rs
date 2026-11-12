@@ -1,5 +1,5 @@
 //! Docker domain logic (Story 4.1.1): the typed listings, the `DockerClient` port and the pure gate
-//! decisions. The CLI adapter (`disk-cleanup-adapters::docker_cli`) fills these from `docker ... --format`
+//! decisions. The CLI adapter (`dunnage-adapters::docker_cli`) fills these from `docker ... --format`
 //! output; nothing here runs a process (ADR-001: docker through the CLI, not a socket client).
 
 use std::collections::BTreeMap;

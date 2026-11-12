@@ -4,14 +4,14 @@
 
 use std::path::Path;
 
-use disk_cleanup_core::ports::{classify, Class};
-use disk_cleanup_core::target::Guarded;
-use disk_cleanup_core::targets::btrfs_guard::{
+use dunnage_core::ports::{classify, Class};
+use dunnage_core::target::Guarded;
+use dunnage_core::targets::btrfs_guard::{
     already_running_note, balance_blocker, balance_cmd, decide_start, next_step, parse_relocated,
     scrub_blocker, timer_blocker, Blocker, Next, StepResult, StopReason, LADDER,
     MIN_UNALLOCATED_FOR_MOVE, TARGET_UNALLOCATED,
 };
-use disk_cleanup_core::SkipReason;
+use dunnage_core::SkipReason;
 
 const GIB: u64 = 1 << 30;
 const MIB: u64 = 1 << 20;
@@ -175,7 +175,7 @@ fn every_step_cmd_should_be_a_row_of_the_allowlist_and_every_non_zero_one_carry_
     for u in LADDER {
         let cmd = balance_cmd(u, Path::new("/"));
         assert_eq!(classify(&cmd), Some(Class::Mutating), "usage {u}");
-        let rendered = disk_cleanup_core::ports::render_argv(&cmd.program, &cmd.args);
+        let rendered = dunnage_core::ports::render_argv(&cmd.program, &cmd.args);
         if u == 0 {
             assert_eq!(rendered, "btrfs balance start -dusage=0 /");
         } else {
@@ -255,7 +255,7 @@ fn decide_start_should_say_NeedsRoot_before_anything_else_When_not_root() {
 
 #[test]
 fn parse_trimmed_should_read_both_fstrim_forms_and_nothing_else() {
-    use disk_cleanup_core::targets::btrfs_guard::parse_trimmed;
+    use dunnage_core::targets::btrfs_guard::parse_trimmed;
     assert_eq!(
         parse_trimmed("/: 1.2 TiB (1319011106816 bytes) trimmed on /dev/x\n"),
         Some(1_319_011_106_816)
@@ -269,7 +269,7 @@ fn parse_trimmed_should_read_both_fstrim_forms_and_nothing_else() {
 
 #[test]
 fn trim_cmd_should_be_the_allowlisted_fstrim_v_mount_and_decide_trim_should_need_root() {
-    use disk_cleanup_core::targets::btrfs_guard::{decide_trim, trim_cmd};
+    use dunnage_core::targets::btrfs_guard::{decide_trim, trim_cmd};
     let cmd = trim_cmd(Path::new("/"));
     assert_eq!(classify(&cmd), Some(Class::Mutating));
     assert_eq!(decide_trim(0), Guarded::Allow);

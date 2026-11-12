@@ -1,0 +1,38 @@
+# Thin, tag-triggered caller of the reusable Rust+Bazel release workflow (RELEASE.md).
+# A workflow_dispatch run is a dry run: it builds and packages but creates no release and pushes nothing.
+# TODO: pin the ref to a commit SHA once feat/rust-bazel-publish is merged (it was d2b534169ec63d7644d56f5abf2717fdd90b96fa).
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to dry-run (no tag on a dispatch)'
+        required: true
+
+permissions: {}
+
+jobs:
+  check-release-artifacts:
+    uses: ./.github/workflows/check-release-artifacts.yml
+    permissions:
+      contents: read
+
+  release:
+    needs: check-release-artifacts
+    uses: tstapler/gha-actions/.github/workflows/rust-bazel-release.yml@feat/rust-bazel-publish
+    permissions:
+      contents: write
+    with:
+      package-name: dunnage
+      bazel-target: //crates/cli:dunnage
+      bazel-configs: dist
+      description: Reclaim disk space safely; dry run by default
+      license: MIT
+      dry-run: ${{ github.event_name == 'workflow_dispatch' }}
+      version: ${{ inputs.version }}
+      homebrew-app-client-id: ${{ vars.HOMEBREW_TAP_APP_CLIENT_ID }}
+    secrets:
+      HOMEBREW_TAP_APP_PRIVATE_KEY: ${{ secrets.HOMEBREW_TAP_APP_PRIVATE_KEY }}

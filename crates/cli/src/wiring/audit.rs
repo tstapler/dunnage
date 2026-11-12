@@ -5,10 +5,10 @@
 use std::io;
 use std::sync::Arc;
 
-use disk_cleanup_adapters::audit::RealAuditSink;
-use disk_cleanup_adapters::gate_stamp::{break_glass, BreakGlassRefusal};
-use disk_cleanup_adapters::state::{RealPlanStore, StateDir};
-use disk_cleanup_core::{
+use dunnage_adapters::audit::RealAuditSink;
+use dunnage_adapters::gate_stamp::{break_glass, BreakGlassRefusal};
+use dunnage_adapters::state::{RealPlanStore, StateDir};
+use dunnage_core::{
     break_glass_warning, check_stamp, BreakGlass, BuildInfo, GateStamp, StampRefusal, StampSummary,
     BREAK_GLASS_NO_TTY, BREAK_GLASS_NO_TTY_CODE,
 };
@@ -73,7 +73,7 @@ pub struct StampInputs<'a> {
     pub exe_sha256: &'a str,
     pub required_gate: char,
     pub confined: bool,
-    /// `DISK_CLEANUP_UNGATED`.
+    /// `DUNNAGE_UNGATED`.
     pub ungated_var: Option<&'a str>,
 }
 

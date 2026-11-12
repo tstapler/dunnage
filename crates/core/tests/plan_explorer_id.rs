@@ -6,14 +6,14 @@ mod xfs;
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::explorer_plan::{explorer_plan, ExplorerPlan};
-use disk_cleanup_core::plan::{
+use dunnage_core::explorer_plan::{explorer_plan, ExplorerPlan};
+use dunnage_core::plan::{
     check_plan_id, ExplorerGateRefusal, ItemIdentity, OnlyMode, Plan, PlanId,
 };
-use disk_cleanup_core::roots::RootIdentity;
-use disk_cleanup_core::selector::{KindSelector, Selection};
-use disk_cleanup_core::target::Guarded;
-use disk_cleanup_core::{
+use dunnage_core::roots::RootIdentity;
+use dunnage_core::selector::{KindSelector, Selection};
+use dunnage_core::target::Guarded;
+use dunnage_core::{
     AllocatedBytes, BuildDirFacts, BuildDirFlavor, Candidate, FileKind, Identity, KindFacts,
     Locator, SaveOutcome, SavedPlan, SelectorId,
 };

@@ -9,12 +9,12 @@ use crate::kind::Kind;
 /// Compile-time proof "this path passed `decide_path_common` just now". Another crate cannot fabricate one:
 ///
 /// ```compile_fail
-/// use disk_cleanup_core::{Allowed, Identity, Kind};
+/// use dunnage_core::{Allowed, Identity, Kind};
 /// let _ = Allowed::new("/x".into(), Identity { dev: 1, ino: 2 }, Kind::Cache);
 /// ```
 ///
 /// ```compile_fail
-/// use disk_cleanup_core::{Allowed, Identity, Kind};
+/// use dunnage_core::{Allowed, Identity, Kind};
 /// let _ = Allowed { path: "/x".into(), ident: Identity { dev: 1, ino: 2 }, kind: Kind::Cache };
 /// ```
 #[derive(Debug)]
@@ -52,7 +52,7 @@ pub struct ExplorerScopeWrongKind;
 /// one constructor; no `Default`, no `Deserialize`.
 ///
 /// ```compile_fail
-/// use disk_cleanup_core::ExplorerScope;
+/// use dunnage_core::ExplorerScope;
 /// let _ = ExplorerScope { path: "/x".into() };
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,7 +108,7 @@ impl std::error::Error for WrongKind {}
 /// from it, in one place.
 ///
 /// ```compile_fail
-/// use disk_cleanup_core::WorktreeRemoval;
+/// use dunnage_core::WorktreeRemoval;
 /// let _ = WorktreeRemoval { allowed: todo!(), main_repo: "/r".into() };
 /// ```
 #[derive(Debug)]

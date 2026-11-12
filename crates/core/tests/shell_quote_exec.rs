@@ -7,8 +7,8 @@
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 
-use disk_cleanup_core::shell_quote::sandbox::{find_on_path, run_printed_line};
-use disk_cleanup_core::shell_quote::shell_quote;
+use dunnage_core::shell_quote::sandbox::{find_on_path, run_printed_line};
+use dunnage_core::shell_quote::shell_quote;
 
 fn hostile() -> Vec<Vec<u8>> {
     let s = |t: &str| t.as_bytes().to_vec();
@@ -115,13 +115,13 @@ fn templates(quoted: &str) -> [(String, &'static str, Vec<&'static str>); 3] {
     [
         (format!("ls -ld -- {quoted}"), "ls", vec!["-ld", "--"]),
         (
-            format!("disk-cleanup explore {quoted}"),
-            "disk-cleanup",
+            format!("dunnage explore {quoted}"),
+            "dunnage",
             vec!["explore"],
         ),
         (
-            format!("disk-cleanup --kinds build-dirs --only {quoted}"),
-            "disk-cleanup",
+            format!("dunnage --kinds build-dirs --only {quoted}"),
+            "dunnage",
             vec!["--kinds", "build-dirs", "--only"],
         ),
     ]

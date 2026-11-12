@@ -7,8 +7,8 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use disk_cleanup_core::ports::RunGuard;
-use disk_cleanup_core::{AbortFlag, FatalError};
+use dunnage_core::ports::RunGuard;
+use dunnage_core::{AbortFlag, FatalError};
 
 use rustix::fs::{flock, FlockOperation};
 

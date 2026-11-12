@@ -10,16 +10,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use common::Fixture;
-use disk_cleanup_cli::wiring::explore::mark_check_fn;
-use disk_cleanup_core::explore::input::MarkQuery;
-use disk_cleanup_core::explore::marks::Marks;
-use disk_cleanup_core::explore::msg::MarkRefusal;
-use disk_cleanup_core::explore::msg::{NodeEvent, ScanMode, NO_PARENT};
-use disk_cleanup_core::explore::rows::{Badge, Row, RowId, RowKind};
-use disk_cleanup_core::explore::testing::DirInfo;
-use disk_cleanup_core::explore::tree::{ExploreTree, NodeId};
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::Dirs;
+use dunnage_cli::wiring::explore::mark_check_fn;
+use dunnage_core::explore::input::MarkQuery;
+use dunnage_core::explore::marks::Marks;
+use dunnage_core::explore::msg::MarkRefusal;
+use dunnage_core::explore::msg::{NodeEvent, ScanMode, NO_PARENT};
+use dunnage_core::explore::rows::{Badge, Row, RowId, RowKind};
+use dunnage_core::explore::testing::DirInfo;
+use dunnage_core::explore::tree::{ExploreTree, NodeId};
+use dunnage_core::roots::RootSet;
+use dunnage_core::Dirs;
 
 /// A real `NodeId`: the row needs one and only a tree hands them out.
 fn node_id() -> NodeId {
@@ -59,7 +59,7 @@ fn row(complete: bool, boundary: bool) -> Row {
     }
 }
 
-type Check = std::sync::Arc<disk_cleanup_cli::wiring::explore::MarkCheckFn>;
+type Check = std::sync::Arc<dunnage_cli::wiring::explore::MarkCheckFn>;
 
 fn check_for(dirs: &Dirs, roots: &[&Path]) -> Check {
     let configured: Vec<PathBuf> = roots.iter().map(|r| r.to_path_buf()).collect();
@@ -68,10 +68,10 @@ fn check_for(dirs: &Dirs, roots: &[&Path]) -> Check {
         &[],
         Some(&configured),
         &dirs.home,
-        &disk_cleanup_cli::wiring::dirs::real_canon,
+        &dunnage_cli::wiring::dirs::real_canon,
     )
     .unwrap();
-    mark_check_fn(dirs, &set, PathBuf::from("/opt/disk-cleanup"), false)
+    mark_check_fn(dirs, &set, PathBuf::from("/opt/dunnage"), false)
 }
 
 fn ask(check: &Check, path: &Path, row: &Row) -> Result<(), MarkRefusal> {
@@ -130,7 +130,7 @@ fn the_tools_own_state_should_be_refused_whatever_the_roots_admit() {
     let f = Fixture::new();
     let dirs = fixture_dirs(&f);
     let code = fs::canonicalize(f.home()).unwrap().join("code");
-    let state = code.join("st/disk-cleanup");
+    let state = code.join("st/dunnage");
     fs::create_dir_all(&state).unwrap();
     let check = check_for(&dirs, &[&f.home().join("code")]);
     assert_eq!(

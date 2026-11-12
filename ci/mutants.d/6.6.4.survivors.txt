@@ -2,7 +2,7 @@
 #
 # 1. The pure delete flow, the file listed in 6.6.4.files (cargo-mutants 27.1.0):
 #   env -u CARGO_TARGET_DIR cargo mutants --no-shuffle -j 3 --timeout 120 \
-#     -f crates/core/src/explore/delete_flow.rs --test-package disk-cleanup-core \
+#     -f crates/core/src/explore/delete_flow.rs --test-package dunnage-core \
 #     --cargo-test-arg=--test=explore_delete_flow --cargo-test-arg=--test=explore_confirm
 #
 # Run 1 (stopped by hand after the first mutants): ReviewedSet::clear -> () and ReviewedSet::is_empty -> true were
@@ -16,7 +16,7 @@
 #    the loop tests that drive them:
 #   env -u CARGO_TARGET_DIR cargo mutants --no-shuffle -j 3 --timeout 90 -f crates/tui/src/app.rs \
 #     --re 'App::(press_d|advance_planning|prompt_key|result_key|begin_abort|poll_delete|finish_delete|find_node|rescan_dir|leave_with|closing_line|signal_lines|start_plan|preview_arrived|delete_running|take_dirty)' \
-#     --test-package disk-cleanup-tui --cargo-test-arg=--test=loop_delete --cargo-test-arg=--test=loop_fake
+#     --test-package dunnage-tui --cargo-test-arg=--test=loop_delete --cargo-test-arg=--test=loop_fake
 #
 # Runs 1 and 2 (the first stopped by hand at 12 mutants, the second complete with 46: 6 missed, 32 caught, 1 unviable,
 # 7 timeouts). Each survivor of either got a test or a change:

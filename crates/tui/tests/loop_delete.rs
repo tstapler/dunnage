@@ -13,23 +13,18 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use common::*;
-use disk_cleanup_core::explore::keymap::Key;
-use disk_cleanup_core::explore::msg::{
-    DeleteItemOutcome, DeleteItemResult, DeleteMsg, DeleteSummary,
-};
-use disk_cleanup_core::explore::ports::{DELETE_NOT_IN_BUILD, NEEDS_TERMINAL};
-use disk_cleanup_tui::event_loop::SystemClock;
+use dunnage_core::explore::keymap::Key;
+use dunnage_core::explore::msg::{DeleteItemOutcome, DeleteItemResult, DeleteMsg, DeleteSummary};
+use dunnage_core::explore::ports::{DELETE_NOT_IN_BUILD, NEEDS_TERMINAL};
+use dunnage_tui::event_loop::SystemClock;
 
 /// Later than every scripted key of every test; only a run that stalls reaches it.
 const WATCHDOG_MS: u64 = 25_000;
-const AUDIT: &str = "/h/.local/state/disk-cleanup/audit.jsonl";
+const AUDIT: &str = "/h/.local/state/dunnage/audit.jsonl";
 const NODE_MODULES: &str = "/h/code/app/node_modules";
 const SRC: &str = "/h/code/app/src";
 
-fn base(
-    actions: &Arc<ControlActions>,
-    script: Vec<(u64, disk_cleanup_tui::event_loop::Input)>,
-) -> Run {
+fn base(actions: &Arc<ControlActions>, script: Vec<(u64, dunnage_tui::event_loop::Input)>) -> Run {
     let mut r = Run::real_time(script);
     r.time = Time::Real(Arc::new(SystemClock::default()));
     r.source.prefill.lock().unwrap().push(root_batch(
@@ -39,7 +34,7 @@ fn base(
     r.source.prefill.lock().unwrap().push(finished(
         0,
         false,
-        disk_cleanup_core::explore::msg::StopCause::None,
+        dunnage_core::explore::msg::StopCause::None,
     ));
     r.actions = actions.clone();
     r.signals = LogSignals::never(&r.log);
@@ -49,14 +44,14 @@ fn base(
     r
 }
 
-fn mark_both() -> Vec<(u64, disk_cleanup_tui::event_loop::Input)> {
+fn mark_both() -> Vec<(u64, dunnage_tui::event_loop::Input)> {
     vec![(100, ch(' ')), (150, ch('j')), (200, ch(' '))]
 }
 
 fn at(
-    script: &mut Vec<(u64, disk_cleanup_tui::event_loop::Input)>,
+    script: &mut Vec<(u64, dunnage_tui::event_loop::Input)>,
     t: u64,
-    k: disk_cleanup_tui::event_loop::Input,
+    k: dunnage_tui::event_loop::Input,
 ) {
     script.push((t, k));
 }
@@ -134,7 +129,7 @@ fn d_again_on_the_same_marks_measures_afresh_and_opens_the_prompt_with_the_fresh
     );
     assert!(
         out.screen
-            .contains("Audit log: ~/.local/state/disk-cleanup/audit.jsonl"),
+            .contains("Audit log: ~/.local/state/dunnage/audit.jsonl"),
         "{}",
         out.screen
     );
@@ -176,7 +171,7 @@ fn safety_a_plan_whose_items_changed_at_the_fresh_measure_opens_no_prompt() {
         if n >= 2 {
             m[0] = PathBuf::from("/h/code/app/other");
         }
-        Ok(disk_cleanup_core::explore::testing::reviewed_of(&m, GIB))
+        Ok(dunnage_core::explore::testing::reviewed_of(&m, GIB))
     });
     let a = Arc::new(a);
     let mut s = mark_both();
@@ -259,7 +254,7 @@ fn without_a_terminal_d_is_refused_before_anything_is_planned() {
 
 // ----- the prompt (UX-T35) -----
 
-fn to_prompt() -> Vec<(u64, disk_cleanup_tui::event_loop::Input)> {
+fn to_prompt() -> Vec<(u64, dunnage_tui::event_loop::Input)> {
     let mut s = mark_both();
     at(&mut s, 400, ch('d'));
     at(&mut s, 900, ch('d'));
@@ -359,8 +354,8 @@ fn item(path: &str, outcome: DeleteItemOutcome) -> DeleteMsg {
 }
 
 fn typed_two(
-    mut s: Vec<(u64, disk_cleanup_tui::event_loop::Input)>,
-) -> Vec<(u64, disk_cleanup_tui::event_loop::Input)> {
+    mut s: Vec<(u64, dunnage_tui::event_loop::Input)>,
+) -> Vec<(u64, dunnage_tui::event_loop::Input)> {
     at(&mut s, 1400, ch('2'));
     at(&mut s, 1500, key(Key::Enter));
     s
@@ -468,7 +463,7 @@ fn an_err_item_makes_a_normal_quit_exit_1() {
 #[test]
 fn every_refusal_text_is_shown_and_keeps_the_marks_and_the_closing_line_stays_the_old_one() {
     for text in [
-        "another disk-cleanup apply is running (pid 4242). Nothing was deleted.",
+        "another dunnage apply is running (pid 4242). Nothing was deleted.",
         "Changed since you confirmed: 40.1 GiB then, 55.0 GiB now. Nothing was deleted. Press d to review again.",
         "Deleting is disabled in this build: run 'make gate' and 'make install-gated'. Nothing was deleted.",
     ] {
@@ -771,7 +766,7 @@ fn a_review_that_answers_after_its_plan_was_cancelled_is_dropped_not_taken_for_t
             Err("STALE FIRST REVIEW".to_string())
         } else {
             std::thread::sleep(Duration::from_millis(1500));
-            Ok(disk_cleanup_core::explore::testing::reviewed_of(marks, GIB))
+            Ok(dunnage_core::explore::testing::reviewed_of(marks, GIB))
         }
     });
     let a = Arc::new(a);
@@ -795,7 +790,7 @@ fn d_while_a_plan_is_in_flight_does_nothing() {
     let mut a = ControlActions::new();
     a.review_fn = Box::new(|_, marks| {
         std::thread::sleep(Duration::from_millis(900));
-        Ok(disk_cleanup_core::explore::testing::reviewed_of(marks, GIB))
+        Ok(dunnage_core::explore::testing::reviewed_of(marks, GIB))
     });
     let a = Arc::new(a);
     let mut s = mark_both();
@@ -815,7 +810,7 @@ fn a_plan_made_for_marks_that_changed_while_it_ran_is_not_the_review_of_the_new_
         if n == 1 {
             std::thread::sleep(Duration::from_millis(900));
         }
-        Ok(disk_cleanup_core::explore::testing::reviewed_of(marks, GIB))
+        Ok(dunnage_core::explore::testing::reviewed_of(marks, GIB))
     });
     let a = Arc::new(a);
     let mut s = mark_both();
@@ -864,9 +859,9 @@ fn a_signal_after_a_finished_delete_still_prints_the_closing_line() {
 
 /// `/h/code/app/node_modules/pkg` below the usual two directories.
 fn with_nested_dir(r: &Run) {
-    let extra = disk_cleanup_core::explore::msg::ScanMsg::Batch {
+    let extra = dunnage_core::explore::msg::ScanMsg::Batch {
         generation: 0,
-        mode: disk_cleanup_core::explore::msg::ScanMode::Fresh,
+        mode: dunnage_core::explore::msg::ScanMode::Fresh,
         events: vec![dir_ev(
             10,
             1,

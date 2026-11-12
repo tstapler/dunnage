@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use disk_cleanup_core::{DirEntryInfo, StatInfo};
+use dunnage_core::{DirEntryInfo, StatInfo};
 
 use crate::dirops::DirOps;
 

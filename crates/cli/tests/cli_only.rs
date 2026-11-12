@@ -239,7 +239,7 @@ fn pasted_next_line_should_apply_and_a_destructive_line_minus_one_only_should_be
     assert!(a.is_dir() && b.is_dir());
 
     // The saved entry keeps the flags with --only.
-    let saved = std::fs::read_to_string(f.xdg("state").join("disk-cleanup/last_plan")).unwrap();
+    let saved = std::fs::read_to_string(f.xdg("state").join("dunnage/last_plan")).unwrap();
     assert!(saved.contains("--only"), "{saved}");
 
     // The whole pasted line is accepted and removes exactly the two marked directories.
@@ -265,9 +265,7 @@ fn a_safe_tier_next_line_should_state_that_only_is_a_filter_without_a_plan_id() 
     let at = lines
         .iter()
         .position(|l| {
-            l.starts_with("  disk-cleanup --apply")
-                && l.contains("--only")
-                && !l.contains("--plan-id")
+            l.starts_with("  dunnage --apply") && l.contains("--only") && !l.contains("--plan-id")
         })
         .unwrap_or_else(|| panic!("no id-less apply line with --only:\n{stdout}"));
     assert!(
@@ -285,11 +283,7 @@ fn a_safe_tier_next_line_should_state_that_only_is_a_filter_without_a_plan_id() 
         .map(|l| l.trim())
         .collect::<Vec<_>>()
         .join(" ");
-    assert_eq!(
-        note,
-        disk_cleanup_core::plan::NO_PLAN_ID_ONLY_NOTE,
-        "{stdout}"
-    );
+    assert_eq!(note, dunnage_core::plan::NO_PLAN_ID_ONLY_NOTE, "{stdout}");
     // Without --only there is no such line.
     let plain_out = plain(&f, &["--kinds", "caches"]);
     assert!(!text_of(&plain_out).0.contains("needs no plan-id; --only"));
@@ -330,14 +324,14 @@ fn hostile_names_should_arrive_as_one_argument_through_the_printed_only_flag() {
     assert_eq!(out.status.code(), Some(0), "{stderr}");
     let line = stdout
         .lines()
-        .find(|l| l.starts_with("  disk-cleanup --apply"))
+        .find(|l| l.starts_with("  dunnage --apply"))
         .expect("apply line")
         .trim()
         .to_string();
     // The line parses back, under sh, to exactly the three paths.
     let probe = f.command_for("sh")
         .arg("-c")
-        .arg(format!("disk_cleanup() {{ for a in \"$@\"; do printf '%s\\n' \"$a\"; done; }}; set -- {}; shift; disk_cleanup \"$@\"", line.replacen("disk-cleanup", "x", 1)))
+        .arg(format!("dunnage() {{ for a in \"$@\"; do printf '%s\\n' \"$a\"; done; }}; set -- {}; shift; dunnage \"$@\"", line.replacen("dunnage", "x", 1)))
         .output()
         .unwrap();
     let got = text_of(&probe).0;

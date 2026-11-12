@@ -12,9 +12,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use disk_cleanup_adapters::RealDirLister;
-use disk_cleanup_core::explore::msg::FileRows;
-use disk_cleanup_core::explore::ports::DirLister;
+use dunnage_adapters::RealDirLister;
+use dunnage_core::explore::msg::FileRows;
+use dunnage_core::explore::ports::DirLister;
 use peak_alloc::PeakAlloc;
 
 #[global_allocator]

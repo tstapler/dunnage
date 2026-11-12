@@ -6,13 +6,13 @@ use std::ffi::OsString;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::ids::CandidateId;
-use disk_cleanup_core::kind::SelectorId;
-use disk_cleanup_core::outcome::{Outcome, SkipReason, Status};
-use disk_cleanup_core::plan::{PlanId, BIN};
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::snapshot_types::FsSnapshot;
-use disk_cleanup_core::summary::{DiskVerdict, RunSummary};
+use dunnage_core::ids::CandidateId;
+use dunnage_core::kind::SelectorId;
+use dunnage_core::outcome::{Outcome, SkipReason, Status};
+use dunnage_core::plan::{PlanId, BIN};
+use dunnage_core::selector::Selection;
+use dunnage_core::snapshot_types::FsSnapshot;
+use dunnage_core::summary::{DiskVerdict, RunSummary};
 
 use crate::escape::shell_quote;
 use crate::layout::RowCells;
@@ -375,7 +375,7 @@ fn still_warn_block(out: &mut Out, input: &ApplyInput) {
     ids.dedup();
     let mut sel = selection_over(input.selection, &ids);
     if ids.contains(&SelectorId::DockerVolumes) && sel.docker_volumes.is_none() {
-        sel.docker_volumes = Some(disk_cleanup_core::selector::DockerVolumes::Anonymous);
+        sel.docker_volumes = Some(dunnage_core::selector::DockerVolumes::Anonymous);
     }
     out.indented(
         "    ",
@@ -568,9 +568,9 @@ fn balance_running_line(out: &mut Out, input: &ApplyInput) {
         .summary
         .outcomes
         .iter()
-        .any(|o| o.status == Status::Running && o.kind == disk_cleanup_core::Kind::BtrfsBalance)
+        .any(|o| o.status == Status::Running && o.kind == dunnage_core::Kind::BtrfsBalance)
     {
-        out.text(disk_cleanup_core::targets::btrfs_guard::BALANCE_STILL_RUNNING);
+        out.text(dunnage_core::targets::btrfs_guard::BALANCE_STILL_RUNNING);
     }
 }
 

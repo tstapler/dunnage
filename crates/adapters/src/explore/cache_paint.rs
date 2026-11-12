@@ -10,16 +10,16 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use disk_cleanup_core::explore::msg::{NodeEvent, ScanMode};
-use disk_cleanup_core::ports::SpaceMeter;
-use disk_cleanup_core::{Dirs, FsSnapshot};
-use disk_cleanup_scan::health::{assess, Thresholds, Verdict, GIB};
-use disk_cleanup_scan::index::{DirEvent, SaveGuard};
-use disk_cleanup_scan::walker::CacheConfig;
+use dunnage_core::explore::msg::{NodeEvent, ScanMode};
+use dunnage_core::ports::SpaceMeter;
+use dunnage_core::{Dirs, FsSnapshot};
+use dunnage_scan::health::{assess, Thresholds, Verdict, GIB};
+use dunnage_scan::index::{DirEvent, SaveGuard};
+use dunnage_scan::walker::CacheConfig;
 
 use crate::space_meter::UNKNOWN_FS;
 
-/// File name inside `$XDG_CACHE_HOME/disk-cleanup`, separate from the cleaner's `walker.cache` so the
+/// File name inside `$XDG_CACHE_HOME/dunnage`, separate from the cleaner's `walker.cache` so the
 /// cleaner's load time and the speed protocol are unchanged (ADR-005, owner decision O-3).
 pub const EXPLORER_CACHE: &str = "explorer.cache";
 
@@ -42,9 +42,9 @@ pub enum CacheMode {
     Rescan,
 }
 
-/// `$XDG_CACHE_HOME/disk-cleanup/explorer.cache`.
+/// `$XDG_CACHE_HOME/dunnage/explorer.cache`.
 pub fn explorer_cache_path(dirs: &Dirs) -> PathBuf {
-    dirs.cache.join("disk-cleanup").join(EXPLORER_CACHE)
+    dirs.cache.join("dunnage").join(EXPLORER_CACHE)
 }
 
 /// The walker's cache config for `mode`; `None` for `--no-cache`.

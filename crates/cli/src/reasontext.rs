@@ -6,9 +6,9 @@
 use std::ffi::OsStr;
 use std::path::Path;
 
-use disk_cleanup_core::kind::SelectorId;
-use disk_cleanup_core::outcome::SkipReason;
-use disk_cleanup_core::selector::{format_age, Selection};
+use dunnage_core::kind::SelectorId;
+use dunnage_core::outcome::SkipReason;
+use dunnage_core::selector::{format_age, Selection};
 
 use crate::escape::shell_quote;
 use crate::units;

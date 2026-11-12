@@ -12,12 +12,12 @@ use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::sync::Arc;
 
-use disk_cleanup_adapters::state::{
+use dunnage_adapters::state::{
     append_outcome, OutcomeLine, OutcomeMode, RealPlanStore, StateDir, LOCK_BUSY_ERRNO,
     OUTCOME_ROTATE_BYTES, RESERVE_BYTES,
 };
-use disk_cleanup_core::ports::PlanStore;
-use disk_cleanup_core::{DiskVerdict, ItemKey, SaveOutcome, SavedSelection};
+use dunnage_core::ports::PlanStore;
+use dunnage_core::{DiskVerdict, ItemKey, SaveOutcome, SavedSelection};
 use rustix::fs::{flock, FlockOperation};
 
 #[path = "support/fullfs.rs"]
@@ -58,7 +58,7 @@ fn ids(s: &RealPlanStore) -> Vec<String> {
 fn reserve_should_be_created_at_the_first_start_of_any_mode_and_not_recreated_when_the_disk_is_full(
 ) {
     let d = tempfile::tempdir().unwrap();
-    let dir = d.path().join("disk-cleanup");
+    let dir = d.path().join("dunnage");
     let (sd, init) = StateDir::open(&dir, 1000, &plenty).unwrap();
     assert!(init.reserves_created);
     assert!(sd.reserves_note(&init).is_some());
@@ -185,7 +185,7 @@ fn plan_save_should_wait_2s_for_the_lock_then_return_NotSaved_LockBusy_with_the_
     );
     assert!(waited < std::time::Duration::from_secs(6), "{waited:?}");
     assert!(!d.path().join("last_plan").exists());
-    assert!(disk_cleanup_core::Warning::PlanLockBusy
+    assert!(dunnage_core::Warning::PlanLockBusy
         .text()
         .contains("last_plan.lock busy for 2 s"));
     drop(lock);
@@ -408,7 +408,7 @@ fn outcome_jsonl_should_get_one_line_per_run_of_every_mode_rotate_at_256KiB_and_
         .open(ro.join("probe"))
         .is_err()
     {
-        let paths = disk_cleanup_adapters::state::StatePaths { dir: ro.clone() };
+        let paths = dunnage_adapters::state::StatePaths { dir: ro.clone() };
         assert!(append_outcome(&paths, None, &line).is_err());
     }
     std::fs::set_permissions(&ro, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();

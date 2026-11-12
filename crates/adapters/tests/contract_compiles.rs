@@ -5,7 +5,7 @@
     clippy::no_effect_underscore_binding,
     clippy::type_complexity
 )]
-//! Compiles every signature of the frozen `contract` block (see `disk_cleanup_adapters::delete`) and
+//! Compiles every signature of the frozen `contract` block (see `dunnage_adapters::delete`) and
 //! exercises the `FaultDirOps` seam against real tempdirs.
 
 use std::ffi::{OsStr, OsString};
@@ -14,12 +14,12 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use disk_cleanup_adapters::testing::{At, Event, FaultDirOps, HookCtx, Op};
-use disk_cleanup_adapters::{
+use dunnage_adapters::testing::{At, Event, FaultDirOps, HookCtx, Op};
+use dunnage_adapters::{
     delete_tree, open_parent, open_verified_root, DirOps, RealDirOps, VerifiedParent, VerifiedRoot,
     DELETE_BATCH,
 };
-use disk_cleanup_core::{
+use dunnage_core::{
     first_line_capped, AbortFlag, AllocatedBytes, AllowedTarget, ApparentBytes, ApplyToken,
     DeleteError, DeleteFailure, DeletePolicy, DirEntryInfo, FileKind, Freed, Identity, NamePattern,
     RootDev, StatInfo, CMD_MSG_MAX,

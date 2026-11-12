@@ -9,7 +9,7 @@ dc_manifest_env()
 dc_library(
     name = "tui",
     srcs = glob(["src/**/*.rs"]),
-    crate_name = "disk_cleanup_tui",
+    crate_name = "dunnage_tui",
     deps = ["//crates/core:core"] + all_crate_deps(normal = True),
     proc_macro_deps = all_crate_deps(proc_macro = True),
     ts_deps_override = ["//crates/core:core_ts"] + all_crate_deps(normal = True),

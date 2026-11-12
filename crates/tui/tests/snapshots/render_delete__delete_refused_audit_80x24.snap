@@ -4,5 +4,5 @@ expression: text
 ---
 DELETE REFUSED - nothing was deleted.                    Esc returns to the list
 
-The audit log cannot be written (/home/u/.local/state/disk-cleanup/audit.jsonl:
-No space left on device). Nothing was deleted.
+The audit log cannot be written (/home/u/.local/state/dunnage/audit.jsonl: No
+space left on device). Nothing was deleted.

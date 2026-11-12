@@ -5,9 +5,9 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_adapters::steam::{default_steam_roots, plan_gate, SteamGate, SteamInstall};
-use disk_cleanup_core::testing::FakeProbe;
-use disk_cleanup_core::{Platform, SkipReason, Tri};
+use dunnage_adapters::steam::{default_steam_roots, plan_gate, SteamGate, SteamInstall};
+use dunnage_core::testing::FakeProbe;
+use dunnage_core::{Platform, SkipReason, Tri};
 
 /// A Steam root plus `n` library directories, all inside one tempdir.
 struct Fixture {

@@ -10,12 +10,12 @@ use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
-use disk_cleanup_core::delete_types::AllowedTarget;
-use disk_cleanup_core::explore::msg::{ClassifyFacts, ScanMsg, SteamLibraryFacts};
-use disk_cleanup_core::ids::AppId;
-use disk_cleanup_core::ports::CommandRunner;
-use disk_cleanup_core::roots::{CacheTool, RootSet};
-use disk_cleanup_core::Kind;
+use dunnage_core::delete_types::AllowedTarget;
+use dunnage_core::explore::msg::{ClassifyFacts, ScanMsg, SteamLibraryFacts};
+use dunnage_core::ids::AppId;
+use dunnage_core::ports::CommandRunner;
+use dunnage_core::roots::{CacheTool, RootSet};
+use dunnage_core::Kind;
 
 use crate::discover_cache::ask_tool;
 use crate::steam::SteamInstall;

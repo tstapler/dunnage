@@ -8,9 +8,9 @@ mod common;
 use std::ffi::OsString;
 
 use common::*;
-use disk_cleanup_core::explore::msg::{NodeEvent, ScanMode, ScanSummary, NO_PARENT};
-use disk_cleanup_core::explore::rows::Badge;
-use disk_cleanup_core::explore::tree::ExploreTree;
+use dunnage_core::explore::msg::{NodeEvent, ScanMode, ScanSummary, NO_PARENT};
+use dunnage_core::explore::rows::Badge;
+use dunnage_core::explore::tree::ExploreTree;
 use ratatui::style::Modifier;
 
 const SIZES: [(u16, u16); 7] = [

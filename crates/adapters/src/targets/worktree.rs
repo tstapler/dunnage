@@ -14,13 +14,13 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use disk_cleanup_core::par::{default_workers, par_map};
-use disk_cleanup_core::ports::{Cmd, Env};
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::target::{Guarded, ItemFacts, Target};
-use disk_cleanup_core::targets::worktree_guard::{WorktreeGuard, WorktreeOpts};
-use disk_cleanup_core::{
+use dunnage_core::par::{default_workers, par_map};
+use dunnage_core::ports::{Cmd, Env};
+use dunnage_core::roots::RootSet;
+use dunnage_core::selector::Selection;
+use dunnage_core::target::{Guarded, ItemFacts, Target};
+use dunnage_core::targets::worktree_guard::{WorktreeGuard, WorktreeOpts};
+use dunnage_core::{
     AllocatedBytes, ApparentBytes, ApplyToken, Candidate, CandidateId, DeleteError, DeleteFailure,
     Freed, KindFacts, Locator, RootDev, SelectorId, SkipReason, WorktreeFacts, WorktreeRemoval,
 };
@@ -195,7 +195,7 @@ impl<D: DirOps> WorktreeTarget<D> {
         &self,
         env: &Env,
         c: &Candidate,
-    ) -> Result<(disk_cleanup_core::Allowed, WorktreeProbed), SkipReason> {
+    ) -> Result<(dunnage_core::Allowed, WorktreeProbed), SkipReason> {
         let site = relist(env, c).ok_or(SkipReason::Gone)?;
         let (probed, guard) = self.probe(env, &site, self.opts());
         match guard {
@@ -204,7 +204,7 @@ impl<D: DirOps> WorktreeTarget<D> {
         }
     }
 
-    fn measure_tree(&self, path: &std::path::Path, ident: disk_cleanup_core::Identity) -> Freed {
+    fn measure_tree(&self, path: &std::path::Path, ident: dunnage_core::Identity) -> Freed {
         let Ok(root) = open_verified_root(&self.ops, path, ident) else {
             return Freed::default();
         };
@@ -396,7 +396,7 @@ impl<D: DirOps + 'static> Target for WorktreeTarget<D> {
             .unwrap_or_default()
     }
 
-    fn finish(&self, _outcomes: &[disk_cleanup_core::Outcome], _env: &Env) -> Vec<String> {
+    fn finish(&self, _outcomes: &[dunnage_core::Outcome], _env: &Env) -> Vec<String> {
         lock(&self.state).warnings.clone()
     }
 }

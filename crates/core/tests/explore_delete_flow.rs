@@ -4,18 +4,16 @@
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::explore::confirm::Confirm;
-use disk_cleanup_core::explore::delete_flow::{
+use dunnage_core::explore::confirm::Confirm;
+use dunnage_core::explore::delete_flow::{
     rescan_target, DPress, DeleteRun, Prompt, PromptKey, Remeasured, ReviewedSet, RunEnd,
     Submitted, Tally, ENTRY_MAX, MSG_WORKER_LOST,
 };
-use disk_cleanup_core::explore::keymap::Key;
-use disk_cleanup_core::explore::marks::{Mark, Marks};
-use disk_cleanup_core::explore::msg::{
-    DeleteItemOutcome, DeleteItemResult, DeleteMsg, DeleteSummary,
-};
-use disk_cleanup_core::explore::testing::reviewed_of;
-use disk_cleanup_core::FatalError;
+use dunnage_core::explore::keymap::Key;
+use dunnage_core::explore::marks::{Mark, Marks};
+use dunnage_core::explore::msg::{DeleteItemOutcome, DeleteItemResult, DeleteMsg, DeleteSummary};
+use dunnage_core::explore::testing::reviewed_of;
+use dunnage_core::FatalError;
 
 fn marks_of(paths: &[&str]) -> Marks {
     let mut m = Marks::new();
@@ -336,7 +334,7 @@ fn a_run_should_list_each_item_and_add_up_the_measured_bytes() {
 fn nothing_should_change_a_run_after_it_ended() {
     let mut r = DeleteRun::new(1);
     r.apply(DeleteMsg::Refused(
-        "another disk-cleanup apply is running (pid 4). Nothing was deleted.".into(),
+        "another dunnage apply is running (pid 4). Nothing was deleted.".into(),
     ));
     r.apply(removed("/h/a", 5));
     r.apply(done(1, 5, false));
@@ -344,7 +342,7 @@ fn nothing_should_change_a_run_after_it_ended() {
     assert!(matches!(r.end(), RunEnd::Refused(_)));
     assert_eq!(
         r.refused(),
-        Some("another disk-cleanup apply is running (pid 4). Nothing was deleted.")
+        Some("another dunnage apply is running (pid 4). Nothing was deleted.")
     );
 }
 
@@ -432,9 +430,9 @@ fn the_closing_line_should_count_items_and_measured_bytes_and_quote_the_log_path
         2,
     );
     assert_eq!(
-        t.closing_line(Path::new("/home/u/.local/state/disk-cleanup/audit.jsonl"), true)
+        t.closing_line(Path::new("/home/u/.local/state/dunnage/audit.jsonl"), true)
             .unwrap(),
-        "EXPLORE CLOSED - deleted 2 items, 22.0 GiB measured. Audit log: /home/u/.local/state/disk-cleanup/audit.jsonl"
+        "EXPLORE CLOSED - deleted 2 items, 22.0 GiB measured. Audit log: /home/u/.local/state/dunnage/audit.jsonl"
     );
     let one = tally_of(&[vec![removed("/h/a", 5), done(1, 5, false)]], 1);
     assert!(one

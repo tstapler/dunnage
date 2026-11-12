@@ -187,7 +187,7 @@ pub fn too_small_lines(w: usize, h: usize) -> Vec<String> {
             h.min(DIM_CAP)
         ),
         "Resize the window, press q to quit,".to_string(),
-        "or run: disk-cleanup explore --text".to_string(),
+        "or run: dunnage explore --text".to_string(),
     ];
     lines
         .into_iter()

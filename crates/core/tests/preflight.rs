@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 
-use disk_cleanup_core::preflight::check;
-use disk_cleanup_core::testing::FakeSpaceMeter;
-use disk_cleanup_core::{
+use dunnage_core::preflight::check;
+use dunnage_core::testing::FakeSpaceMeter;
+use dunnage_core::{
     AllocSnapshot, FatalError, FsSnapshot, Kind, PreflightVerdict, SpaceUse, Starvation,
 };
 

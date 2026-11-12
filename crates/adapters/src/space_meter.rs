@@ -8,9 +8,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use disk_cleanup_core::ports::SpaceMeter;
-use disk_cleanup_core::{AllocSnapshot, FsSnapshot, Platform, Settled, SpaceUse};
-use disk_cleanup_scan::btrfs::{self, Allocation, SpaceInfo};
+use dunnage_core::ports::SpaceMeter;
+use dunnage_core::{AllocSnapshot, FsSnapshot, Platform, Settled, SpaceUse};
+use dunnage_scan::btrfs::{self, Allocation, SpaceInfo};
 
 use crate::{settle, statvfs};
 
@@ -217,7 +217,7 @@ fn darwin_fs_type(_path: &Path) -> String {
 /// The meter of a run. A `test-support` build with `DC_FAKE_STARVED` set reports a starved btrfs (100 MiB
 /// unallocated, no metadata headroom) so the spawned binary's exit-3 refusal is testable; any other build
 /// returns `inner` unchanged and holds no such variable name.
-pub fn run_meter(inner: RealSpaceMeter) -> Box<dyn disk_cleanup_core::ports::SpaceMeter> {
+pub fn run_meter(inner: RealSpaceMeter) -> Box<dyn dunnage_core::ports::SpaceMeter> {
     #[cfg(feature = "test-support")]
     if std::env::var_os("DC_FAKE_STARVED").is_some() {
         return Box::new(starved::StarvedMeter(inner));
@@ -230,8 +230,8 @@ mod starved {
     use std::path::Path;
     use std::time::Duration;
 
-    use disk_cleanup_core::ports::SpaceMeter;
-    use disk_cleanup_core::snapshot_types::{AllocSnapshot, FsSnapshot, Settled, SpaceUse};
+    use dunnage_core::ports::SpaceMeter;
+    use dunnage_core::snapshot_types::{AllocSnapshot, FsSnapshot, Settled, SpaceUse};
 
     pub struct StarvedMeter(pub super::RealSpaceMeter);
 

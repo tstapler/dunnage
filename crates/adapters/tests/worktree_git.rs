@@ -17,17 +17,17 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use disk_cleanup_adapters::targets::worktree::WorktreeTarget;
-use disk_cleanup_adapters::{RealCommandRunner, RealDirOps, RealProbe};
-use disk_cleanup_core::audit_types::RunRoots;
-use disk_cleanup_core::executor::{Executor, Mode, RunMeta, RunOptions};
-use disk_cleanup_core::ports::{worktree_remove_argv, Cmd, CmdOutput, CommandRunner, Env};
-use disk_cleanup_core::selector::{Discard, KindSelector, Selection};
-use disk_cleanup_core::target::{Guarded, Target};
-use disk_cleanup_core::testing::{
+use dunnage_adapters::targets::worktree::WorktreeTarget;
+use dunnage_adapters::{RealCommandRunner, RealDirOps, RealProbe};
+use dunnage_core::audit_types::RunRoots;
+use dunnage_core::executor::{Executor, Mode, RunMeta, RunOptions};
+use dunnage_core::ports::{worktree_remove_argv, Cmd, CmdOutput, CommandRunner, Env};
+use dunnage_core::selector::{Discard, KindSelector, Selection};
+use dunnage_core::target::{Guarded, Target};
+use dunnage_core::testing::{
     FakeAuditSink, FakeClock, FakeFs, FakePlanStore, FakeProbe, FakeRunGuard, FakeSpaceMeter,
 };
-use disk_cleanup_core::{
+use dunnage_core::{
     ApplyToken, BuildInfo, Candidate, DeleteError, SelectorId, SkipReason, Status, WorktreeRemoval,
 };
 
@@ -232,7 +232,7 @@ impl Rig {
     }
 }
 
-use disk_cleanup_core::ports::SystemProbe as SystemProbeDyn;
+use dunnage_core::ports::SystemProbe as SystemProbeDyn;
 
 fn target(f: &Fixture) -> WorktreeTarget<RealDirOps> {
     WorktreeTarget::new(roots_for(f), RealDirOps::confined_to(&f.home))
@@ -275,7 +275,7 @@ fn options() -> RunOptions {
 
 fn cand<'a>(cs: &'a [Candidate], wt: &Path) -> &'a Candidate {
     cs.iter()
-        .find(|c| matches!(c.locator(), disk_cleanup_core::Locator::Path(p) if p == wt))
+        .find(|c| matches!(c.locator(), dunnage_core::Locator::Path(p) if p == wt))
         .unwrap_or_else(|| panic!("no candidate {} in {cs:?}", wt.display()))
 }
 

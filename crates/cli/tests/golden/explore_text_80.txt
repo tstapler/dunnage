@@ -22,6 +22,6 @@ lower bounds.
       0 B        0 B        0 B        1    <1%
   root-owned/  [unreadable: EACCES, at least]
 
-Next: disk-cleanup explore /h/code/app
-Next: disk-cleanup --kinds build-dirs
+Next: dunnage explore /h/code/app
+Next: dunnage --kinds build-dirs
 EXPLORE CLOSED - nothing was deleted.

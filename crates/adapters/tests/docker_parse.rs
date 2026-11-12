@@ -6,7 +6,7 @@
 mod docker_common;
 use docker_common::*;
 
-use disk_cleanup_adapters::docker_cli::{
+use dunnage_adapters::docker_cli::{
     parse_images, parse_ps, parse_system_df, parse_volume_inspect, parse_volume_ls,
 };
 

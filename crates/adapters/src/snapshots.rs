@@ -6,8 +6,8 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::ports::{Env, Fs};
-use disk_cleanup_core::{FileKind, Platform};
+use dunnage_core::ports::{Env, Fs};
+use dunnage_core::{FileKind, Platform};
 
 const SNAPPER_DIR: &str = ".snapshots";
 const TIMESHIFT_DIR: &str = "/timeshift-btrfs/snapshots";
@@ -35,7 +35,7 @@ pub struct SnapshotEntry {
 }
 
 /// Answer of [`SnapshotInfo::holds`]; defined in `core` so `RunSummary::finish` can take it.
-pub use disk_cleanup_core::Held;
+pub use dunnage_core::Held;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotInfo {

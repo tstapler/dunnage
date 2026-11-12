@@ -14,7 +14,7 @@ use crate::selector::Selection;
 use crate::target::{kind_order, Guarded};
 
 /// The name `Next:` lines and refusal texts print for the binary.
-pub const BIN: &str = "disk-cleanup";
+pub const BIN: &str = "dunnage";
 
 /// What the plan decided for one item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

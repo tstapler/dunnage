@@ -2,7 +2,7 @@
 
 use std::io;
 
-use disk_cleanup_core::{MountEntry, Platform};
+use dunnage_core::{MountEntry, Platform};
 
 pub fn euid() -> u32 {
     rustix::process::geteuid().as_raw()

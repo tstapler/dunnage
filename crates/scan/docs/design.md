@@ -147,7 +147,7 @@ gitignore filtering: ignored directories (`node_modules/`, `target/`) are the po
 records only per-directory counters plus marker flags (`package.json`, `Cargo.toml`, `.git`
 file). A pure pass over that map then classifies, so results do not depend on thread scheduling:
 
-- **Build dirs** (rules from `disk-cleanup.py`): `node_modules` with a sibling `package.json`;
+- **Build dirs** (rules from `dunnage.py`): `node_modules` with a sibling `package.json`;
   `target` with a sibling `Cargo.toml`. Outermost match wins, and everything beneath it is counted
   to that category. `.git` directories are their own category.
 - **Checkouts and worktrees**: a directory with a `.git` directory is a checkout. A `.git` file
@@ -218,7 +218,7 @@ or scrub is running, and re-read the changed state afterwards.
 
 ## Cleaning
 
-There is no `metascope clean`: cleaning lives in `tstapler/disk-cleanup`; this tool stays read-only.
+There is no `metascope clean`: cleaning lives in `tstapler/dunnage`; this tool stays read-only.
 
 ## Streaming walk (`Backend::collect_streaming`)
 

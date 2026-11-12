@@ -11,10 +11,8 @@ use std::time::{Duration, Instant};
 
 use crate::signals::ChildInFlight;
 use crate::state::shell_quote_path;
-use disk_cleanup_core::ports::{
-    classify, worktree_remove_argv, Class, Cmd, CmdOutput, CommandRunner,
-};
-use disk_cleanup_core::{first_line_capped, AbortFlag, ApplyToken, DeleteError, WorktreeRemoval};
+use dunnage_core::ports::{classify, worktree_remove_argv, Class, Cmd, CmdOutput, CommandRunner};
+use dunnage_core::{first_line_capped, AbortFlag, ApplyToken, DeleteError, WorktreeRemoval};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
 /// `git worktree remove` is cut off here even when the runner's own deadline is longer (Story 3.1.3).

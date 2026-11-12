@@ -10,8 +10,8 @@ use std::hash::{Hash, Hasher};
 use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_adapters::{delete_tree, open_parent, open_verified_root, RealDirOps};
-use disk_cleanup_core::{
+use dunnage_adapters::{delete_tree, open_parent, open_verified_root, RealDirOps};
+use dunnage_core::{
     AbortFlag, AllowedTarget, ApplyToken, DeletePolicy, Freed, Identity, NamePattern, RootDev,
 };
 use proptest::prelude::*;

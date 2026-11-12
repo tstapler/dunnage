@@ -8,7 +8,7 @@ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
-use disk_cleanup_core::AbortFlag;
+use dunnage_core::AbortFlag;
 
 pub const SIGINT: i32 = libc::SIGINT;
 pub const SIGTERM: i32 = libc::SIGTERM;

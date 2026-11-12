@@ -12,9 +12,9 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use common::{aged_dir, text_of, tree_hash, tree_manifest, Fixture};
-use disk_cleanup_core::ports::{Cmd, CmdOutput, CommandRunner, DryRunRunner};
-use disk_cleanup_core::testing::FakeCommandRunner;
-use disk_cleanup_core::{AllowedTarget, DeleteError, DeletePolicy, Identity, NamePattern, RootDev};
+use dunnage_core::ports::{Cmd, CmdOutput, CommandRunner, DryRunRunner};
+use dunnage_core::testing::FakeCommandRunner;
+use dunnage_core::{AllowedTarget, DeleteError, DeletePolicy, Identity, NamePattern, RootDev};
 
 fn populate(f: &Fixture) {
     let home = f.home();
@@ -63,7 +63,7 @@ fn safety_bare_run_deletes_nothing() {
     assert_eq!(strip(&after_manifest), strip(before_manifest));
     assert_eq!(tree_hash(&f.home()), before.1);
     assert!(
-        f.xdg("state").join("disk-cleanup/last_plan").is_file(),
+        f.xdg("state").join("dunnage/last_plan").is_file(),
         "vacuous: the dry run saved nothing"
     );
 }

@@ -1,10 +1,10 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Story 6.1.2 performance harness: median wall time of `WalkerBackend::collect` over a 2,000-directory fixture,
 //! to compare before and after the streaming change (+5% bound). Run by hand:
-//! `cargo test -p disk-cleanup-scan --release --test walk_baseline -- --ignored --nocapture`.
+//! `cargo test -p dunnage-scan --release --test walk_baseline -- --ignored --nocapture`.
 
-use disk_cleanup_scan::index::{Backend, CollectRequest};
-use disk_cleanup_scan::walker::WalkerBackend;
+use dunnage_scan::index::{Backend, CollectRequest};
+use dunnage_scan::walker::WalkerBackend;
 use std::fs;
 use std::time::Instant;
 

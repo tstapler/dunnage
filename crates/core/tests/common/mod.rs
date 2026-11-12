@@ -7,18 +7,18 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use disk_cleanup_core::audit_types::RunRoots;
-use disk_cleanup_core::delete_types::{DeleteFailure, Freed};
-use disk_cleanup_core::executor::{Executor, Mode, Refused, RunMeta, RunOptions, RunReport};
-use disk_cleanup_core::plan::PlanId;
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::selector::{KindSelector, Selection};
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::testing::{
+use dunnage_core::audit_types::RunRoots;
+use dunnage_core::delete_types::{DeleteFailure, Freed};
+use dunnage_core::executor::{Executor, Mode, Refused, RunMeta, RunOptions, RunReport};
+use dunnage_core::plan::PlanId;
+use dunnage_core::ports::Env;
+use dunnage_core::selector::{KindSelector, Selection};
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::testing::{
     EventLog, FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe,
     FakeRunGuard, FakeSpaceMeter,
 };
-use disk_cleanup_core::{
+use dunnage_core::{
     AllocatedBytes, ApplyToken, BuildDirFacts, BuildDirFlavor, BuildInfo, CacheFacts, Candidate,
     CandidateId, Dirs, DockerFacts, DockerId, Identity, KindFacts, Locator, SelectorId,
 };
@@ -233,9 +233,9 @@ impl Rig {
             plans: &self.plans,
             dirs: Dirs {
                 home: PathBuf::from("/home/u"),
-                state: PathBuf::from("/home/u/.local/state/disk-cleanup"),
-                cache: PathBuf::from("/home/u/.cache/disk-cleanup"),
-                config: PathBuf::from("/home/u/.config/disk-cleanup"),
+                state: PathBuf::from("/home/u/.local/state/dunnage"),
+                cache: PathBuf::from("/home/u/.cache/dunnage"),
+                config: PathBuf::from("/home/u/.config/dunnage"),
             },
         }
     }

@@ -4,8 +4,8 @@
 
 mod stream_common;
 
-use disk_cleanup_scan::index::{CollectRequest, DirEvent, StreamRequest, NO_PARENT};
-use disk_cleanup_scan::walker::WalkerBackend;
+use dunnage_scan::index::{CollectRequest, DirEvent, StreamRequest, NO_PARENT};
+use dunnage_scan::walker::WalkerBackend;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};

@@ -2,12 +2,12 @@
 //! Every port is `Send + Sync`: one `&Env` is shared across scoped worker threads. The `compile_fail` half
 //! (no `run_mutating` without a token) is a doctest on `CommandRunner` in `core/src/ports.rs`.
 
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::testing::{
+use dunnage_core::ports::Env;
+use dunnage_core::testing::{
     FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe, FakeRunGuard,
     FakeSpaceMeter,
 };
-use disk_cleanup_core::Dirs;
+use dunnage_core::Dirs;
 
 #[test]
 fn env_should_be_shareable_across_scoped_threads_When_built_from_the_fakes() {
@@ -48,7 +48,7 @@ fn env_should_be_shareable_across_scoped_threads_When_built_from_the_fakes() {
 
 #[test]
 fn every_port_trait_should_be_send_and_sync() {
-    use disk_cleanup_core::ports::{
+    use dunnage_core::ports::{
         AuditSink, Clock, CommandRunner, Fs, PlanStore, RunGuard, SpaceMeter, SystemProbe,
     };
     fn ok<T: Send + Sync + ?Sized>() {}

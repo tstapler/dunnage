@@ -6,9 +6,9 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::ports::SystemProbe;
-use disk_cleanup_core::roots::SteamLibraryRoot;
-use disk_cleanup_core::{Platform, SkipReason, Tri};
+use dunnage_core::ports::SystemProbe;
+use dunnage_core::roots::SteamLibraryRoot;
+use dunnage_core::{Platform, SkipReason, Tri};
 use steamlocate::{Error as SteamError, SteamDir};
 
 /// Why the Steam kinds cannot be offered. `Skip` is a refusal of this run; `Unavailable` says the

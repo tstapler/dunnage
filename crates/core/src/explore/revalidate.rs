@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 
-use disk_cleanup_scan::estimate::Stats;
+use dunnage_scan::estimate::Stats;
 
 use super::reducer::DirData;
 use super::tree::{flag, stats_add, stats_sub, ExploreTree, NodeId, NONE};

@@ -1,8 +1,8 @@
-//! disk-cleanup: reclaim disk space. Dry run by default; nothing is deleted without `--apply`.
+//! dunnage: reclaim disk space. Dry run by default; nothing is deleted without `--apply`.
 //!
 //! This file only wires the real ports and exits with the code `app::run` returns: parsing is
-//! `disk_cleanup_cli::args`, the commands are `app`, `status`, `kinds` and `audit_cmd`, and every decision
-//! lives in `disk_cleanup_core` so it is tested without a filesystem.
+//! `dunnage_cli::args`, the commands are `app`, `status`, `kinds` and `audit_cmd`, and every decision
+//! lives in `dunnage_core` so it is tested without a filesystem.
 
 #![forbid(unsafe_code)]
 
@@ -11,23 +11,23 @@ mod version;
 use std::ffi::OsString;
 use std::io::IsTerminal;
 
-use disk_cleanup_adapters::config::{config_path, read_config};
-use disk_cleanup_adapters::signals::SwallowBrokenPipe;
-use disk_cleanup_adapters::state::OutcomeMode;
-use disk_cleanup_adapters::steam::{default_steam_roots, library_roots};
-use disk_cleanup_cli::app::{self, ApplyMode, Io, Ports};
-use disk_cleanup_cli::args::{self, Cli, Command, Parsed};
-use disk_cleanup_cli::render_json::{fatal_doc, to_text};
-use disk_cleanup_cli::terminal;
-use disk_cleanup_cli::wiring::audit::{build_info, StampOutcome};
-use disk_cleanup_cli::wiring::compose;
-use disk_cleanup_cli::wiring::confine;
-use disk_cleanup_cli::wiring::dirs::{real_canon, resolve_real_dirs};
-use disk_cleanup_cli::wiring::env::{read_root, Wired};
-use disk_cleanup_cli::wiring::kinds::{KindCtx, KindRegistry};
-use disk_cleanup_cli::wiring::run_guard;
-use disk_cleanup_core::roots::{RootError, RootSet};
-use disk_cleanup_core::{Dirs, DiskVerdict, FatalError};
+use dunnage_adapters::config::{config_path, read_config};
+use dunnage_adapters::signals::SwallowBrokenPipe;
+use dunnage_adapters::state::OutcomeMode;
+use dunnage_adapters::steam::{default_steam_roots, library_roots};
+use dunnage_cli::app::{self, ApplyMode, Io, Ports};
+use dunnage_cli::args::{self, Cli, Command, Parsed};
+use dunnage_cli::render_json::{fatal_doc, to_text};
+use dunnage_cli::terminal;
+use dunnage_cli::wiring::audit::{build_info, StampOutcome};
+use dunnage_cli::wiring::compose;
+use dunnage_cli::wiring::confine;
+use dunnage_cli::wiring::dirs::{real_canon, resolve_real_dirs};
+use dunnage_cli::wiring::env::{read_root, Wired};
+use dunnage_cli::wiring::kinds::{KindCtx, KindRegistry};
+use dunnage_cli::wiring::run_guard;
+use dunnage_core::roots::{RootError, RootSet};
+use dunnage_core::{Dirs, DiskVerdict, FatalError};
 
 const EXIT_USAGE: i32 = 64;
 
@@ -55,7 +55,7 @@ fn real_main() -> i32 {
     };
     // Read-only and stateless: dispatched before any Env, lock or audit sink exists (Story 1.2.5).
     if let Some(Command::Scan(scan)) = &cli.command {
-        return disk_cleanup_cli::scan_cmd::run_wired(scan, cli.json);
+        return dunnage_cli::scan_cmd::run_wired(scan, cli.json);
     }
     if let Some(msg) = confine::startup_refusal(&confine::current_vars(), cli.apply) {
         eprintln!("{msg}");
@@ -68,6 +68,16 @@ fn real_main() -> i32 {
             return e.exit_code();
         }
     };
+    let legacy = dunnage_cli::wiring::dirs::real_legacy_state(&base);
+    if cli.apply {
+        if let Some(msg) = legacy.apply_refusal() {
+            eprintln!("{msg}");
+            return EXIT_USAGE;
+        }
+    }
+    if let Some(note) = legacy.note() {
+        eprintln!("{note}");
+    }
     let roots = match resolve_roots(&cli, &base) {
         Ok(r) => r,
         Err(code) => return code,
@@ -79,7 +89,7 @@ fn real_main() -> i32 {
     };
     // The explorer has its own composition root and takes no lock, audit sink or outcome line (Story 6.5.4).
     if let Some(Command::Explore(args)) = &cli.command {
-        return disk_cleanup_cli::explore::run::run_wired(&cli, args, &base, &roots);
+        return dunnage_cli::explore::run::run_wired(&cli, args, &base, &roots);
     }
     if compose::is_cleaner_apply(&cli) {
         let argv: Vec<OsString> = std::env::args_os().skip(1).collect();
@@ -108,7 +118,7 @@ fn resolve_roots(cli: &Cli, base: &Dirs) -> Result<RootSet, i32> {
             eprintln!("error: {e}. Nothing was changed. Fix or remove the file, then run again.");
             return Err(EXIT_USAGE);
         }
-        Err(_) => disk_cleanup_adapters::config::Config::default(),
+        Err(_) => dunnage_adapters::config::Config::default(),
     };
     let cwd = std::env::current_dir().unwrap_or_else(|_| base.home.clone());
     // The global --root widens the cleaner's roots only; explore never does (ADR-006 O-8: config.toml is the one place).
@@ -123,7 +133,7 @@ fn resolve_roots(cli: &Cli, base: &Dirs) -> Result<RootSet, i32> {
         config.roots.as_deref(),
         &cwd,
         &real_canon,
-        &|p| disk_cleanup_core::ports::Fs::fs_type(&disk_cleanup_cli::wiring::env::RealFs, p),
+        &|p| dunnage_core::ports::Fs::fs_type(&dunnage_cli::wiring::env::RealFs, p),
     ) {
         Ok(r) if cleaner => Ok(with_steam_libraries(r, base)),
         Ok(r) => Ok(r),
@@ -135,11 +145,10 @@ fn resolve_roots(cli: &Cli, base: &Dirs) -> Result<RootSet, i32> {
 /// A build that registers `steam` (Gate D) bounds its deletes by the libraries Steam lists itself. No flag
 /// or config value can add one.
 fn with_steam_libraries(roots: RootSet, base: &Dirs) -> RootSet {
-    if disk_cleanup_cli::wiring::kinds::build_gate() < 'D' {
+    if dunnage_cli::wiring::kinds::build_gate() < 'D' {
         return roots;
     }
-    let platform =
-        disk_cleanup_core::ports::SystemProbe::platform(&disk_cleanup_adapters::RealProbe);
+    let platform = dunnage_core::ports::SystemProbe::platform(&dunnage_adapters::RealProbe);
     let libraries = default_steam_roots(&base.home, platform)
         .first()
         .map(|root| library_roots(root))
@@ -168,7 +177,7 @@ fn run_wired(cli: &Cli, base: &Dirs, roots: &RootSet, writes_state: bool) -> i32
     let read = read_root();
     let ops = {
         let read = read.clone();
-        move || disk_cleanup_adapters::RealDirOps::confined_to(&read)
+        move || dunnage_adapters::RealDirOps::confined_to(&read)
     };
     let registry = KindRegistry::build(&KindCtx {
         roots: roots.clone(),
@@ -188,10 +197,10 @@ fn run_wired(cli: &Cli, base: &Dirs, roots: &RootSet, writes_state: bool) -> i32
     let build = build_info();
     let run_id = format!(
         "{:x}-{:x}",
-        disk_cleanup_core::ports::Clock::now_epoch(&wired.clock),
+        dunnage_core::ports::Clock::now_epoch(&wired.clock),
         std::process::id()
     );
-    let via = std::env::var("DISK_CLEANUP_VIA").ok();
+    let via = dunnage_cli::wiring::env::tool_env("VIA").and_then(|v| v.into_string().ok());
     let outcome_run_id = run_id.clone();
     let outcome_via = via.clone();
     let outcome = |mode: OutcomeMode, verdict: DiskVerdict, free: u64, unalloc: Option<u64>| {
@@ -214,7 +223,7 @@ fn run_wired(cli: &Cli, base: &Dirs, roots: &RootSet, writes_state: bool) -> i32
         .as_ref()
         .filter(|_| wired.state.reserves_created)
         .map(|d| {
-            disk_cleanup_core::Warning::ReservesCreated {
+            dunnage_core::Warning::ReservesCreated {
                 state_dir: d.paths.dir.clone(),
             }
             .text()

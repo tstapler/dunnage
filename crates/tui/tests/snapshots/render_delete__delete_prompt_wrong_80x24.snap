@@ -7,6 +7,6 @@ Plan 841f339d covers exactly 2 marked items:
   ~/code/app/dist.old
   ~/code/app/node_modules
 Total 22.8 GiB (attributed) on / (btrfs).
-Audit log: ~/.local/state/disk-cleanup/audit.jsonl
+Audit log: ~/.local/state/dunnage/audit.jsonl
 That is not 2. Nothing was deleted.
 Type 2 and press Enter to delete, Esc to cancel: _

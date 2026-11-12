@@ -7,7 +7,7 @@
 
 use std::io::IsTerminal;
 
-use disk_cleanup_core::explore::ports::TypedCountSource;
+use dunnage_core::explore::ports::TypedCountSource;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StdinTerminal;

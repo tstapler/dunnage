@@ -8,9 +8,9 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use disk_cleanup_core::audit_types::AUDIT_SCHEMA;
-use disk_cleanup_core::ports::AuditSink;
-use disk_cleanup_core::{
+use dunnage_core::audit_types::AUDIT_SCHEMA;
+use dunnage_core::ports::AuditSink;
+use dunnage_core::{
     AuditRecord, ExplorerConfirm, Intent, ItemResult, Locator, RunEnd, RunStart, Warning,
 };
 use serde::Serialize;
@@ -205,7 +205,7 @@ impl AuditSchemaError {
         let old =
             crate::state::shell_quote_path(&PathBuf::from(format!("{}.old", self.path.display())));
         format!(
-            "error: the audit log {} has an unknown schema version ({}). Nothing was deleted. Move it aside ('mv -- {p} {old}') and run again; 'disk-cleanup audit verify --log {old}' reads it if it can.",
+            "error: the audit log {} has an unknown schema version ({}). Nothing was deleted. Move it aside ('mv -- {p} {old}') and run again; 'dunnage audit verify --log {old}' reads it if it can.",
             self.path.display(),
             self.found,
         )

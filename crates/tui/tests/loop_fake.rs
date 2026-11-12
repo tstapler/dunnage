@@ -11,13 +11,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common::*;
-use disk_cleanup_core::explore::keymap::Key;
-use disk_cleanup_core::explore::msg::{
-    NodeEvent, ScanMode, ScanMsg, ScanSummary, StopCause, NO_PARENT,
-};
-use disk_cleanup_tui::app::{CLOSED_LINE, CLOSED_PARTIAL_LINE};
-use disk_cleanup_tui::event_loop::Input;
-use disk_cleanup_tui::terminal::RESTORE_FAILED;
+use dunnage_core::explore::keymap::Key;
+use dunnage_core::explore::msg::{NodeEvent, ScanMode, ScanMsg, ScanSummary, StopCause, NO_PARENT};
+use dunnage_tui::app::{CLOSED_LINE, CLOSED_PARTIAL_LINE};
+use dunnage_tui::event_loop::Input;
+use dunnage_tui::terminal::RESTORE_FAILED;
 
 fn first_line_with<'a>(screen: &'a str, needle: &str) -> Option<&'a str> {
     screen.lines().find(|l| l.contains(needle))
@@ -384,9 +382,7 @@ fn planning_does_not_freeze_the_screen_and_signals_end_the_run_at_once() {
         plan: plan_fixture(),
         calls: Log::default(),
     });
-    r.time = Time::Real(Arc::new(
-        disk_cleanup_tui::event_loop::SystemClock::default(),
-    ));
+    r.time = Time::Real(Arc::new(dunnage_tui::event_loop::SystemClock::default()));
     r.script = vec![(100, ch(' ')), (200, ch('p'))];
     r.signals = LogSignals::never(&r.log);
     let sig = Arc::clone(&r.signals);
@@ -412,9 +408,7 @@ fn planning_does_not_freeze_the_screen_and_signals_end_the_run_at_once() {
 #[test]
 fn esc_cancels_the_plan_and_q_leaves_while_it_runs() {
     let mut r = with_kids();
-    r.time = Time::Real(Arc::new(
-        disk_cleanup_tui::event_loop::SystemClock::default(),
-    ));
+    r.time = Time::Real(Arc::new(dunnage_tui::event_loop::SystemClock::default()));
     r.actions = Arc::new(SlowActions {
         delay: Duration::from_secs(5),
         plan: plan_fixture(),
@@ -445,9 +439,7 @@ fn a_finished_plan_shows_the_preview_with_no_next_line_and_esc_returns_to_the_li
     // The planner and the review answer from worker threads, so the clock is the real one: with virtual
     // time the eight loop iterations between `p` and `q` can pass before a thread has run.
     let mut r = with_kids();
-    r.time = Time::Real(Arc::new(
-        disk_cleanup_tui::event_loop::SystemClock::default(),
-    ));
+    r.time = Time::Real(Arc::new(dunnage_tui::event_loop::SystemClock::default()));
     r.script = vec![(100, ch(' ')), (200, ch('p')), (600, ch('q'))];
     let open = run(r);
     assert!(
@@ -459,9 +451,7 @@ fn a_finished_plan_shows_the_preview_with_no_next_line_and_esc_returns_to_the_li
     assert!(!open.screen.contains("Next:"));
 
     let mut r = with_kids();
-    r.time = Time::Real(Arc::new(
-        disk_cleanup_tui::event_loop::SystemClock::default(),
-    ));
+    r.time = Time::Real(Arc::new(dunnage_tui::event_loop::SystemClock::default()));
     r.script = vec![
         (100, ch(' ')),
         (200, ch('p')),
@@ -481,9 +471,7 @@ fn a_finished_plan_shows_the_preview_with_no_next_line_and_esc_returns_to_the_li
 #[test]
 fn the_quit_prompt_enter_runs_the_planner_off_thread_and_sigint_still_exits_130() {
     let mut r = with_kids();
-    r.time = Time::Real(Arc::new(
-        disk_cleanup_tui::event_loop::SystemClock::default(),
-    ));
+    r.time = Time::Real(Arc::new(dunnage_tui::event_loop::SystemClock::default()));
     r.actions = Arc::new(SlowActions {
         delay: Duration::from_secs(5),
         plan: plan_fixture(),
@@ -697,9 +685,7 @@ fn a_fifth_nested_scan_gives_the_footer_four_nested_scans() {
         }
     });
     let mut r = r;
-    r.time = Time::Real(Arc::new(
-        disk_cleanup_tui::event_loop::SystemClock::default(),
-    ));
+    r.time = Time::Real(Arc::new(dunnage_tui::event_loop::SystemClock::default()));
     r.script = (0..6)
         .flat_map(|i| [(300 + i * 300, ch('j')), (330 + i * 300, key(Key::Enter))])
         .chain([(2_500, ch('q'))])

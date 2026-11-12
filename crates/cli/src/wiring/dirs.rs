@@ -5,7 +5,7 @@ use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::{Dirs, Identity};
+use dunnage_core::{Dirs, Identity};
 
 /// Usage error (exit 64): the home directory cannot be established.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,7 +23,7 @@ impl DirsError {
 
     pub fn text(&self) -> String {
         match self {
-            DirsError::HomeNotSet => "error: HOME is not set. Nothing was scanned. Set HOME to your home directory (disk-cleanup never reads the passwd entry), then run again.".into(),
+            DirsError::HomeNotSet => "error: HOME is not set. Nothing was scanned. Set HOME to your home directory (dunnage never reads the passwd entry), then run again.".into(),
             DirsError::HomeInvalid { path } => format!(
                 "error: HOME ({}) is not an absolute path to an existing directory. Nothing was scanned. Fix HOME, then run again.",
                 path.display()
@@ -39,6 +39,67 @@ impl std::fmt::Display for DirsError {
 }
 
 impl std::error::Error for DirsError {}
+
+/// The state directory name before the rename (Story 5.3.0). Audit logs in it are append-only evidence:
+/// the tool never moves them, it only tells the owner which `mv` to run.
+pub const LEGACY_STATE_DIR: &str = "disk-cleanup";
+
+/// Which of the old and new state directories exist.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LegacyState {
+    /// No old-name directory, or the new one is present alone.
+    Clear,
+    OldOnly {
+        old: PathBuf,
+        new: PathBuf,
+    },
+    Both {
+        old: PathBuf,
+        new: PathBuf,
+    },
+}
+
+impl LegacyState {
+    pub fn note(&self) -> Option<String> {
+        match self {
+            LegacyState::OldOnly { old, new } => Some(format!(
+                "NOTE: the state directory was renamed. Your audit log is in {old}. Run 'mv {old} {new}' to keep it (dunnage never moves audit logs itself).",
+                old = old.display(),
+                new = new.display()
+            )),
+            _ => None,
+        }
+    }
+
+    /// Exit 64 text for an apply when both directories exist.
+    pub fn apply_refusal(&self) -> Option<String> {
+        match self {
+            LegacyState::Both { old, new } => Some(format!(
+                "error: both {} and {} exist, so dunnage cannot tell which audit log is current. Nothing was deleted. Merge them or remove the one you do not need, then run again.",
+                old.display(),
+                new.display()
+            )),
+            _ => None,
+        }
+    }
+}
+
+/// `exists` must not follow symlinks.
+pub fn legacy_state(base: &Dirs, exists: &dyn Fn(&Path) -> bool) -> LegacyState {
+    let (old, new) = (
+        base.state.join(LEGACY_STATE_DIR),
+        base.state.join("dunnage"),
+    );
+    match (exists(&old), exists(&new)) {
+        (true, true) => LegacyState::Both { old, new },
+        (true, false) => LegacyState::OldOnly { old, new },
+        _ => LegacyState::Clear,
+    }
+}
+
+pub fn real_legacy_state(base: &Dirs) -> LegacyState {
+    legacy_state(base, &|p| std::fs::symlink_metadata(p).is_ok())
+}
 
 /// A set, non-empty, absolute value; the XDG spec says to ignore anything else.
 fn xdg(
@@ -180,5 +241,31 @@ mod tests {
         std::fs::write(&f, "x").unwrap();
         assert!(real_canon(&f).is_err());
         assert!(real_canon(&d.path().join("missing")).is_err());
+    }
+
+    #[test]
+    fn legacy_state_should_note_old_only_and_refuse_both() {
+        let base = Dirs {
+            home: "/h".into(),
+            state: "/s".into(),
+            cache: "/c".into(),
+            config: "/f".into(),
+        };
+        let only = |old: bool, new: bool| {
+            legacy_state(&base, &move |p| {
+                (old && p.ends_with("disk-cleanup")) || (new && p.ends_with("dunnage"))
+            })
+        };
+        assert_eq!(only(false, false), LegacyState::Clear);
+        assert_eq!(only(false, true), LegacyState::Clear);
+        let o = only(true, false);
+        assert!(o.note().unwrap().contains("mv /s/disk-cleanup /s/dunnage"));
+        assert!(o.apply_refusal().is_none());
+        let b = only(true, true);
+        assert!(b.note().is_none());
+        assert!(b
+            .apply_refusal()
+            .unwrap()
+            .contains("both /s/disk-cleanup and /s/dunnage exist"));
     }
 }

@@ -5,13 +5,13 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use disk_cleanup_core::guard::Facts;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::targets::worktree_guard::{
+use dunnage_core::guard::Facts;
+use dunnage_core::roots::RootSet;
+use dunnage_core::targets::worktree_guard::{
     decide_worktree, floor_raised, IgnoredFiles, PushState, WorktreeCandidate, WorktreeOpts,
     AGE_UNKNOWN_DETAIL, FLOOR_DETAIL, IGNORED_UNKNOWN_DETAIL, WORKTREE_MIN_AGE,
 };
-use disk_cleanup_core::{Dirs, Identity, Kind, RootDev, SkipReason, Tri};
+use dunnage_core::{Dirs, Identity, Kind, RootDev, SkipReason, Tri};
 
 const NOW: i64 = 1_000_000_000;
 const HOUR: i64 = 3_600;

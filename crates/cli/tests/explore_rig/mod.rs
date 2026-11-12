@@ -12,28 +12,28 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use disk_cleanup_adapters::dirops::DirOps;
-use disk_cleanup_adapters::treestat::TreestatSizer;
-use disk_cleanup_adapters::{RealDirOps, RealProbe};
-use disk_cleanup_cli::explore::apply::{
+use dunnage_adapters::dirops::DirOps;
+use dunnage_adapters::treestat::TreestatSizer;
+use dunnage_adapters::{RealDirOps, RealProbe};
+use dunnage_cli::explore::apply::{
     compose_explorer_apply, ExplorerApplyPorts, ExplorerReport, ExplorerRun,
 };
-use disk_cleanup_cli::wiring::audit::{GateExit, StampOutcome};
-use disk_cleanup_cli::wiring::compose::Trace;
-use disk_cleanup_cli::wiring::dirs::real_canon;
-use disk_cleanup_cli::wiring::env::RealFs;
-use disk_cleanup_core::explore::confirm::{Confirm, ConfirmedPlan, ReviewedPlan};
-use disk_cleanup_core::explore::mark_check::OwnState;
-use disk_cleanup_core::explorer_plan::{
+use dunnage_cli::wiring::audit::{GateExit, StampOutcome};
+use dunnage_cli::wiring::compose::Trace;
+use dunnage_cli::wiring::dirs::real_canon;
+use dunnage_cli::wiring::env::RealFs;
+use dunnage_core::explore::confirm::{Confirm, ConfirmedPlan, ReviewedPlan};
+use dunnage_core::explore::mark_check::OwnState;
+use dunnage_core::explorer_plan::{
     explorer_plan, ExplorerPlanCtx, NoCleanerView, TreeSize, TreeSizer,
 };
-use disk_cleanup_core::plan::OnlyMode;
-use disk_cleanup_core::ports::PlanStore;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::testing::{
+use dunnage_core::plan::OnlyMode;
+use dunnage_core::ports::PlanStore;
+use dunnage_core::roots::RootSet;
+use dunnage_core::testing::{
     FakeAuditSink, FakeClock, FakeCommandRunner, FakePlanStore, FakeRunGuard, FakeSpaceMeter,
 };
-use disk_cleanup_core::{AllocatedBytes, ApplyToken, BuildInfo, Dirs};
+use dunnage_core::{AllocatedBytes, ApplyToken, BuildInfo, Dirs};
 
 pub const NOW: i64 = 1_800_000_000;
 
@@ -44,7 +44,7 @@ pub struct Ex {
     pub home: PathBuf,
     /// The one scan root, `base/hhh/code`.
     pub code: PathBuf,
-    /// The XDG bases (before `disk-cleanup` is appended).
+    /// The XDG bases (before `dunnage` is appended).
     pub base_dirs: Dirs,
     /// The tool's own directories.
     pub dirs: Dirs,
@@ -79,9 +79,9 @@ impl Ex {
             config: base.join("config"),
         };
         let dirs = Dirs {
-            state: base.join("state/disk-cleanup"),
-            cache: base.join("cache/disk-cleanup"),
-            config: base.join("config/disk-cleanup"),
+            state: base.join("state/dunnage"),
+            cache: base.join("cache/dunnage"),
+            config: base.join("config/dunnage"),
             ..base_dirs.clone()
         };
         Ex {
@@ -138,7 +138,7 @@ impl Ex {
     }
 
     pub fn own_state(&self) -> OwnState {
-        OwnState::new(&self.base_dirs, self.base.join("bin/disk-cleanup"))
+        OwnState::new(&self.base_dirs, self.base.join("bin/dunnage"))
     }
 
     pub fn real_sizer(&self) -> TreestatSizer<RealDirOps> {
@@ -157,7 +157,7 @@ impl Ex {
         sizer: &dyn TreeSizer,
     ) -> ReviewedPlan {
         let plan = self.plan_with(marks, roots, sizer, &self.own_state());
-        let euid = disk_cleanup_core::ports::SystemProbe::euid(&self.probe);
+        let euid = dunnage_core::ports::SystemProbe::euid(&self.probe);
         self.plans
             .save_merged(vec![plan.saved_selection(euid, NOW)], euid, NOW);
         ReviewedPlan::from_explorer_plan(&plan)
@@ -170,7 +170,7 @@ impl Ex {
         roots: &RootSet,
         sizer: &dyn TreeSizer,
         own: &OwnState,
-    ) -> disk_cleanup_core::explorer_plan::ExplorerPlan {
+    ) -> dunnage_core::explorer_plan::ExplorerPlan {
         let ctx = ExplorerPlanCtx {
             roots,
             own_state: own,
@@ -188,28 +188,28 @@ impl Ex {
     /// passes: the identity of each item is what `lstat` says now, or the first value when given.
     pub fn forge(
         &self,
-        items: &[(PathBuf, Option<disk_cleanup_core::plan::ItemIdentity>)],
+        items: &[(PathBuf, Option<dunnage_core::plan::ItemIdentity>)],
     ) -> ReviewedPlan {
-        use disk_cleanup_core::explore::confirm::ReviewedItem;
+        use dunnage_core::explore::confirm::ReviewedItem;
         let list: Vec<ReviewedItem> = items
             .iter()
             .map(|(p, id)| ReviewedItem {
                 path: p.clone(),
                 identity: id.unwrap_or_else(|| {
-                    disk_cleanup_core::plan::ItemIdentity::of(
-                        &disk_cleanup_core::ports::Fs::lstat(&self.fs, p).unwrap(),
+                    dunnage_core::plan::ItemIdentity::of(
+                        &dunnage_core::ports::Fs::lstat(&self.fs, p).unwrap(),
                     )
                 }),
             })
             .collect();
         let roots = self.roots();
         let reviewed = ReviewedPlan::new(list, roots.root_identities().to_vec(), 0);
-        let sel = disk_cleanup_core::selector::Selection::explorer(
+        let sel = dunnage_core::selector::Selection::explorer(
             reviewed.items().iter().map(|i| i.path.clone()).collect(),
         );
-        let euid = disk_cleanup_core::ports::SystemProbe::euid(&self.probe);
+        let euid = dunnage_core::ports::SystemProbe::euid(&self.probe);
         self.plans.save_merged(
-            vec![disk_cleanup_core::plan_state::SavedSelection {
+            vec![dunnage_core::plan_state::SavedSelection {
                 plan_id: reviewed.plan_id().to_string(),
                 saved_at: NOW,
                 euid,
@@ -242,8 +242,8 @@ impl Ex {
         self.run_with(confirmed, ops, &Knobs::default())
     }
 
-    pub fn env(&self) -> disk_cleanup_core::ports::Env<'_> {
-        disk_cleanup_core::ports::Env {
+    pub fn env(&self) -> dunnage_core::ports::Env<'_> {
+        dunnage_core::ports::Env {
             fs: &self.fs,
             runner: &self.runner,
             clock: &self.clock,
@@ -349,9 +349,9 @@ pub struct Knobs {
     /// The caller's abort switch (the loop sets it on a signal or Esc).
     pub abort: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// Replaces the fake audit sink (the real one, to read the log back with `audit verify`).
-    pub audit: Option<std::sync::Arc<dyn disk_cleanup_core::ports::AuditSink>>,
+    pub audit: Option<std::sync::Arc<dyn dunnage_core::ports::AuditSink>>,
     /// Where the per-item messages go (the TUI's delete handle).
-    pub events: Option<std::sync::mpsc::SyncSender<disk_cleanup_core::explore::msg::DeleteMsg>>,
+    pub events: Option<std::sync::mpsc::SyncSender<dunnage_core::explore::msg::DeleteMsg>>,
     /// Runs once, right after `explorer_confirm` is written: a change made here happens after the plan-id gate,
     /// in the window the per-item identity compare defends.
     pub after_gate: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>,
@@ -371,26 +371,26 @@ impl Knobs {
 
 /// Wraps the audit sink the run uses and fires the `after_gate` hook once the `explorer_confirm` line is in.
 struct GateHook<'a> {
-    inner: &'a dyn disk_cleanup_core::ports::AuditSink,
+    inner: &'a dyn dunnage_core::ports::AuditSink,
     hook: &'a std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 
-impl disk_cleanup_core::ports::AuditSink for GateHook<'_> {
-    fn run_start(&self, r: &disk_cleanup_core::RunStart) -> std::io::Result<()> {
+impl dunnage_core::ports::AuditSink for GateHook<'_> {
+    fn run_start(&self, r: &dunnage_core::RunStart) -> std::io::Result<()> {
         self.inner.run_start(r)
     }
-    fn intent(&self, r: &disk_cleanup_core::Intent) -> std::io::Result<()> {
+    fn intent(&self, r: &dunnage_core::Intent) -> std::io::Result<()> {
         self.inner.intent(r)
     }
-    fn result(&self, r: &disk_cleanup_core::ItemResult) -> std::io::Result<()> {
+    fn result(&self, r: &dunnage_core::ItemResult) -> std::io::Result<()> {
         self.inner.result(r)
     }
-    fn run_end(&self, r: &disk_cleanup_core::RunEnd) -> std::io::Result<()> {
+    fn run_end(&self, r: &dunnage_core::RunEnd) -> std::io::Result<()> {
         self.inner.run_end(r)
     }
     fn explorer_confirm(
         &self,
-        r: &disk_cleanup_core::audit_types::ExplorerConfirm,
+        r: &dunnage_core::audit_types::ExplorerConfirm,
     ) -> std::io::Result<()> {
         self.inner.explorer_confirm(r)?;
         if let Some(h) = self.hook.lock().unwrap().take() {
@@ -467,7 +467,7 @@ pub fn manifest(dir: &Path) -> std::collections::BTreeMap<PathBuf, String> {
 
 /// The `status` field of every `result` line the fake audit sink recorded.
 pub fn kinds_of(audit: &FakeAuditSink) -> Vec<&'static str> {
-    use disk_cleanup_core::AuditRecord as R;
+    use dunnage_core::AuditRecord as R;
     audit
         .records()
         .iter()

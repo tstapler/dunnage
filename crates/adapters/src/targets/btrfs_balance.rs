@@ -10,16 +10,16 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use disk_cleanup_core::ports::{Cmd, Env};
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::targets::btrfs_guard::{
+use dunnage_core::ports::{Cmd, Env};
+use dunnage_core::selector::Selection;
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::targets::btrfs_guard::{
     already_running_note, balance_blocker, balance_cmd, decide_start, next_step, parse_relocated,
     scrub_blocker, timer_blocker, unallocated_text, Blocker, Next, StepResult, StopReason,
     BALANCE_STILL_RUNNING,
 };
-use disk_cleanup_core::ApplyToken;
-use disk_cleanup_core::{
+use dunnage_core::ApplyToken;
+use dunnage_core::{
     AllocatedBytes, BtrfsFacts, Candidate, CandidateId, DeleteError, DeleteFailure, Freed,
     Identity, KindFacts, Locator, MountEntry, Outcome, Platform, SelectorId, SkipReason,
 };

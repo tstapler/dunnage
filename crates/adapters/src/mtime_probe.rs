@@ -15,7 +15,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use disk_cleanup_core::{DeleteError, Identity, RootDev};
+use dunnage_core::{DeleteError, Identity, RootDev};
 
 use crate::dirops::{open_verified_root, DirOps};
 use crate::treestat::{measure, MeasureOpts, SkipWhy, TreeStats};

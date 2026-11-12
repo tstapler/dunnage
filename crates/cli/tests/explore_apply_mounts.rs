@@ -15,7 +15,7 @@ mod explore_rig;
 use std::path::Path;
 use std::process::Command;
 
-use disk_cleanup_core::{SkipReason, Status};
+use dunnage_core::{SkipReason, Status};
 use explore_rig::{manifest, Ex, Knobs};
 
 const VAR: &str = "DC_EX_MOUNT_CHILD";
@@ -106,7 +106,7 @@ fn tmpfs_on_the_item(after_gate: bool) {
         .records()
         .into_iter()
         .filter_map(|r| match r {
-            disk_cleanup_core::AuditRecord::Result(o) => Some(o.0.status),
+            dunnage_core::AuditRecord::Result(o) => Some(o.0.status),
             _ => None,
         })
         .collect();

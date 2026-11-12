@@ -9,12 +9,12 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::targets::btrfs_guard::{decide_trim, parse_trimmed, trim_cmd};
-use disk_cleanup_core::ApplyToken;
-use disk_cleanup_core::{
+use dunnage_core::ports::Env;
+use dunnage_core::selector::Selection;
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::targets::btrfs_guard::{decide_trim, parse_trimmed, trim_cmd};
+use dunnage_core::ApplyToken;
+use dunnage_core::{
     AllocatedBytes, BtrfsFacts, Candidate, CandidateId, DeleteError, DeleteFailure, Freed,
     Identity, KindFacts, Locator, Outcome, Platform, SelectorId, SkipReason,
 };

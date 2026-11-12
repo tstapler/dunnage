@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used)]
 //! Review C9: the real read-only `Fs` reports the mount id the engine compares (statx), not `None`.
 
-use disk_cleanup_cli::wiring::env::RealFs;
-use disk_cleanup_core::ports::Fs;
+use dunnage_cli::wiring::env::RealFs;
+use dunnage_core::ports::Fs;
 
 #[test]
 fn real_fs_lstat_should_report_a_mount_id_for_a_directory_and_a_file_on_linux() {

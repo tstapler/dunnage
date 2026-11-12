@@ -6,10 +6,10 @@
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::candidate::Locator;
-use disk_cleanup_core::kind::{Risk, SelectorId};
-use disk_cleanup_core::plan::{Plan, PlanId, PlanItem, Planned, BIN};
-use disk_cleanup_core::selector::Selection;
+use dunnage_core::candidate::Locator;
+use dunnage_core::kind::{Risk, SelectorId};
+use dunnage_core::plan::{Plan, PlanId, PlanItem, Planned, BIN};
+use dunnage_core::selector::Selection;
 
 use crate::view::{args_of, display_path, selection_over, NextCmd};
 

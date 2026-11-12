@@ -2,9 +2,9 @@
 //! Story 2.3.4: the plan-id gate decides on the tier of the resolved selector, not on an id, so the test-only
 //! `fixture-destructive` kind drives the destructive flow of Gate B exactly as `build-dirs` will at Gate C.
 
-use disk_cleanup_core::plan::{destructive_gate, GateRefusal, PlanId};
-use disk_cleanup_core::selector::{KindSelector, Selection};
-use disk_cleanup_core::{Risk, SelectorId};
+use dunnage_core::plan::{destructive_gate, GateRefusal, PlanId};
+use dunnage_core::selector::{KindSelector, Selection};
+use dunnage_core::{Risk, SelectorId};
 
 fn sel(ids: &[SelectorId]) -> Selection {
     Selection::new(KindSelector::of(ids), KindSelector::default())

@@ -15,24 +15,24 @@ use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
-use disk_cleanup_cli::explore::actions::{ExplorerPorts, RealExplorerActions, ScanningProbe};
-use disk_cleanup_cli::explore::handoff::CLOSED_LINE;
-use disk_cleanup_core::candidate::BuildDirFlavor;
-use disk_cleanup_core::delete_types::{DeleteFailure, Freed};
-use disk_cleanup_core::explore::msg::{MarkRefusal, PlanPreview, ScanMsg};
-use disk_cleanup_core::explore::ports::ExplorerActions;
-use disk_cleanup_core::outcome::SkipReason;
-use disk_cleanup_core::plan::NO_PLAN_ID_ONLY_NOTE;
-use disk_cleanup_core::plan_state::{BuildInfo, SavedSelection};
-use disk_cleanup_core::ports::{Env, PlanStore};
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::shell_quote::sandbox::{find_on_path, run_printed_line};
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::testing::{
+use dunnage_cli::explore::actions::{ExplorerPorts, RealExplorerActions, ScanningProbe};
+use dunnage_cli::explore::handoff::CLOSED_LINE;
+use dunnage_core::candidate::BuildDirFlavor;
+use dunnage_core::delete_types::{DeleteFailure, Freed};
+use dunnage_core::explore::msg::{MarkRefusal, PlanPreview, ScanMsg};
+use dunnage_core::explore::ports::ExplorerActions;
+use dunnage_core::outcome::SkipReason;
+use dunnage_core::plan::NO_PLAN_ID_ONLY_NOTE;
+use dunnage_core::plan_state::{BuildInfo, SavedSelection};
+use dunnage_core::ports::{Env, PlanStore};
+use dunnage_core::selector::Selection;
+use dunnage_core::shell_quote::sandbox::{find_on_path, run_printed_line};
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::testing::{
     FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe, FakeRunGuard,
     FakeSpaceMeter,
 };
-use disk_cleanup_core::{ApplyToken, Candidate, Dirs, DiskVerdict, RunRoots, SelectorId};
+use dunnage_core::{ApplyToken, Candidate, Dirs, DiskVerdict, RunRoots, SelectorId};
 use support::{build_dir, cache, worktree, NOW};
 
 const HOME: &str = "/home/u";
@@ -84,7 +84,7 @@ impl Target for Scripted {
     }
     fn guard(&self, c: &Candidate, _env: &Env) -> Guarded {
         match c.locator() {
-            disk_cleanup_core::candidate::Locator::Path(p) => self
+            dunnage_core::candidate::Locator::Path(p) => self
                 .skips
                 .get(p)
                 .map_or(Guarded::Allow, |r| Guarded::Skip(*r)),
@@ -138,12 +138,12 @@ fn wire_with(
         )),
         audit: Arc::new(FakeAuditSink::new()),
         guard: Arc::new(FakeRunGuard::new()),
-        plans: Arc::clone(&plans) as Arc<dyn disk_cleanup_core::ports::PlanStore>,
+        plans: Arc::clone(&plans) as Arc<dyn dunnage_core::ports::PlanStore>,
         dirs: Dirs {
             home: PathBuf::from(HOME),
-            state: PathBuf::from("/home/u/.local/state/disk-cleanup"),
-            cache: PathBuf::from("/home/u/.cache/disk-cleanup"),
-            config: PathBuf::from("/home/u/.config/disk-cleanup"),
+            state: PathBuf::from("/home/u/.local/state/dunnage"),
+            cache: PathBuf::from("/home/u/.cache/dunnage"),
+            config: PathBuf::from("/home/u/.config/dunnage"),
         },
         targets: targets
             .into_iter()
@@ -251,7 +251,7 @@ fn commands(lines: &[String]) -> Vec<String> {
         if in_next && l.is_empty() {
             break;
         }
-        if in_next && l.starts_with("  disk-cleanup ") {
+        if in_next && l.starts_with("  dunnage ") {
             out.push(l.trim().to_string());
         }
     }
@@ -458,7 +458,7 @@ fn the_report_should_be_the_dry_run_with_one_apply_line_per_tier() {
     assert_eq!(cmds.len(), 3, "{text}");
     for c in &cmds {
         sh_accepts(c);
-        assert!(c.starts_with("disk-cleanup --apply --kinds "), "{c}");
+        assert!(c.starts_with("dunnage --apply --kinds "), "{c}");
         assert!(c.contains("--only"), "{c}");
     }
     let destructive = cmds
@@ -584,16 +584,14 @@ fn hostile_marked_names_should_reach_the_cleaner_as_one_argument_and_inject_noth
         path.extend_from_slice(&name);
         let path_os = PathBuf::from(OsString::from_vec(path.clone()));
         let c = Candidate::new(
-            disk_cleanup_core::candidate::Locator::Path(path_os.clone()),
-            disk_cleanup_core::candidate::KindFacts::Cache(
-                disk_cleanup_core::candidate::CacheFacts {
-                    label: "cache".into(),
-                    apt: false,
-                },
-            ),
-            disk_cleanup_core::AllocatedBytes(1 << 30),
+            dunnage_core::candidate::Locator::Path(path_os.clone()),
+            dunnage_core::candidate::KindFacts::Cache(dunnage_core::candidate::CacheFacts {
+                label: "cache".into(),
+                apt: false,
+            }),
+            dunnage_core::AllocatedBytes(1 << 30),
             None,
-            disk_cleanup_core::ids::Identity { dev: 1, ino: 77 },
+            dunnage_core::ids::Identity { dev: 1, ino: 77 },
         );
         let w = wire(vec![Scripted::new(&[SelectorId::Caches], vec![c])]);
         let h = w.actions.finish(std::slice::from_ref(&path_os));
@@ -604,7 +602,7 @@ fn hostile_marked_names_should_reach_the_cleaner_as_one_argument_and_inject_noth
         );
         let cmds: Vec<String> = raw
             .iter()
-            .filter(|l| l.starts_with(b"  disk-cleanup --apply"))
+            .filter(|l| l.starts_with(b"  dunnage --apply"))
             .map(|l| {
                 String::from_utf8(l.clone())
                     .expect("command lines are UTF-8")
@@ -619,7 +617,7 @@ fn hostile_marked_names_should_reach_the_cleaner_as_one_argument_and_inject_noth
                 .unwrap()
                 .unwrap();
             let argv = run
-                .argv_of("disk-cleanup")
+                .argv_of("dunnage")
                 .unwrap_or_else(|| panic!("{shell}: {} did not run: {}", cmds[0], run.stderr));
             let at = argv.iter().position(|a| a == b"--only").expect("--only");
             assert_eq!(argv[at + 1], path, "{shell}: {}", cmds[0]);

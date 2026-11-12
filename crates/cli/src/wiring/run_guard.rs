@@ -6,9 +6,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use disk_cleanup_adapters::lock::{RealRunGuard, RunLock};
-use disk_cleanup_adapters::signals::{self, Mode, SignalState};
-use disk_cleanup_adapters::state::Owner;
+use dunnage_adapters::lock::{RealRunGuard, RunLock};
+use dunnage_adapters::signals::{self, Mode, SignalState};
+use dunnage_adapters::state::Owner;
 
 pub fn run_lock_path(state_dir: &Path) -> PathBuf {
     state_dir.join("run.lock")
@@ -35,7 +35,7 @@ pub fn install_plan() -> io::Result<()> {
 pub fn plan_during_apply_note(state_dir: &Path) -> Option<String> {
     RunLock::probe(&run_lock_path(state_dir)).map(|pid| {
         format!(
-            "note: another disk-cleanup apply is running (pid {pid}); sizes and items below are in flux and a plan-id from this report may be refused as changed once it finishes."
+            "note: another dunnage apply is running (pid {pid}); sizes and items below are in flux and a plan-id from this report may be refused as changed once it finishes."
         )
     })
 }
@@ -57,7 +57,7 @@ mod tests {
         let note = plan_during_apply_note(dir.path()).unwrap();
         assert_eq!(
             note,
-            format!("note: another disk-cleanup apply is running (pid {}); sizes and items below are in flux and a plan-id from this report may be refused as changed once it finishes.", std::process::id())
+            format!("note: another dunnage apply is running (pid {}); sizes and items below are in flux and a plan-id from this report may be refused as changed once it finishes.", std::process::id())
         );
         drop(held);
         assert_eq!(plan_during_apply_note(dir.path()), None);

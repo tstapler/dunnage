@@ -2,12 +2,12 @@
 
 use std::path::PathBuf;
 
-use disk_cleanup_core::ports::RunState;
-use disk_cleanup_core::targets::build_dir::{
+use dunnage_core::ports::RunState;
+use dunnage_core::targets::build_dir::{
     kept_note, plan_keep_newest, run_state_skip, ClusterInput, KeepNewest, Placement,
     KEEP_NEWEST_ZERO_WARNING,
 };
-use disk_cleanup_core::{Kind, SkipReason};
+use dunnage_core::{Kind, SkipReason};
 
 const NOW: i64 = 1_800_000_000;
 const DAY: i64 = 86_400;

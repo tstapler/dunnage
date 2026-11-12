@@ -1,5 +1,5 @@
 [package]
-name = "disk-cleanup-tui"
+name = "dunnage-tui"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
@@ -10,17 +10,17 @@ rust-version = "1.88"
 workspace = true
 
 # Containment (ADR-005): scripts/check-tui-deps.sh holds this list. The crate has no filesystem, process or
-# deletion dependency; everything it shows or does arrives through `disk-cleanup-core` ports.
+# deletion dependency; everything it shows or does arrives through `dunnage-core` ports.
 [dependencies]
-disk-cleanup-core = { path = "../core" }
+dunnage-core = { path = "../core" }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 crossterm = "0.29.0"
 unicode-width = "0.2"
 
 [dev-dependencies]
-disk-cleanup-core = { path = "../core", features = ["test-support"] }
+dunnage-core = { path = "../core", features = ["test-support"] }
 # Only the probe example needs a real signal source; the library may not depend on it (scripts/check-tui-deps.sh).
-disk-cleanup-adapters = { path = "../adapters", features = ["test-support"] }
+dunnage-adapters = { path = "../adapters", features = ["test-support"] }
 insta = "1"
 proptest = "1"
 expectrl = "0.7"

@@ -6,25 +6,25 @@
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::escape::escape_os;
-use disk_cleanup_core::explore::fmt::{fmt_size_cell, share_cell};
-use disk_cleanup_core::explore::headroom::headroom_line;
-use disk_cleanup_core::explore::help::help_lines;
-use disk_cleanup_core::explore::input::{scan_title, ExploreState, Mode};
-use disk_cleanup_core::explore::layout::{
+use dunnage_core::escape::escape_os;
+use dunnage_core::explore::fmt::{fmt_size_cell, share_cell};
+use dunnage_core::explore::headroom::headroom_line;
+use dunnage_core::explore::help::help_lines;
+use dunnage_core::explore::input::{scan_title, ExploreState, Mode};
+use dunnage_core::explore::layout::{
     cells, cut_name, footer_path_line, header_line, layout_for_width, path_line, title_left,
     title_line, too_small_lines, ColumnKind, Layout, Tier, TierLayout,
 };
-use disk_cleanup_core::explore::msg::{PlanPreview, ScanSummary, StopCause};
-use disk_cleanup_core::explore::rows::{Badge, Row, RowId, RowKind};
-use disk_cleanup_core::explore::tree::{ExploreTree, NodeId, ScanStatus};
-use disk_cleanup_core::shell_quote::shell_quote;
-use disk_cleanup_core::snapshot_types::FsSnapshot;
+use dunnage_core::explore::msg::{PlanPreview, ScanSummary, StopCause};
+use dunnage_core::explore::rows::{Badge, Row, RowId, RowKind};
+use dunnage_core::explore::tree::{ExploreTree, NodeId, ScanStatus};
+use dunnage_core::shell_quote::shell_quote;
+use dunnage_core::snapshot_types::FsSnapshot;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
-use disk_cleanup_core::explore::delete_flow::{DeleteRun, Prompt};
+use dunnage_core::explore::delete_flow::{DeleteRun, Prompt};
 
 use crate::overlays::{
     clean, deleting_lines, errors_lines, info_lines, plan_lines_noted, prompt_lines, result_lines,
@@ -183,10 +183,8 @@ fn draw_main_row(
             ColumnKind::Meta => pad_left(&row.meta.map_or("n/a".into(), fmt_size_cell), c.width),
             ColumnKind::Items if na => pad_left("n/a", c.width),
             ColumnKind::Items => pad_left(
-                &row.items.map_or(
-                    "n/a".into(),
-                    disk_cleanup_core::explore::fmt::fmt_items_cell,
-                ),
+                &row.items
+                    .map_or("n/a".into(), dunnage_core::explore::fmt::fmt_items_cell),
                 c.width,
             ),
             ColumnKind::Share if na => pad_right("n/a", c.width),
@@ -392,7 +390,7 @@ fn row_note(s: &Screen<'_>, row: Option<&Row>, width: usize) -> Option<String> {
             );
             // A command is printed whole or not at all: a cut command would not paste.
             let cmd = format!(
-                "disk-cleanup explore {}",
+                "dunnage explore {}",
                 shell_quote(row_path(s.tree, row).as_os_str(), !s.tty)
             );
             let long = format!("{short} From the shell: {cmd}");

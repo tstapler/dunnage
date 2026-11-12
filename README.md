@@ -1,8 +1,8 @@
-# disk-cleanup
+# dunnage
 
 **Reclaim disk space. Review first. Count every byte.**
 
-Caches, stale git worktrees, `node_modules` and `target` trees, Docker and Steam leftovers fill a developer machine without being the work. `disk-cleanup` finds them, shows you a plan, deletes only a plan you applied on purpose, and then reports how much each item actually freed.
+Caches, stale git worktrees, `node_modules` and `target` trees, Docker and Steam leftovers fill a developer machine without being the work. `dunnage` finds them, shows you a plan, deletes only a plan you applied on purpose, and then reports how much each item actually freed.
 
 > **Status: pre-release, under construction.** Nothing below is published yet: no crate, no Homebrew formula, no release binaries. The command surface in this README is the design in `project_plans/rust-disk-cleaner/design/ux.md`; the one terminal session shown is real output, the rest are marked `TODO-OUTPUT`. Sections that need real output carry `TODO-OUTPUT` markers.
 
@@ -12,16 +12,16 @@ Fast, safe disk-space cleaner for developer machines: dry run by default, bytes 
 
 On 2026-11-04 the author's bash cleanup script took a btrfs root from 70 GiB to 312 GiB free. Its output itemised about 11 GiB of the roughly 241 GiB it freed, so there was no way to tell what had been deleted or what had actually freed the space. It also deleted by default, took about two minutes per run, and never looked at the biggest consumers (build directories, unused Docker images and volumes, Steam/Proton leftovers, btrfs unallocated space).
 
-`disk-cleanup` is the replacement, with four rules: it never deletes on a bare run, it never deletes a destructive kind you did not review, it measures freed bytes against the filesystem instead of estimating them, and it prints the part it cannot explain.
+`dunnage` is the replacement, with four rules: it never deletes on a bare run, it never deletes a destructive kind you did not review, it measures freed bytes against the filesystem instead of estimating them, and it prints the part it cannot explain.
 
 <!-- TODO-OUTPUT: add a one-line link to the first real run's numbers (attribution %, run time) once the owner's first three real --apply runs exist. Do not quote the 10x or 95% targets as results. -->
 
 ## What it looks like
 
-A bare run is a dry run. This is real output from a build of this repository (`disk-cleanup 0.1.0`, the default features: only the `caches` kind lists), run with `HOME` pointing at a fixture holding a 5 MB fake npm cache and a 3 MB fake Go build cache. The `Filesystem` block describes the machine it ran on, the author's btrfs root. Which kinds can delete is decided per release gate, so `Scanned 0 roots` and the `not available in this build` note are expected here.
+A bare run is a dry run. This is real output from a build of this repository (`dunnage 0.1.0`, the default features: only the `caches` kind lists), run with `HOME` pointing at a fixture holding a 5 MB fake npm cache and a 3 MB fake Go build cache. The `Filesystem` block describes the machine it ran on, the author's btrfs root. Which kinds can delete is decided per release gate, so `Scanned 0 roots` and the `not available in this build` note are expected here.
 
 ```
-$ disk-cleanup
+$ dunnage
 DRY RUN - nothing will be deleted.   plan-id 4b7ee9f4
 Scanned 0 roots in 0.4s (cache cold, walker backend, 0 dirs, 0 unreadable)
 
@@ -35,7 +35,7 @@ Filesystem ~  (btrfs)
   unallocated    1.0 MiB                              verdict: CRIT
 
 Next:
-  disk-cleanup --apply
+  dunnage --apply
       the 2 FREE rows (selected now)
 
 STATUS KIND         SIZE   AGE  ITEM
@@ -54,11 +54,11 @@ DRY RUN - nothing was deleted.
 
 ## Features
 
-- **Dry run by default.** A bare `disk-cleanup` deletes nothing. Deleting needs `--apply`. There is no `--force`, no `--yes`, and no interactive "yes to all". `-n` and `--dry-run` are accepted as no-ops, and together with `--apply` they are a usage error (exit 64).
+- **Dry run by default.** A bare `dunnage` deletes nothing. Deleting needs `--apply`. There is no `--force`, no `--yes`, and no interactive "yes to all". `-n` and `--dry-run` are accepted as no-ops, and together with `--apply` they are a usage error (exit 64).
 - **Destructive kinds need a reviewed plan.** `build-dirs`, `docker-volumes`, `steam` and `--worktree-ignored discard` additionally require `--plan-id <id>`: the id of a dry run of the same selection, saved in the last 24 hours and equal to the id recomputed at apply time. A new, vanished or newly skipped item changes the id, so an apply can never delete something the dry run did not show. Risky kinds also have to be named in `--kinds`; there is no `all`.
 - **Per-item bytes freed, measured.** Each removed item reports the bytes it freed, and the summary compares their sum with the filesystem's own drop (btrfs `data` bytes_used, or `df` on other filesystems). The unattributed remainder is always printed, never hidden; reflinks and snapshots are the usual cause.
 - **A delete engine that refuses on doubt.** Deletion is file-descriptor relative and refuses symlinks, other filesystems and anything outside the per-kind allowed roots. Guards run again immediately before each delete, because scan results can be minutes old. A dirty or locked worktree, a running build or a referenced Docker volume is skipped and named, with the next command to run.
-- **Checked independently.** The delete engine and its path guards are tested by tests written separately from the code, including adversarial path cases; `disk-cleanup audit verify` re-checks every logged deletion against a separate, reviewed table of allowed roots and exits non-zero if any deletion falls outside it. <!-- TODO: link the adversarial test suite and ci/allowed-roots.txt once they are public. -->
+- **Checked independently.** The delete engine and its path guards are tested by tests written separately from the code, including adversarial path cases; `dunnage audit verify` re-checks every logged deletion against a separate, reviewed table of allowed roots and exits non-zero if any deletion falls outside it. <!-- TODO: link the adversarial test suite and ci/allowed-roots.txt once they are public. -->
 - **btrfs aware.** It reports data, metadata and unallocated space, detects snapshots that may hold space, and can run balance and trim as separate, explicitly named kinds. It does not claim chunks were returned unless a re-read shows it.
 - **Built for agents too.** `--json` prints exactly one document with `schema_version: 1`; exit codes distinguish partial failure, fatal errors and btrfs starvation; refusals are data under `--json`.
 - **Plain-text output.** ASCII, one record per line, no spinner, no cursor movement, colour only as a redundant tint on words (`FREE`, `REFUSED`, `ERR`).
@@ -80,7 +80,7 @@ flowchart TD
 
 ## What it cleans
 
-Tiers decide the gate: **safe** kinds run on `--apply` alone, **guarded** kinds must be named in `--kinds` (the default set also includes `worktrees`), **destructive** kinds must be named and also need a reviewed `--plan-id`. Run `disk-cleanup kinds` for the live list and what is available on your machine.
+Tiers decide the gate: **safe** kinds run on `--apply` alone, **guarded** kinds must be named in `--kinds` (the default set also includes `worktrees`), **destructive** kinds must be named and also need a reviewed `--plan-id`. Run `dunnage kinds` for the live list and what is available on your machine.
 
 | Kind | Tier | Platform | What it touches | Notes |
 |---|---|---|---|---|
@@ -94,7 +94,7 @@ Tiers decide the gate: **safe** kinds run on `--apply` alone, **guarded** kinds 
 | `steam` | destructive | Linux | orphaned Proton prefixes, shader caches, uninstalled-game remnants | prefixes holding saves are protected by default |
 | `btrfs`, `btrfs-trim` | guarded | Linux, btrfs | balance, fstrim | need root; reported separately from freed bytes |
 
-Not cleaned by design: Maven's local repository, source files, `.git`, lockfiles, anything outside the allowed roots. Not supported: Windows, remote machines, cloud storage. <!-- TODO: confirm this table against `disk-cleanup kinds` output at release; kinds not built yet print "not available in this build". -->
+Not cleaned by design: Maven's local repository, source files, `.git`, lockfiles, anything outside the allowed roots. Not supported: Windows, remote machines, cloud storage. <!-- TODO: confirm this table against `dunnage kinds` output at release; kinds not built yet print "not available in this build". -->
 
 ## Install
 
@@ -102,17 +102,17 @@ Not cleaned by design: Maven's local repository, source files, `.git`, lockfiles
 
 ```bash
 # Homebrew (Linux x86_64 and aarch64 via Linuxbrew, macOS arm64) (after the first release)
-brew install tstapler/tap/disk-cleanup
+brew install tstapler/tap/dunnage
 
 # GitHub release archives (after the first release; each has a .sha256 beside it)
-# Archives: disk-cleanup-<version>-<target>.tar.gz for x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu and aarch64-apple-darwin
+# Archives: dunnage-<version>-<target>.tar.gz for x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu and aarch64-apple-darwin
 
 # cargo (after the first release, and only if crates.io publication happened; see Platforms)
-cargo install disk-cleanup
+cargo install dunnage
 
 # From source (today)
-git clone https://github.com/tstapler/disk-cleanup   # TODO-OUTPUT: the repository is not pushed yet
-cd disk-cleanup && cargo install --path crates/cli
+git clone https://github.com/tstapler/dunnage   # TODO-OUTPUT: the repository is not pushed yet
+cd dunnage && cargo install --path crates/cli
 ```
 
 ### Platforms
@@ -127,30 +127,30 @@ Not built: macOS on Intel, musl (static) Linux, Windows. The minimum glibc versi
 
 ## Workspace layout
 
-The repository is one Cargo workspace of five crates, all published to crates.io in dependency order. Only `disk-cleanup` is meant to be installed; the others are internal and carry no stability guarantee.
+The repository is one Cargo workspace of five crates, all published to crates.io in dependency order. Only `dunnage` is meant to be installed; the others are internal and carry no stability guarantee.
 
 | Crate | Role |
 |---|---|
-| `disk-cleanup-scan` | read-only scanner: parallel walker, incremental cache, btrfs reader, build-dir clustering (the former `metascope`, history preserved) |
-| `disk-cleanup-core` | domain types, guards, planner, executor; no direct dependency on `rustix` or `libc` |
-| `disk-cleanup-adapters` | the only crate that unlinks: the fd-relative delete engine, probes, audit log |
-| `disk-cleanup-tui` | the storage explorer's terminal UI |
-| `disk-cleanup` | the binary: argument parsing, rendering, exit codes |
+| `dunnage-scan` | read-only scanner: parallel walker, incremental cache, btrfs reader, build-dir clustering (the former `metascope`, history preserved) |
+| `dunnage-core` | domain types, guards, planner, executor; no direct dependency on `rustix` or `libc` |
+| `dunnage-adapters` | the only crate that unlinks: the fd-relative delete engine, probes, audit log |
+| `dunnage-tui` | the storage explorer's terminal UI |
+| `dunnage` | the binary: argument parsing, rendering, exit codes |
 
 ## Quick start
 
 ```bash
-disk-cleanup                   # 1. dry run: read the plan, nothing is deleted
-disk-cleanup --apply           # 2. delete the safe rows (caches, stale worktrees)
-disk-cleanup --kinds build-dirs                          # 3. dry run a destructive kind; copy the Next: line
-disk-cleanup --apply --kinds build-dirs --plan-id <id>   # 4. apply exactly what you reviewed
-disk-cleanup status            # filesystem usage and verdict (exit 0 ok, 1 warn, 2 crit)
-disk-cleanup scan              # read-only per-repo and per-directory inode and metadata report (the former `metascope scan`)
+dunnage                   # 1. dry run: read the plan, nothing is deleted
+dunnage --apply           # 2. delete the safe rows (caches, stale worktrees)
+dunnage --kinds build-dirs                          # 3. dry run a destructive kind; copy the Next: line
+dunnage --apply --kinds build-dirs --plan-id <id>   # 4. apply exactly what you reviewed
+dunnage status            # filesystem usage and verdict (exit 0 ok, 1 warn, 2 crit)
+dunnage scan              # read-only per-repo and per-directory inode and metadata report (the former `metascope scan`)
 ```
 
 <!-- TODO-OUTPUT: run each command above on a real machine and paste the real ids and output. -->
 
-Every `Next:` line in a plan report is a complete, paste-ready command that reproduces the plan you reviewed. Commands that need root print the absolute path of the binary after `sudo`; `disk-cleanup` never calls `sudo` itself.
+Every `Next:` line in a plan report is a complete, paste-ready command that reproduces the plan you reviewed. Commands that need root print the absolute path of the binary after `sudo`; `dunnage` never calls `sudo` itself.
 
 Exit codes: `0` ok, `1` partial failure, `2` fatal or unsafe, `3` btrfs starved (refused before any delete), `64` usage error, `74` state unreadable, `130`/`143` interrupted.
 
@@ -160,21 +160,21 @@ An interactive, read-only, ncdu-style view of where your space went is in scope 
 
 ## How it compares
 
-Different tools answer different questions. `disk-cleanup` is a cleaner for developer machines with a plan-first workflow; it is not a general disk-usage browser. Claims below come from each project's own README or docs (checked 2026-11-08).
+Different tools answer different questions. `dunnage` is a cleaner for developer machines with a plan-first workflow; it is not a general disk-usage browser. Claims below come from each project's own README or docs (checked 2026-11-08).
 
-| Tool | What it is | Overlap with disk-cleanup | Where it differs |
+| Tool | What it is | Overlap with dunnage | Where it differs |
 |---|---|---|---|
-| [BleachBit](https://github.com/bleachbit/bleachbit) | System cleaner for Windows and Linux that frees disk space and maintains privacy; GUI and CLI; GPL-3.0 | Free space on Linux; offers a Preview before Delete | Targets system and application cleaners and privacy; Windows support; GUI. disk-cleanup targets developer artefacts, has no GUI, and ties destructive applies to a plan id |
-| [ncdu](https://dev.yorhel.nl/ncdu), [gdu](https://github.com/dundee/gdu), [dua](https://github.com/Byron/dua-cli) | Disk-usage analysers with an interactive terminal UI; gdu and dua can delete from the UI, ncdu has a `--enable-delete` option | Finding what uses space; gdu has `--exclusive-size` for reflinks on btrfs/XFS | Analysers first; disk-cleanup knows what is a cache, worktree or build dir. The disk-cleanup storage explorer is planned, not built; use these today for browsing |
-| [`docker system prune`](https://docs.docker.com/reference/cli/docker/system/prune/) | Removes unused containers, networks, images and build cache, optionally volumes | The Docker part of `docker`, `docker-images`, `docker-volumes` | Docker-only; prompts unless `-f`. disk-cleanup lists before deleting, checks volume references and age, and never calls `docker system prune` |
-| [kondo](https://github.com/tbillington/kondo), [npkill](https://github.com/voidcosmos/npkill) | Clean build artefacts from projects (kondo: 20+ project types; npkill: `node_modules`) | `build-dirs` | Per-project tools with their own conventions (npkill has `--dry-run`). disk-cleanup adds the shared plan/apply gate, audit log and measured bytes, and covers more than build dirs |
-| [cargo-sweep](https://github.com/holmgr/cargo-sweep) | Cargo subcommand that deletes old or unused build artefacts from `target/` (by age, toolchain or size; has `--dry-run`) | cargo `target` | Finer-grained inside `target/` (disk-cleanup removes the whole directory). Its README currently lists it as unmaintained and points to cargo-clean-all |
+| [BleachBit](https://github.com/bleachbit/bleachbit) | System cleaner for Windows and Linux that frees disk space and maintains privacy; GUI and CLI; GPL-3.0 | Free space on Linux; offers a Preview before Delete | Targets system and application cleaners and privacy; Windows support; GUI. dunnage targets developer artefacts, has no GUI, and ties destructive applies to a plan id |
+| [ncdu](https://dev.yorhel.nl/ncdu), [gdu](https://github.com/dundee/gdu), [dua](https://github.com/Byron/dua-cli) | Disk-usage analysers with an interactive terminal UI; gdu and dua can delete from the UI, ncdu has a `--enable-delete` option | Finding what uses space; gdu has `--exclusive-size` for reflinks on btrfs/XFS | Analysers first; dunnage knows what is a cache, worktree or build dir. The dunnage storage explorer is planned, not built; use these today for browsing |
+| [`docker system prune`](https://docs.docker.com/reference/cli/docker/system/prune/) | Removes unused containers, networks, images and build cache, optionally volumes | The Docker part of `docker`, `docker-images`, `docker-volumes` | Docker-only; prompts unless `-f`. dunnage lists before deleting, checks volume references and age, and never calls `docker system prune` |
+| [kondo](https://github.com/tbillington/kondo), [npkill](https://github.com/voidcosmos/npkill) | Clean build artefacts from projects (kondo: 20+ project types; npkill: `node_modules`) | `build-dirs` | Per-project tools with their own conventions (npkill has `--dry-run`). dunnage adds the shared plan/apply gate, audit log and measured bytes, and covers more than build dirs |
+| [cargo-sweep](https://github.com/holmgr/cargo-sweep) | Cargo subcommand that deletes old or unused build artefacts from `target/` (by age, toolchain or size; has `--dry-run`) | cargo `target` | Finer-grained inside `target/` (dunnage removes the whole directory). Its README currently lists it as unmaintained and points to cargo-clean-all |
 
 If you only need to look at disk usage, ncdu, gdu or dua are the better tool. If you only clean one ecosystem and are happy with it, the per-ecosystem tools are simpler.
 
 ## Safety and security
 
-What is guarded, and how it is tested, is listed under Features. Deleting user data is the whole job, so the path guards are the security boundary. In short: nothing outside the per-kind allowed roots, no symlink following, no cross-filesystem deletes, no network access, and every deletion is written to an append-only audit log (`$XDG_STATE_HOME/disk-cleanup/audit.jsonl`) before it happens.
+What is guarded, and how it is tested, is listed under Features. Deleting user data is the whole job, so the path guards are the security boundary. In short: nothing outside the per-kind allowed roots, no symlink following, no cross-filesystem deletes, no network access, and every deletion is written to an append-only audit log (`$XDG_STATE_HOME/dunnage/audit.jsonl`) before it happens.
 
 What this does not promise: deleted data cannot be recovered, estimates can overcount under reflinks and snapshots (which is why the remainder is printed), and the tool has not had an external security audit.
 
@@ -195,7 +195,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [RELEASE.md](RELEASE.md).
 
 ## Related
 
-`disk-cleanup scan` is the former `metascope scan`, a read-only diagnostic, now part of this repository; the separate `metascope` project is archived and its history lives here under `crates/scan`. The old `metascope status` is `disk-cleanup status`. <!-- TODO: the metascope repo has no GitHub remote today; add the archive link only if it was ever pushed. -->
+`dunnage scan` is the former `metascope scan`, a read-only diagnostic, now part of this repository; the separate `metascope` project is archived and its history lives here under `crates/scan`. The old `metascope status` is `dunnage status`. <!-- TODO: the metascope repo has no GitHub remote today; add the archive link only if it was ever pushed. -->
 
 ## License
 

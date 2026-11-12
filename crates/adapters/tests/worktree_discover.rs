@@ -11,13 +11,13 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
 
-use disk_cleanup_adapters::targets::worktree_discover::{
+use dunnage_adapters::targets::worktree_discover::{
     collect_repos, discover_worktrees, git_dir_parents, git_dir_parents_until,
 };
-use disk_cleanup_adapters::RealCommandRunner;
-use disk_cleanup_core::ports::{Cmd, CmdOutput, CommandRunner};
-use disk_cleanup_core::testing::FakeCommandRunner;
-use disk_cleanup_core::{ApplyToken, DeleteError, WorktreeRemoval};
+use dunnage_adapters::RealCommandRunner;
+use dunnage_core::ports::{Cmd, CmdOutput, CommandRunner};
+use dunnage_core::testing::FakeCommandRunner;
+use dunnage_core::{ApplyToken, DeleteError, WorktreeRemoval};
 
 /// Wraps the real runner and records every argv.
 struct Counting {

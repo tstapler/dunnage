@@ -11,8 +11,8 @@ use std::ffi::OsString;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::ports::{Cmd, CommandRunner};
-use disk_cleanup_core::{DeleteError, Tri};
+use dunnage_core::ports::{Cmd, CommandRunner};
+use dunnage_core::{DeleteError, Tri};
 
 /// `(answer, first holder as (process name, pid))`.
 pub type InUse = (Tri, Option<(String, u32)>);

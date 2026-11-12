@@ -1,14 +1,12 @@
 //! The I/O half of the gate-stamp check (Story 2.2.1, Task 2.2.1d): the stamp file, the hash of the running
 //! binary and the break-glass confirmation on the controlling terminal. The decision is the pure
-//! `disk_cleanup_core::check_stamp`.
+//! `dunnage_core::check_stamp`.
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::{
-    break_glass_reason, BreakGlass, GateStamp, BREAK_GLASS_WORD, STAMP_SCHEMA,
-};
+use dunnage_core::{break_glass_reason, BreakGlass, GateStamp, BREAK_GLASS_WORD, STAMP_SCHEMA};
 use sha2::{Digest, Sha256};
 
 /// Where `make install-gated` puts the stamp: next to `audit.jsonl` in the state dir.
@@ -62,7 +60,7 @@ pub fn read_stamp(path: &Path) -> Option<GateStamp> {
 /// Why the break-glass did not open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BreakGlassRefusal {
-    /// `DISK_CLEANUP_UNGATED` is unset or empty.
+    /// `DUNNAGE_UNGATED` is unset or empty.
     NotRequested,
     /// `/dev/tty` cannot be opened: an agent session, cron, or `ssh` without `-t`.
     NoTerminal,
@@ -88,7 +86,7 @@ pub fn confirm_bypass(reason: &str, tty: &mut (impl BufRead + Write)) -> io::Res
 }
 
 /// The audited break-glass: needs the variable's reason and a person typing the word on the terminal that
-/// `open_tty` opens. `raw_var` is the value of `DISK_CLEANUP_UNGATED`.
+/// `open_tty` opens. `raw_var` is the value of `DUNNAGE_UNGATED`.
 pub fn break_glass(
     raw_var: Option<&str>,
     open_tty: &dyn Fn() -> io::Result<File>,

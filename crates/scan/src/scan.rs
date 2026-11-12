@@ -631,10 +631,8 @@ mod tests {
     }
 
     fn tmp(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!(
-            "disk-cleanup-scan-test-{name}-{}",
-            std::process::id()
-        ));
+        let d =
+            std::env::temp_dir().join(format!("dunnage-scan-test-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         fs::canonicalize(&d).unwrap()

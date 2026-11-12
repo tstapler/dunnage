@@ -23,25 +23,23 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
-use disk_cleanup_adapters::discover_build::{discover_build_dirs, BuildEnv, BuildKinds, BuildOpts};
-use disk_cleanup_adapters::discover_cache::{discover_caches, CacheEnv};
-use disk_cleanup_adapters::steam::orphans::list_orphans;
-use disk_cleanup_adapters::steam::remnants::list_remnants;
-use disk_cleanup_adapters::steam::{library_roots, SteamInstall};
-use disk_cleanup_adapters::targets::worktree_discover::discover_worktrees;
-use disk_cleanup_adapters::RealDirOps;
-use disk_cleanup_core::explore::hint::{hint_of_node, kind_hint, shape_of};
-use disk_cleanup_core::explore::msg::{
-    ClassifyFacts, Hint, NodeEvent, ScanMode, SteamLibraryFacts,
-};
-use disk_cleanup_core::explore::tree::{ExploreTree, Inside, NodeId};
-use disk_cleanup_core::ports::CmdOutput;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::testing::{FakeClock, FakeCommandRunner, FakeProbe};
-use disk_cleanup_core::{AppId, Dirs, Identity, Kind, Locator, SelectorId};
-use disk_cleanup_scan::classify::ParentFacts;
-use disk_cleanup_scan::index::{Backend, CollectRequest, StreamRequest};
-use disk_cleanup_scan::walker::WalkerBackend;
+use dunnage_adapters::discover_build::{discover_build_dirs, BuildEnv, BuildKinds, BuildOpts};
+use dunnage_adapters::discover_cache::{discover_caches, CacheEnv};
+use dunnage_adapters::steam::orphans::list_orphans;
+use dunnage_adapters::steam::remnants::list_remnants;
+use dunnage_adapters::steam::{library_roots, SteamInstall};
+use dunnage_adapters::targets::worktree_discover::discover_worktrees;
+use dunnage_adapters::RealDirOps;
+use dunnage_core::explore::hint::{hint_of_node, kind_hint, shape_of};
+use dunnage_core::explore::msg::{ClassifyFacts, Hint, NodeEvent, ScanMode, SteamLibraryFacts};
+use dunnage_core::explore::tree::{ExploreTree, Inside, NodeId};
+use dunnage_core::ports::CmdOutput;
+use dunnage_core::roots::RootSet;
+use dunnage_core::testing::{FakeClock, FakeCommandRunner, FakeProbe};
+use dunnage_core::{AppId, Dirs, Identity, Kind, Locator, SelectorId};
+use dunnage_scan::classify::ParentFacts;
+use dunnage_scan::index::{Backend, CollectRequest, StreamRequest};
+use dunnage_scan::walker::WalkerBackend;
 use proptest::prelude::*;
 
 // ---------------------------------------------------------------- fixture
@@ -397,9 +395,9 @@ fn world(site: &Site, with_steam: bool, explore: &[PathBuf]) -> World {
         .allowed(Kind::Cache)
         .into_iter()
         .filter_map(|t| match t {
-            disk_cleanup_core::AllowedTarget::Exact(p) => Some(p),
-            disk_cleanup_core::AllowedTarget::Within { .. }
-            | disk_cleanup_core::AllowedTarget::BelowScanRoot(_) => None,
+            dunnage_core::AllowedTarget::Exact(p) => Some(p),
+            dunnage_core::AllowedTarget::Within { .. }
+            | dunnage_core::AllowedTarget::BelowScanRoot(_) => None,
         })
         .collect();
 
@@ -634,12 +632,12 @@ fn the_hint_should_agree_with_the_engine_on_the_fixed_look_alikes() {
     };
     let nm = yes(
         SelectorId::BuildDirs,
-        disk_cleanup_core::explore::msg::Tier::Destructive,
+        dunnage_core::explore::msg::Tier::Destructive,
     );
     assert_eq!(hint_at(&w, &c.join("a/node_modules")), nm);
     assert_eq!(hint_at(&w, &c.join("r/target")), nm);
-    let not_shape = Hint::No(disk_cleanup_core::explore::msg::NoReason::NotShape);
-    let inside = Hint::No(disk_cleanup_core::explore::msg::NoReason::InsideBuildOrGit);
+    let not_shape = Hint::No(dunnage_core::explore::msg::NoReason::NotShape);
+    let inside = Hint::No(dunnage_core::explore::msg::NoReason::InsideBuildOrGit);
     for p in [
         "nopkg/node_modules",
         "nocargo/target",
@@ -660,17 +658,14 @@ fn the_hint_should_agree_with_the_engine_on_the_fixed_look_alikes() {
     // worktrees: Shape; the unregistered one is no candidate, the registered one is
     let wt = Hint::Shape {
         selector: SelectorId::Worktrees,
-        tier: disk_cleanup_core::explore::msg::Tier::Guarded,
+        tier: dunnage_core::explore::msg::Tier::Guarded,
     };
     assert_eq!(hint_at(&w, &c.join("w/.claude/worktrees/agent-2")), wt);
     assert_eq!(hint_at(&w, &c.join("w/.claude/worktrees/agent-3")), wt);
     assert!(!w.worktree.contains(&c.join("w/.claude/worktrees/agent-2")));
     assert!(w.worktree.contains(&c.join("w/.claude/worktrees/agent-3")));
     // caches
-    let cache = yes(
-        SelectorId::Caches,
-        disk_cleanup_core::explore::msg::Tier::Safe,
-    );
+    let cache = yes(SelectorId::Caches, dunnage_core::explore::msg::Tier::Safe);
     assert_eq!(hint_at(&w, &s.home.join(".npm/_cacache")), cache);
     assert_eq!(hint_at(&w, &s.home.join(".npm/_cacache2")), not_shape);
     assert_eq!(hint_at(&w, &s.home.join(".cache/go-build")), cache);
@@ -682,19 +677,16 @@ fn the_hint_should_agree_with_the_engine_on_the_fixed_look_alikes() {
     // steam
     let prefix = yes(
         SelectorId::Steam,
-        disk_cleanup_core::explore::msg::Tier::Destructive,
+        dunnage_core::explore::msg::Tier::Destructive,
     );
-    let installed = Hint::No(disk_cleanup_core::explore::msg::NoReason::InstalledSteamGame);
+    let installed = Hint::No(dunnage_core::explore::msg::NoReason::InstalledSteamGame);
     let lib = &s.steam_root.join("steamapps");
     assert_eq!(hint_at(&w, &lib.join("compatdata/99999")), prefix);
     assert_eq!(hint_at(&w, &lib.join("compatdata/620")), installed);
     assert_eq!(hint_at(&w, &lib.join("common/Portal 2")), installed);
     assert_eq!(
         hint_at(&w, &lib.join("common/OldGame")),
-        yes(
-            SelectorId::Steam,
-            disk_cleanup_core::explore::msg::Tier::Guarded
-        )
+        yes(SelectorId::Steam, dunnage_core::explore::msg::Tier::Guarded)
     );
 }
 
@@ -707,7 +699,7 @@ fn a_relocated_gocache_should_be_yes_only_once_the_facts_hold_it() {
     w.facts.cache_paths.retain(|p| p != &go);
     assert_eq!(
         hint_at(&w, &go),
-        Hint::No(disk_cleanup_core::explore::msg::NoReason::NotShape)
+        Hint::No(dunnage_core::explore::msg::NoReason::NotShape)
     );
     let bad = violations(&w, &real);
     assert!(
@@ -729,7 +721,7 @@ fn nested_look_alikes_above_the_explore_root_should_be_shape_not_yes() {
         hint_at(&w, &inner.join("node_modules")),
         Hint::Shape {
             selector: SelectorId::BuildDirs,
-            tier: disk_cleanup_core::explore::msg::Tier::Destructive
+            tier: dunnage_core::explore::msg::Tier::Destructive
         }
     );
     // and a target inside a target, started inside the outer one

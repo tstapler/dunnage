@@ -1,5 +1,5 @@
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
-//! A real pty around the real `disk-cleanup explore` binary, shared by the Gate F journeys (Story 6.5.6):
+//! A real pty around the real `dunnage explore` binary, shared by the Gate F journeys (Story 6.5.6):
 //! `explore_pty.rs`, `explore_delete_pty.rs` and `explore_fulldisk.rs`. The binary runs under the fixture
 //! environment of `Fixture::command_for`, in a shell that saves `stty -a` before it and after it.
 
@@ -309,14 +309,14 @@ impl Pty {
         self.pump();
     }
 
-    /// The pid of the `disk-cleanup` process the shell started.
+    /// The pid of the `dunnage` process the shell started.
     pub fn binary_pid(&self) -> u32 {
         let end = Instant::now() + WAIT;
         loop {
-            if let Some(p) = descendant_named(self.shell_pid_for_children(), "disk-cleanup") {
+            if let Some(p) = descendant_named(self.shell_pid_for_children(), "dunnage") {
                 return p;
             }
-            assert!(Instant::now() < end, "no disk-cleanup child of the shell");
+            assert!(Instant::now() < end, "no dunnage child of the shell");
             std::thread::sleep(Duration::from_millis(20));
         }
     }

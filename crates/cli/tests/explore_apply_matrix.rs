@@ -54,10 +54,10 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use disk_cleanup_adapters::testing::{At, Event, FaultDirOps};
-use disk_cleanup_adapters::RealDirOps;
-use disk_cleanup_core::plan::ItemIdentity;
-use disk_cleanup_core::{AuditRecord, FileKind, Outcome, SkipReason, Status};
+use dunnage_adapters::testing::{At, Event, FaultDirOps};
+use dunnage_adapters::RealDirOps;
+use dunnage_core::plan::ItemIdentity;
+use dunnage_core::{AuditRecord, FileKind, Outcome, SkipReason, Status};
 use explore_rig::{manifest, Ex, Knobs, Ran};
 
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -95,7 +95,7 @@ impl Fx {
         }
     }
 
-    fn ops(&self) -> impl Fn(&disk_cleanup_core::ApplyToken) -> RealDirOps + '_ {
+    fn ops(&self) -> impl Fn(&dunnage_core::ApplyToken) -> RealDirOps + '_ {
         self.ex.confined_ops()
     }
 
@@ -108,7 +108,7 @@ impl Fx {
     /// set) or in the window after the gate (the per-item identity compare sees it).
     fn run_swapped(
         &self,
-        confirmed: disk_cleanup_core::explore::confirm::ConfirmedPlan,
+        confirmed: dunnage_core::explore::confirm::ConfirmedPlan,
         change: impl FnOnce() + Send + 'static,
         after_gate: bool,
     ) -> Ran {
@@ -195,7 +195,7 @@ fn a02_symlink_swapped_for_a_directory_after_open_dir_is_not_followed() {
     let outside_before = manifest(&fx.outside);
     let done = Arc::new(AtomicBool::new(false));
     let (flag, outside) = (done.clone(), fx.outside.clone());
-    let ops = |_: &disk_cleanup_core::ApplyToken| {
+    let ops = |_: &dunnage_core::ApplyToken| {
         let (flag, outside) = (flag.clone(), outside.clone());
         FaultDirOps::wrap(RealDirOps::confined_to(&fx.ex.base))
             .hook(Event::AfterOpenDir, move |ctx| {
@@ -221,7 +221,7 @@ fn a03_entry_replaced_by_a_symlink_before_unlinkat_unlinks_the_link_only() {
     let outside_before = manifest(&fx.outside);
     let done = Arc::new(AtomicBool::new(false));
     let (flag, keep) = (done.clone(), fx.outside.join("keep.txt"));
-    let ops = |_: &disk_cleanup_core::ApplyToken| {
+    let ops = |_: &dunnage_core::ApplyToken| {
         let (flag, keep) = (flag.clone(), keep.clone());
         FaultDirOps::wrap(RealDirOps::confined_to(&fx.ex.base))
             .hook(Event::BeforeUnlinkat, move |ctx| {
@@ -382,7 +382,7 @@ fn a09_enospc_on_the_fifth_unlinkat_stops_every_later_item() {
     let fx = Fx::new();
     let trees = many_trees(&fx, 4, 3);
     let confirmed = fx.ex.confirmed(&trees);
-    let ops = |_: &disk_cleanup_core::ApplyToken| {
+    let ops = |_: &dunnage_core::ApplyToken| {
         FaultDirOps::wrap(RealDirOps::confined_to(&fx.ex.base))
             .enospc_on_nth_unlinkat(5)
             .build()
@@ -410,7 +410,7 @@ fn a10_bytes_freed_before_enospc_are_in_the_result() {
         std::fs::write(d.join(format!("f{j}")), vec![b'z'; 8192]).unwrap();
     }
     let confirmed = fx.ex.confirmed(&[d.clone()]);
-    let ops = |_: &disk_cleanup_core::ApplyToken| {
+    let ops = |_: &dunnage_core::ApplyToken| {
         FaultDirOps::wrap(RealDirOps::confined_to(&fx.ex.base))
             .enospc_on_nth_unlinkat(4)
             .build()
@@ -430,7 +430,7 @@ fn a11_a_subdirectory_on_another_mount_id_is_not_entered_and_siblings_are_remove
     std::fs::write(mnt.join("theirs"), "not yours").unwrap();
     std::fs::write(fx.nm.join("mine"), "mine").unwrap();
     let confirmed = fx.ex.confirmed(&[fx.nm.clone()]);
-    let ops = |_: &disk_cleanup_core::ApplyToken| {
+    let ops = |_: &dunnage_core::ApplyToken| {
         FaultDirOps::wrap(RealDirOps::confined_to(&fx.ex.base))
             .report_mnt_id(At::Name(OsString::from("mnt")), 9)
             .build()
@@ -583,7 +583,7 @@ fn a17_enotempty_from_a_concurrent_writer_is_busy_without_a_retry_loop() {
     let hits = Arc::new(AtomicUsize::new(0));
     let h = hits.clone();
     let confirmed = fx.ex.confirmed(&[fx.nm.clone()]);
-    let ops = |_: &disk_cleanup_core::ApplyToken| {
+    let ops = |_: &dunnage_core::ApplyToken| {
         let h = h.clone();
         FaultDirOps::wrap(RealDirOps::confined_to(&fx.ex.base))
             .hook(Event::BeforeUnlinkat, move |ctx| {
@@ -618,7 +618,7 @@ fn a18_enoent_during_the_delete_is_already_removed() {
     let done = Arc::new(AtomicBool::new(false));
     let flag = done.clone();
     let confirmed = fx.ex.confirmed(&[fx.nm.clone()]);
-    let ops = |_: &disk_cleanup_core::ApplyToken| {
+    let ops = |_: &dunnage_core::ApplyToken| {
         let flag = flag.clone();
         FaultDirOps::wrap(RealDirOps::confined_to(&fx.ex.base))
             .hook(Event::BeforeUnlinkat, move |ctx| {

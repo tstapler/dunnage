@@ -1,10 +1,10 @@
 //! The headroom line (`tui/ux-explorer.md` 3.3, UX-T15): free space of one filesystem on one line, in the
 //! wide, compact or narrow form that fits, ending with the verdict word of
-//! `disk_cleanup_scan::health::assess` (the metascope assessment).
+//! `dunnage_scan::health::assess` (the metascope assessment).
 
 use std::path::Path;
 
-use disk_cleanup_scan::health::{assess, Thresholds, Verdict};
+use dunnage_scan::health::{assess, Thresholds, Verdict};
 
 use super::fmt::fmt_size_cell;
 use super::layout::{cells, cut_name};

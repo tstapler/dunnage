@@ -1,7 +1,7 @@
 # cargo-mutants 27.1.0, Story 3.2.4 (branch w12-324): the guard files of ci/mutants.d/3.2.4.files, run per file with the tests that own them.
-# core: cargo mutants --no-shuffle -j 3 -f crates/core/src/targets/build_dir.rs -f crates/core/src/guard.rs --package disk-cleanup-core -- --test build_dir_guard --test keep_newest --test guard --test guard_prop
+# core: cargo mutants --no-shuffle -j 3 -f crates/core/src/targets/build_dir.rs -f crates/core/src/guard.rs --package dunnage-core -- --test build_dir_guard --test keep_newest --test guard --test guard_prop
 #   -> 38 mutants: 32 caught, 6 unviable, 0 missed.
-# adapters: cargo mutants --no-shuffle -j 3 -f crates/adapters/src/targets/build_dir.rs --package disk-cleanup-adapters -- --features test-support --test build_dir_target --test build_dir_recheck
+# adapters: cargo mutants --no-shuffle -j 3 -f crates/adapters/src/targets/build_dir.rs --package dunnage-adapters -- --features test-support --test build_dir_target --test build_dir_recheck
 #   -> 100 mutants: 69 caught, 19 unviable, 12 missed (below). All 12 survive for a stated reason, none changes what can be deleted:
 #   - lines 277-303 (recheck_build_dir): the `cheap_ok` short-circuit and the early-exit floor of the mtime probe are optimisations; the final verdict is recomputed by decide_build_dir from the same facts, so a mutated shortcut gives the same verdict (equivalent mutants).
 #   - 196 (gather): `path != root` after `starts_with` only rejects the scan root itself, which strip_prefix rejects on the next line anyway (equivalent).

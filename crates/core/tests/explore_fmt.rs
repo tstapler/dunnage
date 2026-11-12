@@ -4,8 +4,8 @@
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 
-use disk_cleanup_core::escape::{escape, needs_escape, unescape, FORMAT_RANGES};
-use disk_cleanup_core::explore::fmt::{fmt_size_cell, share_cell, SIZE_CELL_MAX};
+use dunnage_core::escape::{escape, needs_escape, unescape, FORMAT_RANGES};
+use dunnage_core::explore::fmt::{fmt_size_cell, share_cell, SIZE_CELL_MAX};
 use proptest::prelude::*;
 
 const GIB: u64 = 1 << 30;

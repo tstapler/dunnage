@@ -11,14 +11,14 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::Mutex;
 
-use disk_cleanup_core::docker::{DockerContainer, DockerError, DockerInventory, DockerVolume};
-use disk_cleanup_core::ports::{Cmd, Env};
-use disk_cleanup_core::selector::{default_min_age_secs, DockerVolumes, Selection};
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::targets::docker_volume_guard::{
+use dunnage_core::docker::{DockerContainer, DockerError, DockerInventory, DockerVolume};
+use dunnage_core::ports::{Cmd, Env};
+use dunnage_core::selector::{default_min_age_secs, DockerVolumes, Selection};
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::targets::docker_volume_guard::{
     decide_volume, evidence_text, Contents, VolumeFacts, VolumeOpts,
 };
-use disk_cleanup_core::{
+use dunnage_core::{
     AllocatedBytes, ApplyToken, Candidate, CandidateId, DeleteError, DeleteFailure, DockerFacts,
     DockerId, Freed, KindFacts, Locator, Outcome, SelectorId, SkipReason, Status,
 };
@@ -28,7 +28,7 @@ use crate::targets::docker_common::{
     failure, freed_of, lock, read, remove, skip_of, GateMemo, DOCKER_IDENT,
 };
 use crate::targets::docker_images::DAEMON_SIDE_NOTE;
-use disk_cleanup_core::par::{default_workers, par_map};
+use dunnage_core::par::{default_workers, par_map};
 
 const COMPOSE_PROJECT: &str = "com.docker.compose.project";
 const COMPOSE_WORKING_DIR: &str = "com.docker.compose.project.working_dir";
@@ -138,7 +138,7 @@ impl DockerVolumesTarget {
             approx_size_bytes: listed.approx_size_bytes,
             created_epoch: created_at
                 .as_deref()
-                .and_then(disk_cleanup_core::docker::parse_docker_time),
+                .and_then(dunnage_core::docker::parse_docker_time),
             contents: contents_of(env, &listed.mountpoint),
         };
         let evidence = evidence_text(

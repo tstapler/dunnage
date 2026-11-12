@@ -14,5 +14,5 @@ Plan 33068c75 covers exactly 12 marked items:
   ~/code/app/some-long-directory-name-5/node_modules
   ... and 4 more items
 Total 12.0 GiB (attributed) on / (btrfs).
-Audit log: ~/.local/state/disk-cleanup/audit.jsonl
+Audit log: ~/.local/state/dunnage/audit.jsonl
 Type 12 and press Enter to delete, Esc to cancel: _

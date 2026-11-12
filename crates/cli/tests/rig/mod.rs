@@ -6,19 +6,19 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use disk_cleanup_cli::app::{self, ApplyMode, Io, Ports};
-use disk_cleanup_cli::args::{self, Parsed};
-use disk_cleanup_cli::terminal::Terminal;
-use disk_cleanup_cli::wiring::audit::{GateExit, StampOutcome};
-use disk_cleanup_core::delete_types::{DeleteFailure, Freed};
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::testing::{
+use dunnage_cli::app::{self, ApplyMode, Io, Ports};
+use dunnage_cli::args::{self, Parsed};
+use dunnage_cli::terminal::Terminal;
+use dunnage_cli::wiring::audit::{GateExit, StampOutcome};
+use dunnage_core::delete_types::{DeleteFailure, Freed};
+use dunnage_core::ports::Env;
+use dunnage_core::selector::Selection;
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::testing::{
     FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe, FakeRunGuard,
     FakeSpaceMeter,
 };
-use disk_cleanup_core::{
+use dunnage_core::{
     AllocatedBytes, ApplyToken, BuildInfo, Candidate, CandidateId, Dirs, DiskVerdict, RunRoots,
     SelectorId,
 };
@@ -139,9 +139,9 @@ impl Rig {
             plans: &self.plans,
             dirs: Dirs {
                 home: PathBuf::from("/home/u"),
-                state: PathBuf::from("/home/u/.local/state/disk-cleanup"),
-                cache: PathBuf::from("/home/u/.cache/disk-cleanup"),
-                config: PathBuf::from("/home/u/.config/disk-cleanup"),
+                state: PathBuf::from("/home/u/.local/state/dunnage"),
+                cache: PathBuf::from("/home/u/.cache/dunnage"),
+                config: PathBuf::from("/home/u/.config/dunnage"),
             },
         }
     }
@@ -200,7 +200,7 @@ pub fn run(rig: &Rig, targets: &[&dyn Target], argv: &[&str], apply: bool, stamp
         build: build(),
         roots: RunRoots::default(),
         scan_roots: 1,
-        exe: PathBuf::from("/usr/bin/disk-cleanup"),
+        exe: PathBuf::from("/usr/bin/dunnage"),
         term: Terminal::pipe(),
         stdout_tty: false,
         run_id: "run-1".into(),

@@ -7,8 +7,8 @@ use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_scan::estimate::Stats;
-use disk_cleanup_scan::{classify_dir, ParentFacts};
+use dunnage_scan::estimate::Stats;
+use dunnage_scan::{classify_dir, ParentFacts};
 
 use super::msg::{NodeEvent, ScanMode};
 use super::names::{IdMap, NameArena};

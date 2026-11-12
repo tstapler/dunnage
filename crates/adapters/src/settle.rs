@@ -7,7 +7,7 @@ use std::path::Path;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use disk_cleanup_core::Settled;
+use dunnage_core::Settled;
 
 /// Flush the filesystem holding `path`. Best effort: a failure only makes the wait longer.
 #[cfg(target_os = "linux")]

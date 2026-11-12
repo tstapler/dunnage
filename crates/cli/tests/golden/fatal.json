@@ -2,7 +2,7 @@
   "errors": [
     {
       "code": "lock_held",
-      "message": "error: another disk-cleanup run is active (pid 4242). Nothing was deleted. Wait for it to finish ('pgrep -a disk-cleanup' shows it), then run again.",
+      "message": "error: another dunnage run is active (pid 4242). Nothing was deleted. Wait for it to finish ('pgrep -a dunnage' shows it), then run again.",
       "path": null
     }
   ],

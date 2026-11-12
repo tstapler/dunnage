@@ -9,13 +9,11 @@ use std::os::unix::ffi::OsStringExt;
 use std::path::PathBuf;
 
 use common::{build_dir, selection as sel_of, NOW};
-use disk_cleanup_core::plan::{non_items, plan_only, OnlyMode, Plan, PlanId};
-use disk_cleanup_core::ports::{merge_saved, SAVED_ENTRY_MAX_BYTES};
-use disk_cleanup_core::selector::{
-    Selection, ONLY_MAX_BYTES, ONLY_MAX_VALUES, ONLY_QUOTED_MAX_BYTES,
-};
-use disk_cleanup_core::target::Guarded;
-use disk_cleanup_core::{Candidate, SelectorId};
+use dunnage_core::plan::{non_items, plan_only, OnlyMode, Plan, PlanId};
+use dunnage_core::ports::{merge_saved, SAVED_ENTRY_MAX_BYTES};
+use dunnage_core::selector::{Selection, ONLY_MAX_BYTES, ONLY_MAX_VALUES, ONLY_QUOTED_MAX_BYTES};
+use dunnage_core::target::Guarded;
+use dunnage_core::{Candidate, SelectorId};
 
 fn builds() -> Vec<Candidate> {
     (1..=3).map(|i| build_dir(i, 4096, 70)).collect()
@@ -143,17 +141,14 @@ fn the_quoted_flags_should_stay_under_24_kib_and_round_trip_through_last_plan() 
     let mut saved = plan.saved_selection(&six, 1000, NOW);
     saved.items = (0..400)
         .map(|i| {
-            disk_cleanup_core::ItemKey::new(&format!(
-                "build-dirs:/home/u/code/{i}/{}",
-                "y".repeat(150)
-            ))
+            dunnage_core::ItemKey::new(&format!("build-dirs:/home/u/code/{i}/{}", "y".repeat(150)))
         })
         .collect();
     let got = merge_saved(vec![], vec![saved], 1000, NOW);
     assert_eq!(got[0].flags, six.flags());
     assert!(got[0].items_truncated);
     assert!(serde_json::to_vec(&got[0]).unwrap().len() <= SAVED_ENTRY_MAX_BYTES);
-    let back: disk_cleanup_core::SavedSelection =
+    let back: dunnage_core::SavedSelection =
         serde_json::from_slice(&serde_json::to_vec(&got[0]).unwrap()).unwrap();
     assert_eq!(back.flags, six.flags());
 }

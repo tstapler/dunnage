@@ -5,7 +5,7 @@
 #   rehearse-full-disk.sh [--no-reserve | --prime 'CMD'] -- <command...>
 #       run <command> with XDG_STATE_HOME on a full tmpfs. Default: a 1 MiB last_plan.reserve is written before
 #       the fill (what the binary leaves behind). --prime 'CMD' runs CMD first with XDG_STATE_HOME set (for
-#       example 'disk-cleanup status') so the real binary creates its own reserves. --no-reserve: nothing before
+#       example 'dunnage status') so the real binary creates its own reserves. --no-reserve: nothing before
 #       the fill (the first run on an already-full disk).
 #   --cache-too (Story 6.5.6, Gate F): a second 24 MiB tmpfs, also full, is mounted for XDG_CACHE_HOME, so the
 #       explorer's cache save has no room either (UX-T22). Combine with the flags above, before `--`.
@@ -37,24 +37,24 @@ fill_and_run() { # $1 = default|none|prime, $2 = prime command or '', rest = com
     exec unshare -U --map-user="$uid" --map-group="$gid" bash -c "
       set -euo pipefail
       mode=\"\$1\"; prime=\"\$2\"; state=\"\$3\"; cache=\"\$4\"; shift 4
-      mkdir -p \"\$state/disk-cleanup\"
+      mkdir -p \"\$state/dunnage\"
       export XDG_STATE_HOME=\"\$state\"
       case \"\$mode\" in
-        default) dd if=/dev/zero of=\"\$state/disk-cleanup/last_plan.reserve\" bs=1k count=1024 status=none ;;
+        default) dd if=/dev/zero of=\"\$state/dunnage/last_plan.reserve\" bs=1k count=1024 status=none ;;
         prime)   sh -c \"\$prime\" || echo \"rehearsal: the prime command exited \$? (continuing: status exits 2 on a CRIT disk)\" >&2 ;;
         none)    : ;;
       esac
       dd if=/dev/zero of=\"\$state/fill\" bs=4k count=8000 status=none 2>/dev/null || true
       if [ -n \"\$cache\" ]; then
-        mkdir -p \"\$cache/disk-cleanup\"
+        mkdir -p \"\$cache/dunnage\"
         export XDG_CACHE_HOME=\"\$cache\"
         dd if=/dev/zero of=\"\$cache/fill\" bs=4k count=8000 status=none 2>/dev/null || true
-        if ( echo x > \"\$cache/disk-cleanup/new-file\" ) 2>/dev/null; then echo \"REHEARSAL BAD: the cache dir is not full\" >&2; exit 3; fi
-        rm -f \"\$cache/disk-cleanup/new-file\"
+        if ( echo x > \"\$cache/dunnage/new-file\" ) 2>/dev/null; then echo \"REHEARSAL BAD: the cache dir is not full\" >&2; exit 3; fi
+        rm -f \"\$cache/dunnage/new-file\"
         echo \"rehearsal: XDG_CACHE_HOME=\$cache is full\" >&2
       fi
-      if ( echo x > \"\$state/disk-cleanup/new-file\" ) 2>/dev/null; then echo \"REHEARSAL BAD: the state dir is not full\" >&2; exit 3; fi
-      rm -f \"\$state/disk-cleanup/new-file\"
+      if ( echo x > \"\$state/dunnage/new-file\" ) 2>/dev/null; then echo \"REHEARSAL BAD: the state dir is not full\" >&2; exit 3; fi
+      rm -f \"\$state/dunnage/new-file\"
       echo \"rehearsal: XDG_STATE_HOME=\$state is full (reserve: \$mode)\" >&2
       \"\$@\"
     " _ "$MODE" "$PRIME" "$state" "$cache" "$@"
@@ -69,23 +69,23 @@ if [ "${1:-}" = --selftest ]; then
   ok() { echo "ok: $*"; }
   no() { echo "SELFTEST BAD: $*"; bad=1; }
   # 1. without a reserve: writing data fails, as on the first run on a full disk
-  if fill_and_run none '' bash -c 'echo x > "$XDG_STATE_HOME/disk-cleanup/last_plan"' 2>/dev/null; then
+  if fill_and_run none '' bash -c 'echo x > "$XDG_STATE_HOME/dunnage/last_plan"' 2>/dev/null; then
     no "creating last_plan on the full tmpfs succeeded"; else ok "no reserve: creating last_plan fails (ENOSPC)"; fi
   # 2. with the default 1 MiB reserve: truncating the reserve frees room and the retry succeeds
   if fill_and_run default '' bash -c '
-      d="$XDG_STATE_HOME/disk-cleanup"
+      d="$XDG_STATE_HOME/dunnage"
       ( echo x > "$d/last_plan" ) 2>/dev/null && exit 4   # first write must fail
       : > "$d/last_plan.reserve"                          # release the reserve
       echo saved > "$d/last_plan"                         # retry must succeed
       [ "$(cat "$d/last_plan")" = saved ]' 2>/dev/null; then
     ok "with a reserve: first write fails, release + retry succeeds"; else no "reserve release did not make room"; fi
   # 3. --prime runs before the fill, so a binary can create its own reserves
-  if fill_and_run prime 'dd if=/dev/zero of="$XDG_STATE_HOME/disk-cleanup/audit.reserve" bs=1k count=64 status=none' \
-      bash -c 'test -s "$XDG_STATE_HOME/disk-cleanup/audit.reserve"' 2>/dev/null; then
+  if fill_and_run prime 'dd if=/dev/zero of="$XDG_STATE_HOME/dunnage/audit.reserve" bs=1k count=64 status=none' \
+      bash -c 'test -s "$XDG_STATE_HOME/dunnage/audit.reserve"' 2>/dev/null; then
     ok "--prime output exists on the full state dir"; else no "--prime did not run before the fill"; fi
-  # 3b. a prime command that exits non-zero (`disk-cleanup status` exits 2 on a CRIT disk) does not abort the rehearsal
-  if fill_and_run prime 'dd if=/dev/zero of="$XDG_STATE_HOME/disk-cleanup/audit.reserve" bs=1k count=8 status=none; exit 2' \
-      bash -c 'test -s "$XDG_STATE_HOME/disk-cleanup/audit.reserve"' 2>/dev/null; then
+  # 3b. a prime command that exits non-zero (`dunnage status` exits 2 on a CRIT disk) does not abort the rehearsal
+  if fill_and_run prime 'dd if=/dev/zero of="$XDG_STATE_HOME/dunnage/audit.reserve" bs=1k count=8 status=none; exit 2' \
+      bash -c 'test -s "$XDG_STATE_HOME/dunnage/audit.reserve"' 2>/dev/null; then
     ok "a failing --prime command still leaves the rehearsal running"; else no "a failing --prime command aborted the rehearsal"; fi
   # 3c. the exit status of the rehearsed command is the script's
   fill_and_run none '' bash -c 'exit 7' 2>/dev/null && rc7=0 || rc7=$?
@@ -96,7 +96,7 @@ if [ "${1:-}" = --selftest ]; then
   # 3e. --cache-too: XDG_CACHE_HOME is a second full tmpfs; without it the variable is the caller's own
   if CACHE_TOO=1 fill_and_run none '' bash -c '
       case "$XDG_CACHE_HOME" in *dc-rehearse-cache*) ;; *) exit 5 ;; esac
-      ( echo x > "$XDG_CACHE_HOME/disk-cleanup/f" ) 2>/dev/null && exit 6
+      ( echo x > "$XDG_CACHE_HOME/dunnage/f" ) 2>/dev/null && exit 6
       [ "$(stat -f -c %T "$XDG_CACHE_HOME")" = tmpfs ] && [ "$XDG_CACHE_HOME" != "$XDG_STATE_HOME" ]' 2>/dev/null; then
     ok "--cache-too: XDG_CACHE_HOME is its own full tmpfs"; else no "--cache-too did not give a full cache tmpfs"; fi
   if fill_and_run none '' bash -c 'case "${XDG_CACHE_HOME:-}" in *dc-rehearse-cache*) exit 7 ;; esac' 2>/dev/null; then

@@ -8,19 +8,19 @@ use std::fs;
 use std::os::unix::fs::{symlink, MetadataExt};
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_adapters::discover_cache::{
+use dunnage_adapters::discover_cache::{
     discover_caches, CacheDiscovery, CacheEnv, CacheVerdict, Via,
 };
-use disk_cleanup_adapters::testing::{FaultDirOps, Op};
-use disk_cleanup_adapters::treestat::{measure, MeasureOpts};
-use disk_cleanup_adapters::{open_verified_root, RealDirOps};
-use disk_cleanup_core::ports::CmdOutput;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::testing::{FakeCommandRunner, FakeProbe};
-use disk_cleanup_core::{Identity, Locator, RootDev, SkipReason};
+use dunnage_adapters::testing::{FaultDirOps, Op};
+use dunnage_adapters::treestat::{measure, MeasureOpts};
+use dunnage_adapters::{open_verified_root, RealDirOps};
+use dunnage_core::ports::CmdOutput;
+use dunnage_core::roots::RootSet;
+use dunnage_core::testing::{FakeCommandRunner, FakeProbe};
+use dunnage_core::{Identity, Locator, RootDev, SkipReason};
 
 #[allow(clippy::unnecessary_wraps)]
-fn answer(path: &Path) -> Result<CmdOutput, disk_cleanup_core::DeleteError> {
+fn answer(path: &Path) -> Result<CmdOutput, dunnage_core::DeleteError> {
     Ok(CmdOutput {
         stdout: format!("{}\n", path.display()).into_bytes(),
         stderr: Vec::new(),
@@ -65,7 +65,7 @@ fn walked_size(p: &Path) -> u64 {
         .0
 }
 
-fn path_of(i: &disk_cleanup_adapters::discover_cache::CacheItem) -> PathBuf {
+fn path_of(i: &dunnage_adapters::discover_cache::CacheItem) -> PathBuf {
     match i.candidate.locator() {
         Locator::Path(p) => p.clone(),
         other => panic!("{other:?}"),
@@ -184,7 +184,7 @@ fn apt_should_be_Skip_NeedsRoot_and_not_walked_When_not_root() {
     ));
     assert!(matches!(
         item.candidate.facts(),
-        disk_cleanup_core::KindFacts::Cache(c) if c.apt
+        dunnage_core::KindFacts::Cache(c) if c.apt
     ));
     assert_eq!(r.ops_open_root, 0);
 }

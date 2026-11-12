@@ -7,7 +7,7 @@ use std::os::unix::fs::MetadataExt;
 /// Comparing it with a bare integer does not compile; go through [`Identity::on_dev`]:
 ///
 /// ```compile_fail
-/// use disk_cleanup_core::Identity;
+/// use dunnage_core::Identity;
 /// let id = Identity { dev: 28, ino: 5 };
 /// assert!(28u64 == id);
 /// ```
@@ -39,7 +39,7 @@ pub struct RootDev(pub u64);
 /// Allocated and apparent sizes cannot be added to each other:
 ///
 /// ```compile_fail
-/// use disk_cleanup_core::{AllocatedBytes, ApparentBytes};
+/// use dunnage_core::{AllocatedBytes, ApparentBytes};
 /// let _ = AllocatedBytes(1) + ApparentBytes(2);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -72,7 +72,7 @@ pub struct DockerId(pub String);
 /// Not a raw string: a plain `&str` cannot be used where an id is wanted.
 ///
 /// ```compile_fail
-/// use disk_cleanup_core::CandidateId;
+/// use dunnage_core::CandidateId;
 /// let _: CandidateId = "0123456789abcdef";
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

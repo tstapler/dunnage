@@ -5,20 +5,20 @@ use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::explore::input::{
+use dunnage_core::explore::input::{
     handle_key, scan_title, Action, ExitKind, ExploreState, KeyEnv, MarkQuery, Mode, Outcome,
     Rescan, MSG_NOTHING_MARKED, MSG_ONLY_D_DELETES, MSG_TOP_OF_SCAN,
 };
-use disk_cleanup_core::explore::keymap::{all_keys, lookup, Cmd, Key, KEYMAP};
-use disk_cleanup_core::explore::layout::Tier;
-use disk_cleanup_core::explore::mark_check::MarkOk;
-use disk_cleanup_core::explore::msg::{
+use dunnage_core::explore::keymap::{all_keys, lookup, Cmd, Key, KEYMAP};
+use dunnage_core::explore::layout::Tier;
+use dunnage_core::explore::mark_check::MarkOk;
+use dunnage_core::explore::msg::{
     FileRow, FileRows, MarkRefusal, NodeEvent, ScanMode, StopCause, NO_PARENT,
 };
-use disk_cleanup_core::explore::tree::{ExploreTree, NodeId, ScanStatus};
-use disk_cleanup_core::explore::view::{no_badge, Badge, Sort, ViewState};
-use disk_cleanup_scan::estimate::Stats;
-use disk_cleanup_scan::index::DirInfo;
+use dunnage_core::explore::tree::{ExploreTree, NodeId, ScanStatus};
+use dunnage_core::explore::view::{no_badge, Badge, Sort, ViewState};
+use dunnage_scan::estimate::Stats;
+use dunnage_scan::index::DirInfo;
 use proptest::prelude::*;
 
 fn own(files: u64, subdirs: u64, alloc: u64) -> Stats {
@@ -150,7 +150,7 @@ fn names(st: &ExploreState) -> Vec<String> {
     st.view
         .rows()
         .iter()
-        .map(disk_cleanup_core::explore::rows::Row::display_name)
+        .map(dunnage_core::explore::rows::Row::display_name)
         .collect()
 }
 

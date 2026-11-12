@@ -1,5 +1,5 @@
 {
-  "checksum": "10249a83b34f3f448a5e9e1a670d492fa533a8d163fa06b686d131e5f9fd1b22",
+  "checksum": "3650da9d6d169d0e5e6ec3069abe26d0372aadffeb1706eddd5ae36b771884b6",
   "conditions": {
     "aarch64-apple-darwin": [
       "aarch64-apple-darwin"
@@ -2171,7 +2171,45 @@
       ],
       "version": "0.11.3"
     },
-    "disk-cleanup 0.1.0": {
+    "document-features 0.2.12": {
+      "common_attrs": {
+        "crate_features": [
+          "default"
+        ],
+        "deps": [
+          {
+            "id": "litrs 1.0.1",
+            "target": "litrs"
+          }
+        ],
+        "edition": "2018"
+      },
+      "library_target_name": "document_features",
+      "license": "MIT OR Apache-2.0",
+      "license_file": "LICENSE-APACHE",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "name": "document-features",
+      "package_url": "https://github.com/slint-ui/document-features",
+      "repository": {
+        "Http": {
+          "sha256": "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61",
+          "url": "https://static.crates.io/crates/document-features/0.2.12/download"
+        }
+      },
+      "targets": [
+        {
+          "ProcMacro": {
+            "crate_name": "document_features",
+            "crate_root": "lib.rs"
+          }
+        }
+      ],
+      "version": "0.2.12"
+    },
+    "dunnage 0.1.0": {
       "build_script_attrs": {},
       "common_attrs": {
         "crate_features": [
@@ -2215,18 +2253,18 @@
           ":build_script_build"
         ]
       },
-      "library_target_name": "disk_cleanup_cli",
+      "library_target_name": "dunnage_cli",
       "license": "MIT",
       "license_ids": [
         "MIT"
       ],
-      "name": "disk-cleanup",
-      "package_url": "https://github.com/tstapler/disk-cleanup",
+      "name": "dunnage",
+      "package_url": "https://github.com/tstapler/dunnage",
       "repository": null,
       "targets": [
         {
           "Library": {
-            "crate_name": "disk_cleanup_cli",
+            "crate_name": "dunnage_cli",
             "crate_root": "src/lib.rs"
           }
         },
@@ -2239,7 +2277,7 @@
       ],
       "version": "0.1.0"
     },
-    "disk-cleanup-adapters 0.1.0": {
+    "dunnage-adapters 0.1.0": {
       "common_attrs": {
         "crate_features": [
           "default",
@@ -2295,25 +2333,25 @@
         ],
         "edition": "2021"
       },
-      "library_target_name": "disk_cleanup_adapters",
+      "library_target_name": "dunnage_adapters",
       "license": "MIT",
       "license_ids": [
         "MIT"
       ],
-      "name": "disk-cleanup-adapters",
-      "package_url": "https://github.com/tstapler/disk-cleanup",
+      "name": "dunnage-adapters",
+      "package_url": "https://github.com/tstapler/dunnage",
       "repository": null,
       "targets": [
         {
           "Library": {
-            "crate_name": "disk_cleanup_adapters",
+            "crate_name": "dunnage_adapters",
             "crate_root": "src/lib.rs"
           }
         }
       ],
       "version": "0.1.0"
     },
-    "disk-cleanup-core 0.1.0": {
+    "dunnage-core 0.1.0": {
       "common_attrs": {
         "crate_features": [
           "default",
@@ -2353,25 +2391,25 @@
         ],
         "edition": "2021"
       },
-      "library_target_name": "disk_cleanup_core",
+      "library_target_name": "dunnage_core",
       "license": "MIT",
       "license_ids": [
         "MIT"
       ],
-      "name": "disk-cleanup-core",
-      "package_url": "https://github.com/tstapler/disk-cleanup",
+      "name": "dunnage-core",
+      "package_url": "https://github.com/tstapler/dunnage",
       "repository": null,
       "targets": [
         {
           "Library": {
-            "crate_name": "disk_cleanup_core",
+            "crate_name": "dunnage_core",
             "crate_root": "src/lib.rs"
           }
         }
       ],
       "version": "0.1.0"
     },
-    "disk-cleanup-scan 0.1.0": {
+    "dunnage-scan 0.1.0": {
       "common_attrs": {
         "deps": [
           {
@@ -2399,25 +2437,25 @@
         ],
         "edition": "2021"
       },
-      "library_target_name": "disk_cleanup_scan",
+      "library_target_name": "dunnage_scan",
       "license": "MIT",
       "license_ids": [
         "MIT"
       ],
-      "name": "disk-cleanup-scan",
-      "package_url": "https://github.com/tstapler/disk-cleanup",
+      "name": "dunnage-scan",
+      "package_url": "https://github.com/tstapler/dunnage",
       "repository": null,
       "targets": [
         {
           "Library": {
-            "crate_name": "disk_cleanup_scan",
+            "crate_name": "dunnage_scan",
             "crate_root": "src/lib.rs"
           }
         }
       ],
       "version": "0.1.0"
     },
-    "disk-cleanup-tui 0.1.0": {
+    "dunnage-tui 0.1.0": {
       "common_attrs": {
         "deps": [
           {
@@ -2449,61 +2487,23 @@
         ],
         "edition": "2021"
       },
-      "library_target_name": "disk_cleanup_tui",
+      "library_target_name": "dunnage_tui",
       "license": "MIT",
       "license_ids": [
         "MIT"
       ],
-      "name": "disk-cleanup-tui",
-      "package_url": "https://github.com/tstapler/disk-cleanup",
+      "name": "dunnage-tui",
+      "package_url": "https://github.com/tstapler/dunnage",
       "repository": null,
       "targets": [
         {
           "Library": {
-            "crate_name": "disk_cleanup_tui",
+            "crate_name": "dunnage_tui",
             "crate_root": "src/lib.rs"
           }
         }
       ],
       "version": "0.1.0"
-    },
-    "document-features 0.2.12": {
-      "common_attrs": {
-        "crate_features": [
-          "default"
-        ],
-        "deps": [
-          {
-            "id": "litrs 1.0.1",
-            "target": "litrs"
-          }
-        ],
-        "edition": "2018"
-      },
-      "library_target_name": "document_features",
-      "license": "MIT OR Apache-2.0",
-      "license_file": "LICENSE-APACHE",
-      "license_ids": [
-        "Apache-2.0",
-        "MIT"
-      ],
-      "name": "document-features",
-      "package_url": "https://github.com/slint-ui/document-features",
-      "repository": {
-        "Http": {
-          "sha256": "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61",
-          "url": "https://static.crates.io/crates/document-features/0.2.12/download"
-        }
-      },
-      "targets": [
-        {
-          "ProcMacro": {
-            "crate_name": "document_features",
-            "crate_root": "lib.rs"
-          }
-        }
-      ],
-      "version": "0.2.12"
     },
     "either 1.19.0": {
       "common_attrs": {
@@ -8771,10 +8771,10 @@
     "tempfile 3.27.0"
   ],
   "workspace_members": {
-    "disk-cleanup 0.1.0": "crates/cli",
-    "disk-cleanup-adapters 0.1.0": "crates/adapters",
-    "disk-cleanup-core 0.1.0": "crates/core",
-    "disk-cleanup-scan 0.1.0": "crates/scan",
-    "disk-cleanup-tui 0.1.0": "crates/tui"
+    "dunnage 0.1.0": "crates/cli",
+    "dunnage-adapters 0.1.0": "crates/adapters",
+    "dunnage-core 0.1.0": "crates/core",
+    "dunnage-scan 0.1.0": "crates/scan",
+    "dunnage-tui 0.1.0": "crates/tui"
   }
 }

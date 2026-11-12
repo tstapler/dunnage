@@ -4,7 +4,7 @@
 
 use std::io;
 
-use disk_cleanup_core::explore::ports::TermSignals;
+use dunnage_core::explore::ports::TermSignals;
 
 use crate::signals;
 

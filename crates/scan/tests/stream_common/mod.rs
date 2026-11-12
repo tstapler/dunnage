@@ -2,10 +2,10 @@
 //! Shared helpers of the `stream_*` tests: a recording sink and a virtual filesystem driven through
 //! `WalkHooks`, so trees of 200,000 or 1,000,000 directories need no disk.
 
-use disk_cleanup_scan::cache::Rec;
-use disk_cleanup_scan::estimate::Stats;
-use disk_cleanup_scan::index::DirEvent;
-use disk_cleanup_scan::walker::{DirStat, WalkHooks};
+use dunnage_scan::cache::Rec;
+use dunnage_scan::estimate::Stats;
+use dunnage_scan::index::DirEvent;
+use dunnage_scan::walker::{DirStat, WalkHooks};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};

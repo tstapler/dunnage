@@ -3,10 +3,10 @@
 
 mod common;
 
-use disk_cleanup_core::ports::{
+use dunnage_core::ports::{
     merge_saved, SAVED_ENTRY_MAX_BYTES, SAVED_FILE_MAX_BYTES, SAVED_MAX_ENTRIES,
 };
-use disk_cleanup_core::{ItemKey, SavedPlan, SavedSelection};
+use dunnage_core::{ItemKey, SavedPlan, SavedSelection};
 
 const NOW: i64 = 1_000_000;
 const H: i64 = 3600;
@@ -137,12 +137,12 @@ fn last_plan_should_cut_entries_to_32KiB_keep_the_file_under_512KiB_and_fit_the_
 use std::path::Path;
 
 use common::{build_dir, cache, selection as sel_of, DAY};
-use disk_cleanup_core::plan::{
+use dunnage_core::plan::{
     destructive_gate, ChangeCause, GateRefusal, GateRenderCtx, Plan, PlanId, PlanIdArg,
 };
-use disk_cleanup_core::selector::{Discard, DockerVolumes, KindSelector, Selection};
-use disk_cleanup_core::target::Guarded;
-use disk_cleanup_core::{Candidate, SelectorId};
+use dunnage_core::selector::{Discard, DockerVolumes, KindSelector, Selection};
+use dunnage_core::target::Guarded;
+use dunnage_core::{Candidate, SelectorId};
 
 const T: i64 = common::NOW;
 const HOME: &str = "/home/u";
@@ -231,7 +231,7 @@ fn plan_id_should_ignore_size_drift_and_change_when_an_item_appears_vanishes_or_
     // an item becomes Skip for another reason
     let skipped = Plan::build(&sel, T, three_builds(), &|c| {
         if c.ident().ino == 1001 {
-            Guarded::Skip(disk_cleanup_core::SkipReason::Dirty)
+            Guarded::Skip(dunnage_core::SkipReason::Dirty)
         } else {
             Guarded::Allow
         }
@@ -370,7 +370,7 @@ fn destructive_gate_should_be_Ok_only_when_supplied_id_is_saved_within_24h_and_e
     let missing = GateRefusal::MissingPlanId { recent: vec![] }.render(&c);
     assert_eq!(
         missing,
-        "error: destructive kinds (build-dirs) need --plan-id from a dry run made in the last 24h. Run 'disk-cleanup --kinds build-dirs' first and use the plan-id on its Next: line. Recent dry runs: none. Nothing was deleted."
+        "error: destructive kinds (build-dirs) need --plan-id from a dry run made in the last 24h. Run 'dunnage --kinds build-dirs' first and use the plan-id on its Next: line. Recent dry runs: none. Nothing was deleted."
     );
     let some = SavedPlan {
         entries: vec![saved_entry(other, 3 * 3600, "build-dirs", "", &[])],
@@ -378,7 +378,7 @@ fn destructive_gate_should_be_Ok_only_when_supplied_id_is_saved_within_24h_and_e
     let err = gate(&sel, None, Some(&some), &plan, T).unwrap_err();
     assert_eq!(
         err.render(&ctx(&sel, Some(&some))),
-        "error: destructive kinds (build-dirs) need --plan-id from a dry run made in the last 24h. Run 'disk-cleanup --kinds build-dirs' first and use the plan-id on its Next: line. Recent dry runs: 0badc0de ('--kinds build-dirs', 3h ago). Nothing was deleted."
+        "error: destructive kinds (build-dirs) need --plan-id from a dry run made in the last 24h. Run 'dunnage --kinds build-dirs' first and use the plan-id on its Next: line. Recent dry runs: 0badc0de ('--kinds build-dirs', 3h ago). Nothing was deleted."
     );
     let err = gate(&sel, Some(other), Some(&some), &plan, T);
     assert_eq!(
@@ -396,7 +396,7 @@ fn destructive_gate_should_be_Ok_only_when_supplied_id_is_saved_within_24h_and_e
     let unknown = gate(&sel, Some(id), Some(&some), &plan, T).unwrap_err();
     assert_eq!(
         unknown.render(&ctx(&sel, Some(&some))),
-        format!("error: no dry run with plan-id {id} in the last 24h (recent: 0badc0de for '--kinds build-dirs', 3h ago). Dry run again, then use the plan-id on its Next: line: disk-cleanup --kinds build-dirs. Nothing was deleted.")
+        format!("error: no dry run with plan-id {id} in the last 24h (recent: 0badc0de for '--kinds build-dirs', 3h ago). Dry run again, then use the plan-id on its Next: line: dunnage --kinds build-dirs. Nothing was deleted.")
     );
     let none = gate(&sel, Some(id), None, &plan, T).unwrap_err();
     assert!(none.render(&ctx(&sel, None)).contains("(recent: none)"));
@@ -487,7 +487,7 @@ fn changed_should_name_vanished_and_appeared_items_and_flag_an_incomplete_list()
     }
     assert_eq!(
         err.render(&ctx(&sel, Some(&saved))),
-        "error: plan-id 91be04d7 does not match the plan just computed (c4410aa2): 2 items vanished (/home/u/code/a/node_modules, /home/u/code/b/node_modules), 1 appeared (/home/u/code/e/node_modules). Dry run again, then use the new plan-id on its Next: line: disk-cleanup --kinds build-dirs. If an earlier apply was interrupted or partly failed, this is expected. Nothing was deleted."
+        "error: plan-id 91be04d7 does not match the plan just computed (c4410aa2): 2 items vanished (/home/u/code/a/node_modules, /home/u/code/b/node_modules), 1 appeared (/home/u/code/e/node_modules). Dry run again, then use the new plan-id on its Next: line: dunnage --kinds build-dirs. If an earlier apply was interrupted or partly failed, this is expected. Nothing was deleted."
             .replace("/home/u/", "~/")
     );
 
@@ -555,7 +555,7 @@ fn changed_should_say_the_selection_differs_and_end_with_the_paste_ready_dry_run
     let text = err.render(&ctx(&sel, Some(&saved)));
     assert_eq!(
         text,
-        "error: plan-id 91be04d7 was a dry run of '--kinds build-dirs --min-age 60d'; this command selects '--kinds build-dirs,docker-volumes', so the ids differ. Use the Next: line of that dry run unchanged, or dry run this selection: disk-cleanup --kinds build-dirs,docker-volumes. Nothing was deleted."
+        "error: plan-id 91be04d7 was a dry run of '--kinds build-dirs --min-age 60d'; this command selects '--kinds build-dirs,docker-volumes', so the ids differ. Use the Next: line of that dry run unchanged, or dry run this selection: dunnage --kinds build-dirs,docker-volumes. Nothing was deleted."
     );
     assert!(!text.contains("vanished") && !text.contains("appeared"));
 
@@ -602,9 +602,9 @@ fn changed_should_name_vanished_and_appeared_items_and_docker_down_and_uid_cases
 
     // under 1 MiB free in the state directory
     let mut c = ctx(&sel, Some(&saved));
-    c.state_dir_low = Some(("~/.local/state/disk-cleanup".into(), 0));
+    c.state_dir_low = Some(("~/.local/state/dunnage".into(), 0));
     let text = err.render(&c);
-    assert!(text.contains("The state directory ~/.local/state/disk-cleanup has 0 B free: free about 1 MiB there, then dry run again. Nothing was deleted."), "{text}");
+    assert!(text.contains("The state directory ~/.local/state/dunnage has 0 B free: free about 1 MiB there, then dry run again. Nothing was deleted."), "{text}");
 
     // the missing and the unknown refusals carry the state-directory sentence too
     let missing = GateRefusal::MissingPlanId { recent: vec![] }.render(&c);

@@ -5,19 +5,17 @@ use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::explore::help::{help_lines, DELETE_RULE, DELETE_STEPS, SCREEN_READER};
-use disk_cleanup_core::explore::input::{
-    handle_key, Action, ExploreState, KeyEnv, MarkQuery, Outcome,
-};
-use disk_cleanup_core::explore::keymap::{Key, KEYMAP};
-use disk_cleanup_core::explore::layout::{cells, Tier};
-use disk_cleanup_core::explore::mark_check::MarkOk;
-use disk_cleanup_core::explore::marks::{Mark, Marks, MARK_LIMIT};
-use disk_cleanup_core::explore::msg::{MarkRefusal, NodeEvent, ScanMode, NO_PARENT};
-use disk_cleanup_core::explore::tree::{ExploreTree, NodeId};
-use disk_cleanup_core::explore::view::{Badge, Sort, ViewState};
-use disk_cleanup_scan::estimate::Stats;
-use disk_cleanup_scan::index::DirInfo;
+use dunnage_core::explore::help::{help_lines, DELETE_RULE, DELETE_STEPS, SCREEN_READER};
+use dunnage_core::explore::input::{handle_key, Action, ExploreState, KeyEnv, MarkQuery, Outcome};
+use dunnage_core::explore::keymap::{Key, KEYMAP};
+use dunnage_core::explore::layout::{cells, Tier};
+use dunnage_core::explore::mark_check::MarkOk;
+use dunnage_core::explore::marks::{Mark, Marks, MARK_LIMIT};
+use dunnage_core::explore::msg::{MarkRefusal, NodeEvent, ScanMode, NO_PARENT};
+use dunnage_core::explore::tree::{ExploreTree, NodeId};
+use dunnage_core::explore::view::{Badge, Sort, ViewState};
+use dunnage_scan::estimate::Stats;
+use dunnage_scan::index::DirInfo;
 
 fn stats(files: u64, alloc: u64) -> Stats {
     Stats {
@@ -455,10 +453,10 @@ fn the_help_overlay_is_generated_from_the_keymap_and_pinned() {
         "'?' possible candidate: p checks it with git or Steam data the explorer does not have"
     ));
     assert!(flat.contains("not screen-reader friendly"));
-    assert!(flat.contains("disk-cleanup explore --text"));
+    assert!(flat.contains("dunnage explore --text"));
     assert_eq!(
         SCREEN_READER,
-        "This view is not screen-reader friendly: use 'disk-cleanup explore --text'."
+        "This view is not screen-reader friendly: use 'dunnage explore --text'."
     );
     assert!(!text.to_lowercase().contains("cleanable"));
     assert_eq!(
@@ -517,18 +515,17 @@ State     '.' still scanning (size is at least)   '!' unreadable (at least)
           it with git or Steam data the explorer does not have
 Headers   USAGE bytes on disk   APPARENT file sizes   META est. btrfs metadata
           SHARE of parent
-Access    This view is not screen-reader friendly: use 'disk-cleanup explore
-          --text'.";
+Access    This view is not screen-reader friendly: use 'dunnage explore --text'.";
 
 // ---- Story 6.6.1 (Task 6.6.1b): Space reaches the real `mark_check` --------------------------------------
 
 mod real_check {
     use super::*;
-    use disk_cleanup_core::explore::mark_check::{
+    use dunnage_core::explore::mark_check::{
         mark_check, MarkCtx, MarkEnv, MarkFacts, MarkMount, MountTable, OwnState, SymlinkFact,
     };
-    use disk_cleanup_core::explore::refusal::{RefusalCtx, MARK_LIMIT as LIMIT};
-    use disk_cleanup_core::Dirs;
+    use dunnage_core::explore::refusal::{RefusalCtx, MARK_LIMIT as LIMIT};
+    use dunnage_core::Dirs;
 
     struct NoFacts;
     impl MarkFacts for NoFacts {

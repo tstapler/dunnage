@@ -52,7 +52,7 @@ impl StampRefusal {
 
     pub fn text(&self) -> String {
         format!(
-            "error: this binary has no valid gate stamp ({}). If the disk has room for a build, run 'make gate GATE={}' then 'make install-gated' in the disk-cleanup repo. If it does not (a build needs free space, which a full disk lacks), start the command from your own terminal with DISK_CLEANUP_UNGATED=<reason> and type BYPASS when asked; the bypass is recorded in the audit log. Nothing was deleted.",
+            "error: this binary has no valid gate stamp ({}). If the disk has room for a build, run 'make gate GATE={}' then 'make install-gated' in the dunnage repo. If it does not (a build needs free space, which a full disk lacks), start the command from your own terminal with DUNNAGE_UNGATED=<reason> and type BYPASS when asked; the bypass is recorded in the audit log. Nothing was deleted.",
             self.why(),
             match self {
                 StampRefusal::GateTooLow { need, .. } => *need,
@@ -148,7 +148,7 @@ pub fn check_stamp(
     }
 }
 
-/// `DISK_CLEANUP_UNGATED` as the break-glass reason; an empty (or all-blank) value is as if unset.
+/// `DUNNAGE_UNGATED` as the break-glass reason; an empty (or all-blank) value is as if unset.
 pub fn break_glass_reason(raw: Option<&str>) -> Option<String> {
     raw.map(str::trim)
         .filter(|r| !r.is_empty())
@@ -161,7 +161,7 @@ pub fn break_glass_warning(bg: &BreakGlass) -> String {
 }
 
 /// Stderr text of the break-glass without a controlling terminal (agent session, cron, `ssh` without `-t`).
-pub const BREAK_GLASS_NO_TTY: &str = "error: DISK_CLEANUP_UNGATED needs a person at a terminal to confirm, and this run has none. Nothing was deleted. Run 'make gate' and 'make install-gated', or start the command from your own terminal.";
+pub const BREAK_GLASS_NO_TTY: &str = "error: DUNNAGE_UNGATED needs a person at a terminal to confirm, and this run has none. Nothing was deleted. Run 'make gate' and 'make install-gated', or start the command from your own terminal.";
 
 /// `--json` error code of [`BREAK_GLASS_NO_TTY`].
 pub const BREAK_GLASS_NO_TTY_CODE: &str = "break_glass_no_tty";

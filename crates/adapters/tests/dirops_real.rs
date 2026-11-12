@@ -5,9 +5,9 @@ use std::ffi::OsStr;
 use std::os::unix::fs::{symlink, MetadataExt};
 use std::path::Path;
 
-use disk_cleanup_adapters::dirops::is_scope_violation;
-use disk_cleanup_adapters::{open_parent, open_verified_root, DirOps, RealDirOps};
-use disk_cleanup_core::{DeleteError, FileKind, Identity};
+use dunnage_adapters::dirops::is_scope_violation;
+use dunnage_adapters::{open_parent, open_verified_root, DirOps, RealDirOps};
+use dunnage_core::{DeleteError, FileKind, Identity};
 
 fn tmp() -> (tempfile::TempDir, std::path::PathBuf) {
     let t = tempfile::tempdir().unwrap();

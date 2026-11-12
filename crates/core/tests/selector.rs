@@ -9,11 +9,11 @@
 mod common;
 
 use common::{build_dir, docker_cache, run, FakeTarget, Rig, DAY};
-use disk_cleanup_core::plan::Planned;
-use disk_cleanup_core::selector::{
+use dunnage_core::plan::Planned;
+use dunnage_core::selector::{
     default_min_age_secs, Discard, DockerVolumes, KindSelector, Selection, SelectorError,
 };
-use disk_cleanup_core::{SelectorId, SkipReason};
+use dunnage_core::{SelectorId, SkipReason};
 
 const ALL_BUILT: [SelectorId; 10] = SelectorId::ALL;
 
@@ -34,12 +34,12 @@ fn kind_selector_should_expand_families_replace_not_add_and_reject_unknown_all_p
     let e = parse("dockr").unwrap_err();
     assert_eq!(
         e.to_string(),
-        "unknown kind 'dockr'. Did you mean 'docker'? See 'disk-cleanup kinds'."
+        "unknown kind 'dockr'. Did you mean 'docker'? See 'dunnage kinds'."
     );
     // nothing within edit distance 2: no suggestion
     assert_eq!(
         parse("frobnicate").unwrap_err().to_string(),
-        "unknown kind 'frobnicate'. See 'disk-cleanup kinds'."
+        "unknown kind 'frobnicate'. See 'dunnage kinds'."
     );
     for bad in ["all", "+build-dirs", ""] {
         assert!(parse(bad).is_err(), "{bad:?}");
@@ -62,7 +62,7 @@ fn kind_selector_should_expand_families_replace_not_add_and_reject_unknown_all_p
         KindSelector::parse("steam", &built)
             .unwrap_err()
             .to_string(),
-        "error: 'steam' is not available in this build (see 'disk-cleanup kinds')"
+        "error: 'steam' is not available in this build (see 'dunnage kinds')"
     );
 }
 

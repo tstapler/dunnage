@@ -10,8 +10,8 @@ use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use disk_cleanup_core::explore::msg::{FileRow, FileRows};
-use disk_cleanup_core::explore::ports::DirLister;
+use dunnage_core::explore::msg::{FileRow, FileRows};
+use dunnage_core::explore::ports::DirLister;
 
 /// Lists with the real filesystem.
 #[derive(Debug, Default, Clone, Copy)]

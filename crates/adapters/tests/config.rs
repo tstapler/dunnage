@@ -1,11 +1,11 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 
-use disk_cleanup_adapters::config::{config_path, read_config, Config, ConfigError};
-use disk_cleanup_core::Dirs;
+use dunnage_adapters::config::{config_path, read_config, Config, ConfigError};
+use dunnage_core::Dirs;
 use std::path::PathBuf;
 
 #[test]
-fn config_path_should_sit_under_the_config_dir_in_a_disk_cleanup_folder() {
+fn config_path_should_sit_under_the_config_dir_in_a_dunnage_folder() {
     let d = Dirs {
         home: "/h".into(),
         state: "/s".into(),
@@ -14,7 +14,7 @@ fn config_path_should_sit_under_the_config_dir_in_a_disk_cleanup_folder() {
     };
     assert_eq!(
         config_path(&d),
-        PathBuf::from("/h/.config/disk-cleanup/config.toml")
+        PathBuf::from("/h/.config/dunnage/config.toml")
     );
 }
 

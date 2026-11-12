@@ -6,11 +6,11 @@ mod explore_fixture;
 
 use std::sync::Arc;
 
-use disk_cleanup_cli::explore::json::run_json;
-use disk_cleanup_cli::explore::text::{build_model, run_text, scan_to_completion, ScanEnd};
-use disk_cleanup_core::explore::fmt::{fmt_items_cell, fmt_size_cell, share_cell};
-use disk_cleanup_core::explore::rows::{build_rows, Filter, RowKind, RowSource};
-use disk_cleanup_core::explore::testing::FakeTermSignals;
+use dunnage_cli::explore::json::run_json;
+use dunnage_cli::explore::text::{build_model, run_text, scan_to_completion, ScanEnd};
+use dunnage_core::explore::fmt::{fmt_items_cell, fmt_size_cell, share_cell};
+use dunnage_core::explore::rows::{build_rows, Filter, RowKind, RowSource};
+use dunnage_core::explore::testing::FakeTermSignals;
 use explore_fixture::{env, golden};
 use serde_json::Value;
 
@@ -121,7 +121,7 @@ fn text_json_and_the_interactive_row_model_should_agree_on_every_number() {
             tree: &scanned.tree,
             dir: root,
             files: None,
-            badge: &|_| disk_cleanup_core::explore::rows::Badge::None,
+            badge: &|_| dunnage_core::explore::rows::Badge::None,
         },
         e.sort,
         Filter::All,

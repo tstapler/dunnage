@@ -17,7 +17,7 @@ use crossterm::style::{Attribute, SetAttribute};
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, window_size, EnterAlternateScreen, LeaveAlternateScreen,
 };
-use disk_cleanup_core::escape::escape;
+use dunnage_core::escape::escape;
 use ratatui::backend::{Backend, ClearType, WindowSize};
 use ratatui::buffer::Cell;
 use ratatui::layout::{Position, Rect, Size};

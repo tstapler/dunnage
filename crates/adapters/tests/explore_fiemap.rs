@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use disk_cleanup_adapters::FiemapProbe;
-use disk_cleanup_core::ports::{ExtentProbe, SharedEstimate, Unavailable};
+use dunnage_adapters::FiemapProbe;
+use dunnage_core::ports::{ExtentProbe, SharedEstimate, Unavailable};
 
 const MIB: u64 = 1 << 20;
 const BTRFS_MAGIC: u64 = 0x9123_683E;

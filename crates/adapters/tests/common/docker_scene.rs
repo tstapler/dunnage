@@ -12,17 +12,17 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use disk_cleanup_adapters::targets::docker_common::DOCKER_IDENT;
-use disk_cleanup_core::audit_types::RunRoots;
-use disk_cleanup_core::executor::{Executor, Mode, RunMeta, RunOptions, RunReport};
-use disk_cleanup_core::ports::{CmdOutput, Env};
-use disk_cleanup_core::selector::{KindSelector, Selection};
-use disk_cleanup_core::target::Target;
-use disk_cleanup_core::testing::{
+use dunnage_adapters::targets::docker_common::DOCKER_IDENT;
+use dunnage_core::audit_types::RunRoots;
+use dunnage_core::executor::{Executor, Mode, RunMeta, RunOptions, RunReport};
+use dunnage_core::ports::{CmdOutput, Env};
+use dunnage_core::selector::{KindSelector, Selection};
+use dunnage_core::target::Target;
+use dunnage_core::testing::{
     FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe, FakeRunGuard,
     FakeSpaceMeter,
 };
-use disk_cleanup_core::{ApplyToken, BuildInfo, Dirs, SelectorId, Status};
+use dunnage_core::{ApplyToken, BuildInfo, Dirs, SelectorId, Status};
 
 pub const NOW: i64 = 1_800_000_000;
 pub const DAY: i64 = 86_400;
@@ -36,15 +36,15 @@ pub const PS: &[&str] = &["docker", "ps", "-a", "--format", "{{json .}}"];
 pub const IMAGES: &[&str] = &["docker", "images", "--format", "{{json .}}"];
 pub const VOLS: &[&str] = &["docker", "volume", "ls", "--format", "{{json .}}"];
 
-pub fn ok(s: &str) -> Result<CmdOutput, disk_cleanup_core::DeleteError> {
+pub fn ok(s: &str) -> Result<CmdOutput, dunnage_core::DeleteError> {
     Ok(CmdOutput {
         stdout: s.as_bytes().to_vec(),
         stderr: Vec::new(),
     })
 }
 
-pub fn failed(message: &str) -> Result<CmdOutput, disk_cleanup_core::DeleteError> {
-    Err(disk_cleanup_core::DeleteError::CommandFailed {
+pub fn failed(message: &str) -> Result<CmdOutput, dunnage_core::DeleteError> {
+    Err(dunnage_core::DeleteError::CommandFailed {
         status: 1,
         message: message.to_string(),
     })
@@ -443,7 +443,7 @@ pub fn plan_then_apply(targets: Vec<&dyn Target>, env: &Env, sel: &Selection) ->
     .unwrap_or_else(|r| panic!("apply refused: {}", r.text))
 }
 
-pub fn status_for(r: &RunReport, c: &disk_cleanup_core::Candidate) -> Status {
+pub fn status_for(r: &RunReport, c: &dunnage_core::Candidate) -> Status {
     r.summary
         .outcomes
         .iter()
@@ -453,6 +453,6 @@ pub fn status_for(r: &RunReport, c: &disk_cleanup_core::Candidate) -> Status {
         .clone()
 }
 
-pub fn ident() -> disk_cleanup_core::Identity {
+pub fn ident() -> dunnage_core::Identity {
     DOCKER_IDENT
 }

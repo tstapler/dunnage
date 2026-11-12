@@ -8,16 +8,16 @@ use std::ffi::OsString;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
-use disk_cleanup_core::explore::hint::{hint_of_node, kind_hint, kind_line, shape_of};
-use disk_cleanup_core::explore::msg::{
+use dunnage_core::explore::hint::{hint_of_node, kind_hint, kind_line, shape_of};
+use dunnage_core::explore::msg::{
     ClassifyFacts, Hint, NoReason, NodeEvent, ScanMode, SteamLibraryFacts, Tier, NO_PARENT,
 };
-use disk_cleanup_core::explore::rows::Badge;
-use disk_cleanup_core::explore::tree::{ExploreTree, Inside, NodeId};
-use disk_cleanup_core::roots::{CacheTool, RootSet, SteamLibraryRoot};
-use disk_cleanup_core::{AppId, Dirs, Identity, Kind, SelectorId};
-use disk_cleanup_scan::classify::ParentFacts;
-use disk_cleanup_scan::index::DirInfo;
+use dunnage_core::explore::rows::Badge;
+use dunnage_core::explore::tree::{ExploreTree, Inside, NodeId};
+use dunnage_core::roots::{CacheTool, RootSet, SteamLibraryRoot};
+use dunnage_core::{AppId, Dirs, Identity, Kind, SelectorId};
+use dunnage_scan::classify::ParentFacts;
+use dunnage_scan::index::DirInfo;
 
 const HOME: &str = "/h";
 
@@ -216,11 +216,11 @@ fn caches_should_be_yes_only_for_an_exact_path_of_the_facts() {
     );
 }
 
-fn exact(t: &disk_cleanup_core::AllowedTarget) -> Option<PathBuf> {
+fn exact(t: &dunnage_core::AllowedTarget) -> Option<PathBuf> {
     match t {
-        disk_cleanup_core::AllowedTarget::Exact(p) => Some(p.clone()),
-        disk_cleanup_core::AllowedTarget::Within { .. }
-        | disk_cleanup_core::AllowedTarget::BelowScanRoot(_) => None,
+        dunnage_core::AllowedTarget::Exact(p) => Some(p.clone()),
+        dunnage_core::AllowedTarget::Within { .. }
+        | dunnage_core::AllowedTarget::BelowScanRoot(_) => None,
     }
 }
 

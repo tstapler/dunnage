@@ -6,13 +6,13 @@ mod xfs;
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::explorer_plan::{explorer_plan, CleanerView, ExplorerPlanCtx};
-use disk_cleanup_core::plan::{OnlyMode, Planned};
-use disk_cleanup_core::ports::{ExtentAttribution, ItemExtents, SharedExtent};
-use disk_cleanup_core::selector::{KindSelector, Selection, SelectorError};
-use disk_cleanup_core::target::Guarded;
-use disk_cleanup_core::testing::FakeExtentProbe;
-use disk_cleanup_core::{Kind, Risk, SelectorId, SkipReason};
+use dunnage_core::explorer_plan::{explorer_plan, CleanerView, ExplorerPlanCtx};
+use dunnage_core::plan::{OnlyMode, Planned};
+use dunnage_core::ports::{ExtentAttribution, ItemExtents, SharedExtent};
+use dunnage_core::selector::{KindSelector, Selection, SelectorError};
+use dunnage_core::target::Guarded;
+use dunnage_core::testing::FakeExtentProbe;
+use dunnage_core::{Kind, Risk, SelectorId, SkipReason};
 use xfs::{none, with_ctx, World};
 
 fn p(s: &str) -> PathBuf {
@@ -51,7 +51,7 @@ fn safety_explorer_selection_is_destructive_hidden_and_unnameable_When_the_regis
         );
         assert_eq!(
             err.to_string(),
-            "error: explorer-selection is not a kind you can name; it exists only inside 'disk-cleanup explore'. Nothing was deleted."
+            "error: explorer-selection is not a kind you can name; it exists only inside 'dunnage explore'. Nothing was deleted."
         );
     }
     // The explorer's own selection needs the plan-id gate and echoes the flags the store keeps.
@@ -154,7 +154,7 @@ fn explorer_plan_should_refuse_each_rule_m1_to_m5_as_a_skip_row_When_the_mark_br
         .symlink("/home/u/code/link")
         .dir("/home/u/code/bound", 10)
         .dir("/home/u/code/bound/inner", 0)
-        .dir("/home/u/.local/state/disk-cleanup", 10)
+        .dir("/home/u/.local/state/dunnage", 10)
         .dir("/home/u/code/ok", 10);
     w.fs.on_dev("/home/u/code/mnt", 2);
     // The parent becomes a symlink after the child exists (lstat of the child still answers, as it would
@@ -176,7 +176,7 @@ fn explorer_plan_should_refuse_each_rule_m1_to_m5_as_a_skip_row_When_the_mark_br
         "/home/u/code/linked-parent/child",
         "/home/u/code/mnt",
         "/home/u/code/bound",
-        "/home/u/.local/state/disk-cleanup",
+        "/home/u/.local/state/dunnage",
         "/home/u/code/ok",
     ]
     .map(p)
@@ -210,7 +210,7 @@ fn explorer_plan_should_refuse_each_rule_m1_to_m5_as_a_skip_row_When_the_mark_br
         will_not(SkipReason::MountPoint)
     );
     assert_eq!(
-        status("/home/u/.local/state/disk-cleanup"),
+        status("/home/u/.local/state/dunnage"),
         will_not(SkipReason::OutsideRoot)
     );
     assert_eq!(status("/home/u/code/ok"), Planned::Will);
@@ -303,7 +303,7 @@ fn explorer_plan_should_subtract_shared_extents_When_the_probe_measured_them() {
         clock: &w.clock,
         sizer: &sizer,
         extents: Some(&probe),
-        cleaner: &disk_cleanup_core::explorer_plan::NoCleanerView,
+        cleaner: &dunnage_core::explorer_plan::NoCleanerView,
     };
     let plan = explorer_plan(&[p("/home/u/code/big")], OnlyMode::Explorer, &ctx).unwrap();
     let row = &plan.rows[0];
@@ -358,7 +358,7 @@ fn explorer_plan_should_store_twenty_512_byte_marks_and_refuse_a_quoted_text_ove
     });
     assert!(matches!(
         err,
-        disk_cleanup_core::explorer_plan::ExplorerPlanError::PathTooLong(_)
+        dunnage_core::explorer_plan::ExplorerPlanError::PathTooLong(_)
     ));
     // Nothing was stat-ed for a refused request.
     let before = w.fs.lstats.lock().unwrap().len();
@@ -419,7 +419,7 @@ fn explorer_plan_should_call_a_replaced_parent_gone_and_keep_an_unreadable_mark_
     let keys: Vec<&str> = saved
         .items
         .iter()
-        .map(disk_cleanup_core::ItemKey::as_str)
+        .map(dunnage_core::ItemKey::as_str)
         .collect();
     assert_eq!(keys, ["explorer-selection:/home/u/code/c"]);
 }

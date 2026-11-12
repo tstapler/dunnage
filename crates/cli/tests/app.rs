@@ -5,14 +5,14 @@
 mod rig;
 mod support;
 
-use disk_cleanup_cli::args;
-use disk_cleanup_cli::wiring::audit::GateExit;
-use disk_cleanup_core::candidate::BuildDirFlavor;
-use disk_cleanup_core::delete_types::{DeleteError, DeleteFailure, Freed};
-use disk_cleanup_core::kind::{Risk, SelectorId};
-use disk_cleanup_core::plan_state::{ItemKey, SavedSelection};
-use disk_cleanup_core::snapshot_types::{AllocSnapshot, SpaceUse};
-use disk_cleanup_core::testing::{AuditCall, FakePlanStore, FakeSpaceMeter};
+use dunnage_cli::args;
+use dunnage_cli::wiring::audit::GateExit;
+use dunnage_core::candidate::BuildDirFlavor;
+use dunnage_core::delete_types::{DeleteError, DeleteFailure, Freed};
+use dunnage_core::kind::{Risk, SelectorId};
+use dunnage_core::plan_state::{ItemKey, SavedSelection};
+use dunnage_core::snapshot_types::{AllocSnapshot, SpaceUse};
+use dunnage_core::testing::{AuditCall, FakePlanStore, FakeSpaceMeter};
 use rig::{confined, executed_total, plan_id_of, run, FakeTarget, Rig, NOW};
 use support::{
     btrfs_balance, build_dir, cache, docker_dangling, docker_volumes, steam, worktree, GIB,
@@ -177,7 +177,7 @@ fn dry_run_flags_with_apply_should_exit_64_with_the_contradiction_text_and_touch
         assert!(r.stdout.is_empty(), "{argv:?}");
         assert_eq!(
             r.stderr,
-            "error: -n/--dry-run and --apply contradict each other; drop one. Dry run is the default, so plain 'disk-cleanup' is the dry run.\n",
+            "error: -n/--dry-run and --apply contradict each other; drop one. Dry run is the default, so plain 'dunnage' is the dry run.\n",
             "{argv:?}"
         );
     }
@@ -252,9 +252,7 @@ fn help_should_say_in_its_first_line_that_nothing_is_deleted_without_apply_and_d
     assert!(h.contains("130 interrupted (SIGINT), 143 (SIGTERM)"));
     assert!(h.contains("Environment:"));
     assert!(
-        h.contains("DISK_CLEANUP_UNGATED=<reason>")
-            && h.contains("BYPASS")
-            && h.contains("NO_COLOR")
+        h.contains("DUNNAGE_UNGATED=<reason>") && h.contains("BYPASS") && h.contains("NO_COLOR")
     );
     assert!(h.contains("made in the last 24h"));
 }
@@ -549,16 +547,16 @@ fn apply_should_be_refused_with_the_gate_a_text_When_the_build_has_no_apply_path
     assert!(c.executed().is_empty() && rig.audit.calls().is_empty());
 }
 
-fn many_caches(n: u64) -> Vec<disk_cleanup_core::Candidate> {
+fn many_caches(n: u64) -> Vec<dunnage_core::Candidate> {
     (0..n)
         .map(|i| {
             let c = cache(&format!("/home/u/.cache/c{i}"), 1.0);
-            disk_cleanup_core::Candidate::new(
+            dunnage_core::Candidate::new(
                 c.locator().clone(),
                 c.facts().clone(),
                 c.est_bytes(),
                 None,
-                disk_cleanup_core::Identity {
+                dunnage_core::Identity {
                     dev: 1,
                     ino: 100 + i,
                 },
@@ -571,7 +569,7 @@ fn many_caches(n: u64) -> Vec<disk_cleanup_core::Candidate> {
 fn exit_code_should_be_1_for_an_eacces_item_2_for_enospc_and_signal_plus_128_When_interrupted() {
     let mut eacces = FakeTarget::new(CACHES, many_caches(5));
     eacces.exec = Box::new(|c| {
-        if c.locator() == &disk_cleanup_core::Locator::Path("/home/u/.cache/c2".into()) {
+        if c.locator() == &dunnage_core::Locator::Path("/home/u/.cache/c2".into()) {
             Err(DeleteFailure {
                 error: DeleteError::Io(13),
                 freed: Freed::default(),
@@ -645,7 +643,7 @@ fn clap_usage_errors_should_map_to_64_and_help_flags_to_0() {
     );
 }
 
-fn btrfs_snapshot(unallocated_gib: f64) -> disk_cleanup_core::FsSnapshot {
+fn btrfs_snapshot(unallocated_gib: f64) -> dunnage_core::FsSnapshot {
     let space = |used: u64, total: u64| SpaceUse {
         bytes_used: used,
         total_bytes: total,
@@ -661,7 +659,7 @@ fn btrfs_snapshot(unallocated_gib: f64) -> disk_cleanup_core::FsSnapshot {
     s
 }
 
-fn status_rig(snap: disk_cleanup_core::FsSnapshot) -> Rig {
+fn status_rig(snap: dunnage_core::FsSnapshot) -> Rig {
     let mut rig = Rig::new();
     rig.space = FakeSpaceMeter::new(vec![snap], FakeSpaceMeter::stable());
     rig
@@ -866,16 +864,13 @@ fn the_selection_should_carry_max_seconds_rescan_and_no_cache_When_the_flags_are
         args::Parsed::Run(c) => c,
         other @ args::Parsed::Exit { .. } => panic!("{other:?}"),
     };
-    let kinds = disk_cleanup_core::selector::KindSelector::default();
+    let kinds = dunnage_core::selector::KindSelector::default();
     let none = parse(&[]).selection(&[], &kinds).unwrap();
-    assert_eq!(
-        none.scan,
-        disk_cleanup_core::selector::ScanControl::default()
-    );
+    assert_eq!(none.scan, dunnage_core::selector::ScanControl::default());
     let all = parse(&WALK_FLAGS).selection(&[], &kinds).unwrap();
     assert_eq!(
         all.scan,
-        disk_cleanup_core::selector::ScanControl {
+        dunnage_core::selector::ScanControl {
             max_seconds: Some(3600),
             rescan: true,
             no_cache: true

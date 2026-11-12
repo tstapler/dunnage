@@ -1,4 +1,4 @@
-use disk_cleanup_core::{first_line_capped, CMD_MSG_MAX};
+use dunnage_core::{first_line_capped, CMD_MSG_MAX};
 
 #[test]
 fn first_line_capped_should_take_the_first_nonempty_line_replace_control_chars_and_cut_on_a_char_boundary_at_200_bytes_when_given(

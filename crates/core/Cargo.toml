@@ -1,5 +1,5 @@
 [package]
-name = "disk-cleanup-core"
+name = "dunnage-core"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
@@ -16,11 +16,11 @@ test-support = []
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-disk-cleanup-scan = { path = "../scan", version = "0.1.0" }
+dunnage-scan = { path = "../scan", version = "0.1.0" }
 unicode-width = "0.2"
 
 [dev-dependencies]
 proptest = "1"
 insta = "1"
 tempfile = "3"
-disk-cleanup-core = { path = ".", features = ["test-support"] }
+dunnage-core = { path = ".", features = ["test-support"] }

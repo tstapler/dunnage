@@ -8,12 +8,12 @@ use std::os::unix::fs::{symlink, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
-use disk_cleanup_adapters::probe::cwd::{lsof_scan, scan_proc};
-use disk_cleanup_adapters::RealProbe;
-use disk_cleanup_core::ports::CmdOutput;
-use disk_cleanup_core::ports::SystemProbe;
-use disk_cleanup_core::testing::FakeCommandRunner;
-use disk_cleanup_core::{DeleteError, Tri};
+use dunnage_adapters::probe::cwd::{lsof_scan, scan_proc};
+use dunnage_adapters::RealProbe;
+use dunnage_core::ports::CmdOutput;
+use dunnage_core::ports::SystemProbe;
+use dunnage_core::testing::FakeCommandRunner;
+use dunnage_core::{DeleteError, Tri};
 
 struct Reaped(Child);
 

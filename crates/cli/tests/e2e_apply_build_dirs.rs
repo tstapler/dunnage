@@ -1,7 +1,7 @@
 #![cfg(feature = "gate-c")]
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 //! Story 3.2.4: Gate C, `--apply --kinds build-dirs` end to end through the spawned binary under
-//! `fixture_cmd()`. Run with `GATE=C cargo test --workspace --features disk-cleanup/gate-c`; a build without
+//! `fixture_cmd()`. Run with `GATE=C cargo test --workspace --features dunnage/gate-c`; a build without
 //! the feature has no `build-dirs` kind, so this file is compiled only with it.
 //!
 //! Every directory lives in a tempdir fixture HOME; nothing here touches a real repository or build dir.
@@ -58,7 +58,7 @@ fn apply(f: &Fixture, id: &str, extra: &[&str]) -> Output {
 }
 
 fn age_saved_plan(f: &Fixture, id: &str, age_secs: i64) {
-    let path = f.xdg("state").join("disk-cleanup/last_plan");
+    let path = f.xdg("state").join("dunnage/last_plan");
     let mut doc: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     let now = i64::try_from(
@@ -89,7 +89,7 @@ fn refused(out: &Output, needle: &str) {
 }
 
 fn run_start_ids(f: &Fixture) -> Vec<String> {
-    std::fs::read_to_string(f.xdg("state").join("disk-cleanup/audit.jsonl"))
+    std::fs::read_to_string(f.xdg("state").join("dunnage/audit.jsonl"))
         .unwrap_or_default()
         .lines()
         .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
@@ -404,7 +404,7 @@ fn a_partly_failed_apply_should_spend_the_id_and_a_new_dry_run_should_finish_the
     assert_eq!(out.status.code(), Some(1), "{stdout}\n{stderr}");
     assert!(
         stdout.contains(&format!(
-            "plan-id {a} is spent (4 items removed). Dry run again, then use the new plan-id: disk-cleanup --kinds build-dirs"
+            "plan-id {a} is spent (4 items removed). Dry run again, then use the new plan-id: dunnage --kinds build-dirs"
         )),
         "{stdout}"
     );
@@ -460,7 +460,7 @@ fn apply_should_exit_64_with_the_uid_sentence_and_delete_nothing_When_a_differen
     let out = f
         .command_for("unshare")
         .env("HOME", &root_home)
-        .args(["-rm", env!("CARGO_BIN_EXE_disk-cleanup")])
+        .args(["-rm", env!("CARGO_BIN_EXE_dunnage")])
         .args(["--apply", "--kinds", "build-dirs", "--plan-id", &id])
         .stdin(std::process::Stdio::null())
         .output()

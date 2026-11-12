@@ -4,13 +4,13 @@
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::kind::SelectorId;
-use disk_cleanup_core::outcome::SkipReason;
-use disk_cleanup_core::plan::{ChangeCause, GateRefusal, GateRenderCtx, BIN};
-use disk_cleanup_core::reasons::FatalError;
-use disk_cleanup_core::selector::{default_min_age_secs, format_age, KindSelector};
-use disk_cleanup_core::snapshot_types::FsSnapshot;
-use disk_cleanup_core::summary::{DiskVerdict, RunSummary};
+use dunnage_core::kind::SelectorId;
+use dunnage_core::outcome::SkipReason;
+use dunnage_core::plan::{ChangeCause, GateRefusal, GateRenderCtx, BIN};
+use dunnage_core::reasons::FatalError;
+use dunnage_core::selector::{default_min_age_secs, format_age, KindSelector};
+use dunnage_core::snapshot_types::FsSnapshot;
+use dunnage_core::summary::{DiskVerdict, RunSummary};
 use serde_json::{json, Map, Value};
 
 use crate::apply::{apply_rows, freed_total, ApplyInput};
@@ -21,7 +21,7 @@ pub const SCHEMA_VERSION: u32 = 1;
 
 /// The one-liner `--help` prints for reading the report by column.
 pub const JQ_TSV_ONE_LINER: &str =
-    "disk-cleanup --json | jq -r '.items[] | [.status, .kind, .est_bytes, .path] | @tsv'";
+    "dunnage --json | jq -r '.items[] | [.status, .kind, .est_bytes, .path] | @tsv'";
 
 /// One document, pretty-printed, ending in a newline.
 pub fn to_text(doc: &Value) -> String {
@@ -63,9 +63,9 @@ fn item_json(r: &ItemRow) -> Value {
 
 fn tier_id(r: &ItemRow) -> &'static str {
     match r.tier() {
-        disk_cleanup_core::kind::Risk::Safe => "safe",
-        disk_cleanup_core::kind::Risk::Guarded => "guarded",
-        disk_cleanup_core::kind::Risk::Destructive => "destructive",
+        dunnage_core::kind::Risk::Safe => "safe",
+        dunnage_core::kind::Risk::Guarded => "guarded",
+        dunnage_core::kind::Risk::Destructive => "destructive",
     }
 }
 
@@ -155,7 +155,7 @@ fn row_errors(rows: &[ItemRow]) -> Vec<ErrorEntry> {
 
 /// `selection`: the `--only` values as `flags()` orders them (lossy UTF-8), and `only_hex` (parallel, `null`
 /// for a valid name) only when one is not valid UTF-8.
-fn selection_json(sel: &disk_cleanup_core::selector::Selection) -> Value {
+fn selection_json(sel: &dunnage_core::selector::Selection) -> Value {
     let only = sel.only_sorted();
     let mut m = Map::new();
     m.insert(
@@ -354,9 +354,9 @@ pub fn kind_rows_with(
             id: s.id(),
             family: family(s.kinds()[0]),
             tier: match s.tier() {
-                disk_cleanup_core::kind::Risk::Safe => "safe",
-                disk_cleanup_core::kind::Risk::Guarded => "guarded",
-                disk_cleanup_core::kind::Risk::Destructive => "destructive",
+                dunnage_core::kind::Risk::Safe => "safe",
+                dunnage_core::kind::Risk::Guarded => "guarded",
+                dunnage_core::kind::Risk::Destructive => "destructive",
             },
             default: defaults.contains(s) || s == SelectorId::CacheApt,
             available: available(s),
@@ -421,7 +421,7 @@ pub fn fatal_doc(mode: &str, plan_id: Option<&str>, e: &FatalError) -> Value {
 }
 
 fn recent_saved(ctx: &GateRenderCtx) -> Value {
-    let mut entries: Vec<&disk_cleanup_core::SavedSelection> = ctx
+    let mut entries: Vec<&dunnage_core::SavedSelection> = ctx
         .saved
         .map(|s| s.entries.iter().collect())
         .unwrap_or_default();
@@ -444,7 +444,7 @@ fn recent_saved(ctx: &GateRenderCtx) -> Value {
 pub fn gate_refusal_doc(r: &GateRefusal, ctx: &GateRenderCtx) -> Value {
     // The three newest saved dry runs, as `design/ux.md` S7 shows them (`plan_id`, `kinds`, `flags`,
     // `saved_at`); the refusal's own `recent` list carries only ids and ages.
-    let recent_of = |_v: &[disk_cleanup_core::plan::RecentPlan]| -> Value { recent_saved(ctx) };
+    let recent_of = |_v: &[dunnage_core::plan::RecentPlan]| -> Value { recent_saved(ctx) };
     let dry = format!("{BIN} {}", ctx.selection.dry_run_args());
     let (code, supplied, detail) = match r {
         GateRefusal::MissingPlanId { recent } => (
@@ -481,8 +481,8 @@ pub fn gate_refusal_doc(r: &GateRefusal, ctx: &GateRenderCtx) -> Value {
                     json!({
                         "supplied": supplied.to_string(),
                         "recomputed": recomputed.to_string(),
-                        "vanished": vanished.iter().map(disk_cleanup_core::ItemKey::as_str).collect::<Vec<_>>(),
-                        "appeared": appeared.iter().map(disk_cleanup_core::ItemKey::as_str).collect::<Vec<_>>(),
+                        "vanished": vanished.iter().map(dunnage_core::ItemKey::as_str).collect::<Vec<_>>(),
+                        "appeared": appeared.iter().map(dunnage_core::ItemKey::as_str).collect::<Vec<_>>(),
                         "incomplete": incomplete,
                         "recent": recent_saved(ctx),
                         "dry_run_command": dry,

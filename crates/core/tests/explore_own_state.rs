@@ -3,8 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::explore::mark_check::OwnState;
-use disk_cleanup_core::Dirs;
+use dunnage_core::explore::mark_check::OwnState;
+use dunnage_core::Dirs;
 use proptest::prelude::*;
 
 fn dirs(state: &str) -> Dirs {
@@ -26,21 +26,18 @@ fn canon(p: &Path) -> PathBuf {
 
 #[test]
 fn covers_should_include_the_canonical_target_of_a_symlinked_xdg_directory() {
-    let lexical = OwnState::new(
-        &dirs("/home/u/.local/state"),
-        "/usr/bin/disk-cleanup".into(),
-    );
-    assert!(!lexical.covers(Path::new("/data/st/disk-cleanup/audit.jsonl")));
+    let lexical = OwnState::new(&dirs("/home/u/.local/state"), "/usr/bin/dunnage".into());
+    assert!(!lexical.covers(Path::new("/data/st/dunnage/audit.jsonl")));
     let own = OwnState::canonical(
         &dirs("/home/u/.local/state"),
-        "/usr/bin/disk-cleanup".into(),
+        "/usr/bin/dunnage".into(),
         &canon,
     );
     for p in [
-        "/data/st/disk-cleanup",
-        "/data/st/disk-cleanup/audit.jsonl",
+        "/data/st/dunnage",
+        "/data/st/dunnage/audit.jsonl",
         "/data/st",
-        "/home/u/.local/state/disk-cleanup/audit.jsonl",
+        "/home/u/.local/state/dunnage/audit.jsonl",
     ] {
         assert!(own.covers(Path::new(p)), "{p}");
     }
@@ -51,10 +48,10 @@ fn covers_should_include_the_canonical_target_of_a_symlinked_xdg_directory() {
 fn covers_should_include_the_binary_and_every_ancestor_of_it() {
     let own = OwnState::new(
         &dirs("/home/u/.local/state"),
-        "/home/u/code/dc/target/release/disk-cleanup".into(),
+        "/home/u/code/dc/target/release/dunnage".into(),
     );
     for p in [
-        "/home/u/code/dc/target/release/disk-cleanup",
+        "/home/u/code/dc/target/release/dunnage",
         "/home/u/code/dc/target/release",
         "/home/u/code/dc/target",
         "/home/u/code/dc",
@@ -81,7 +78,7 @@ proptest! {
             }
         };
         let own = OwnState::canonical(&dirs("/home/u/.local/state"), "/usr/bin/dc".into(), &canon_fn);
-        let inside = Path::new(&target).join("disk-cleanup").join(&leaf);
+        let inside = Path::new(&target).join("dunnage").join(&leaf);
         prop_assert!(own.covers(&inside));
         let sibling = Path::new(&target).join(["not-", leaf.as_str()].concat());
         prop_assert!(!own.covers(&sibling));

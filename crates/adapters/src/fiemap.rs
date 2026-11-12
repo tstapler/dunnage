@@ -7,8 +7,8 @@ use std::path::Path;
 use std::time::Duration;
 
 #[cfg(not(target_os = "linux"))]
-use disk_cleanup_core::ports::Unavailable;
-use disk_cleanup_core::ports::{ExtentAttribution, ExtentProbe, SharedEstimate};
+use dunnage_core::ports::Unavailable;
+use dunnage_core::ports::{ExtentAttribution, ExtentProbe, SharedEstimate};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct FiemapProbe;
@@ -48,7 +48,7 @@ mod linux {
     use std::path::{Path, PathBuf};
     use std::time::{Duration, Instant};
 
-    use disk_cleanup_core::ports::{
+    use dunnage_core::ports::{
         ExtentAttribution, ItemExtents, SharedEstimate, SharedExtent, Unavailable,
     };
     use libc::{c_int, c_ulong, c_void};

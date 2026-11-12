@@ -5,21 +5,21 @@
 #   DC_BENCH_OWNER_MACHINE=1  the owner's machine, real HOME: one cold run (reported apart, discarded), 7 warm
 #                             runs, the median must be <= 12.7 s, and a --rescan run <= 63.5 s (2x).
 #   otherwise                 counters, not seconds: a generated tree of 20,000 directories is scanned twice by
-#                             `disk-cleanup scan`; the second run must list nothing and serve every directory
+#                             `dunnage scan`; the second run must list nothing and serve every directory
 #                             from the cache. No wall-clock assertion.
 #   --budget                  Gate B (Story 2.3.3, Task 2.3.3a): the seconds assertion without the owner's HOME. One cold
 #                             run (discarded) and WARM_RUNS warm runs of the report on a fixture HOME with the cache rows
 #                             present; the median must be <= 12.7 s. Builds the Gate B binary (--features
-#                             disk-cleanup/gate-b) unless --bin is given. The owner machine run stays an owner action.
+#                             dunnage/gate-b) unless --bin is given. The owner machine run stays an owner action.
 #                             With DC_BENCH_FEATURE=gate-d (Story 4.3.3, Task 4.3.3a) the binary registers the Docker, Steam
 #                             and btrfs kinds, so the daemon must be up: with it down the script prints
 #                             `INCONCLUSIVE: docker down` and exits 77 rather than pass without the Docker kinds. A miss
 #                             prints discover_ms/plan_ms and the per-kind discovery ms from the plan document's `timings`, slowest first.
 #   Story 5.1.1 (owner machine, full kind set): the binary is the Gate D build (DC_BENCH_FEATURE defaults to gate-d here), run bare
-#                             as the protocol says, so every registered kind is discovered; `disk-cleanup kinds` is printed first.
+#                             as the protocol says, so every registered kind is discovered; `dunnage kinds` is printed first.
 #                             `docker` on PATH is a front that passes only read-only subcommands to the real daemon and logs every
 #                             call; a mutating one is refused and fails the run. With the daemon down: `INCONCLUSIVE: docker down`,
-#                             exit 77. The bash baseline (`stapler-scripts/disk-cleanup -n`, never without -n; DC_BENCH_BASELINE_SCRIPT
+#                             exit 77. The bash baseline (`stapler-scripts/dunnage -n`, never without -n; DC_BENCH_BASELINE_SCRIPT
 #                             overrides the path, DC_BENCH_SKIP_BASELINE=1 skips it) is re-timed once per run and the ratio printed,
 #                             so the 127 s reference is this session's figure. A miss prints discover_ms/plan_ms and the per-kind
 #                             discovery ms (the plan document's `timings`), slowest first.
@@ -111,14 +111,14 @@ docker_audit() { # <log>: fails if the front refused anything
 # The bash tool, dry run only, timed in the same session as the Rust runs so the ratio compares like with like.
 baseline_ms=""
 time_baseline() {
-  local script=${DC_BENCH_BASELINE_SCRIPT:-$HOME/dotfiles/stapler-scripts/disk-cleanup} t0 rc
+  local script=${DC_BENCH_BASELINE_SCRIPT:-$HOME/dotfiles/stapler-scripts/dunnage} t0 rc
   if [ "${DC_BENCH_SKIP_BASELINE:-0}" = 1 ]; then say "bash baseline: skipped (DC_BENCH_SKIP_BASELINE=1)"; return; fi
   if ! { [ -f "$script" ] && head -1 "$script" | grep -q bash && grep -q 'DRY_RUN' "$script"; }; then
     say "bash baseline: $script is not the legacy bash tool (a wrapper, or missing); not timed"; return
   fi
   t0=$(now_ms); bash "$script" -n </dev/null >/dev/null 2>&1; rc=$?
   baseline_ms=$(( $(now_ms) - t0 ))
-  say "bash baseline (same session, \`disk-cleanup -n\`, exit $rc): ${baseline_ms} ms (requirements.md reference: 127000 ms)"
+  say "bash baseline (same session, \`dunnage -n\`, exit $rc): ${baseline_ms} ms (requirements.md reference: 127000 ms)"
 }
 
 print_ratio() { # <median_ms>
@@ -306,7 +306,7 @@ STUB
   : > "$d/calls-good"
   expect 0 "owner mode passes a fast binary" "PASS (owner machine)" env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 "$self" --bin "$(stub good)"
   expect 0 "owner mode re-times the bash baseline with -n and prints the ratio" "ratio baseline/median: .*x (10x claim " env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 "$self" --bin "$(stub good)"
-  expect 0 "owner mode: the baseline ran with -n (exit 0, not the stub's 9)" "same session, .disk-cleanup -n., exit 0" env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 "$self" --bin "$(stub good)"
+  expect 0 "owner mode: the baseline ran with -n (exit 0, not the stub's 9)" "same session, .dunnage -n., exit 0" env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 "$self" --bin "$(stub good)"
   expect 0 "owner mode: a baseline that is not the legacy bash tool is not timed" "not the legacy bash tool" env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 DC_BENCH_BASELINE_SCRIPT=/bin/true "$self" --bin "$(stub good)"
   expect 77 "owner mode: a down daemon is INCONCLUSIVE, not a pass without the Docker kinds" "INCONCLUSIVE: docker down" env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 DC_BENCH_DOCKER_CMD=false "$self" --bin "$(stub good)"
   expect 1 "owner mode: a mutating docker command is refused by the front and fails the run" "mutating or unlisted docker command" env DC_BENCH_LOADAVG_FILE="$d/load-low" DC_BENCH_MAX_LOAD=12 "$self" --bin "$(stub dockmut)"
@@ -330,7 +330,7 @@ STUB
   echo "bench-dry-run selftest: $n ok"
 }
 
-bin=${DC_BENCH_BIN:-${CARGO_TARGET_DIR:-target}/release/disk-cleanup}
+bin=${DC_BENCH_BIN:-${CARGO_TARGET_DIR:-target}/release/dunnage}
 usage="usage: $0 [--bin PATH | --budget [--bin PATH]] | --selftest"
 # The default binary is rebuilt (a no-op when fresh): a gate runs this before its own release build.
 # The owner-machine run measures the Gate D build, which registers every kind (Story 5.1.1).
@@ -343,14 +343,14 @@ build_default() {
     return 0
   fi
   if [ "${DC_BENCH_OWNER_MACHINE:-0}" = 1 ]; then
-    cargo build --release --locked -q --features "disk-cleanup/${DC_BENCH_FEATURE:-gate-d}" || fail "cargo build --release (${DC_BENCH_FEATURE:-gate-d}) failed"
+    cargo build --release --locked -q --features "dunnage/${DC_BENCH_FEATURE:-gate-d}" || fail "cargo build --release (${DC_BENCH_FEATURE:-gate-d}) failed"
   else cargo build --release --locked -q || fail "cargo build --release failed"; fi
 }
 # DC_BENCH_FEATURE names the gate feature the budget binary is built with (gate-b by default; Gate C passes gate-c).
 build_gate_b() {
   [ -n "${DC_BENCH_BIN:-}" ] && return 0
   if [ "${DC_BENCH_BAZEL:-0}" = 1 ]; then bazel_bin "${DC_BENCH_FEATURE:-gate-b}"; return 0; fi
-  cargo build --release --locked -q --features "disk-cleanup/${DC_BENCH_FEATURE:-gate-b}" || fail "cargo build --release (${DC_BENCH_FEATURE:-gate-b}) failed"
+  cargo build --release --locked -q --features "dunnage/${DC_BENCH_FEATURE:-gate-b}" || fail "cargo build --release (${DC_BENCH_FEATURE:-gate-b}) failed"
 }
 case ${1:-} in
   --selftest) selftest ;;

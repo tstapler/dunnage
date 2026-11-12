@@ -8,9 +8,9 @@
 
 use std::path::Path;
 
-use disk_cleanup_core::cache_targets::{root_decision, CacheCommand};
-use disk_cleanup_core::ports::{Cmd, CommandRunner, SystemProbe};
-use disk_cleanup_core::{
+use dunnage_core::cache_targets::{root_decision, CacheCommand};
+use dunnage_core::ports::{Cmd, CommandRunner, SystemProbe};
+use dunnage_core::{
     AllocatedBytes, ApparentBytes, ApplyToken, DeleteFailure, Freed, Identity, RootDev, SkipReason,
 };
 

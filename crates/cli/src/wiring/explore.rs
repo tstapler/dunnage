@@ -1,4 +1,4 @@
-//! The composition root of `disk-cleanup explore` (Story 6.5.4, Task 6.5.4c): the real scan source, signals,
+//! The composition root of `dunnage explore` (Story 6.5.4, Task 6.5.4c): the real scan source, signals,
 //! lister, mark check and planner, owned so the planner's worker thread can outlive any one call.
 //!
 //! Read-only. The one state it creates is the first-run reserve files (N-8), and only for the interactive
@@ -12,30 +12,26 @@ use std::sync::mpsc::TrySendError;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use disk_cleanup_adapters::explore::cache_paint::{
+use dunnage_adapters::explore::cache_paint::{
     cache_config, explorer_cache_path, paints, save_guard, CacheMode, DEFAULT_MAX_AGE,
 };
-use disk_cleanup_adapters::explore::facts::ClassifyFactsLoader;
-use disk_cleanup_adapters::explore::scan_source::{Companion, WalkerScanSource};
-use disk_cleanup_adapters::lock::RunLock;
-use disk_cleanup_adapters::probe::basic::mount_sources;
-use disk_cleanup_adapters::steam::default_steam_roots;
-use disk_cleanup_adapters::{
-    RealCommandRunner, RealDirLister, RealDirOps, RealProbe, RealSpaceMeter,
-};
-use disk_cleanup_core::explore::input::MarkQuery;
-use disk_cleanup_core::explore::mark_check::{
+use dunnage_adapters::explore::facts::ClassifyFactsLoader;
+use dunnage_adapters::explore::scan_source::{Companion, WalkerScanSource};
+use dunnage_adapters::lock::RunLock;
+use dunnage_adapters::probe::basic::mount_sources;
+use dunnage_adapters::steam::default_steam_roots;
+use dunnage_adapters::{RealCommandRunner, RealDirLister, RealDirOps, RealProbe, RealSpaceMeter};
+use dunnage_core::explore::input::MarkQuery;
+use dunnage_core::explore::mark_check::{
     mark_check, MarkCtx, MarkEnv, MarkFacts, MarkMount, MarkOk, MountTable, OwnState, SymlinkFact,
 };
-use disk_cleanup_core::explore::msg::{ClassifyFacts, MarkRefusal, ScanMsg};
-use disk_cleanup_core::explore::ports::{
-    DirLister, ExplorerActions, ScanOpts, ScanSource, TermSignals,
-};
-use disk_cleanup_core::explore::rows::Sort;
-use disk_cleanup_core::ports::{CommandRunner, DryRunRunner, SpaceMeter, SystemProbe};
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::{Dirs, FsSnapshot};
-use disk_cleanup_scan::walker::WalkerBackend;
+use dunnage_core::explore::msg::{ClassifyFacts, MarkRefusal, ScanMsg};
+use dunnage_core::explore::ports::{DirLister, ExplorerActions, ScanOpts, ScanSource, TermSignals};
+use dunnage_core::explore::rows::Sort;
+use dunnage_core::ports::{CommandRunner, DryRunRunner, SpaceMeter, SystemProbe};
+use dunnage_core::roots::RootSet;
+use dunnage_core::{Dirs, FsSnapshot};
+use dunnage_scan::walker::WalkerBackend;
 
 use super::audit::build_info;
 use super::env::{read_root, tool_dirs, Wired};
@@ -90,7 +86,7 @@ pub struct ExplorerEnv {
     pub config_path: PathBuf,
     pub cleaner_roots: Vec<PathBuf>,
     pub now_unix: i64,
-    /// `another disk-cleanup apply is running (pid N); sizes are in flux`, while the run lock is held.
+    /// `another dunnage apply is running (pid N); sizes are in flux`, while the run lock is held.
     pub start_note: Option<String>,
     /// `audit.jsonl`, which a delete from the explorer appends to.
     pub audit_log: PathBuf,
@@ -100,7 +96,7 @@ pub struct ExplorerEnv {
 pub fn in_flux_note(dirs: &Dirs) -> Option<String> {
     let state_dir = tool_dirs(dirs).state;
     RunLock::probe(&run_lock_path(&state_dir))
-        .map(|pid| format!("another disk-cleanup apply is running (pid {pid}); sizes are in flux"))
+        .map(|pid| format!("another dunnage apply is running (pid {pid}); sizes are in flux"))
 }
 
 fn walker_source(base: &Dirs, settings: &Settings, space: Arc<dyn SpaceMeter>) -> WalkerScanSource {
@@ -296,7 +292,7 @@ pub fn mark_check_fn(base: &Dirs, roots: &RootSet, exe: PathBuf, tty: bool) -> A
     let home = std::fs::canonicalize(&base.home).unwrap_or_else(|_| base.home.clone());
     let mounts = mount_table();
     let own_state = OwnState::canonical(base, exe, &canonical_lenient);
-    let forced_panic = disk_cleanup_core::explore_panic_at().is_some_and(|at| at == "mark_check");
+    let forced_panic = dunnage_core::explore_panic_at().is_some_and(|at| at == "mark_check");
     Arc::new(move |q: &MarkQuery<'_>| {
         if forced_panic {
             forced_mark_check_panic();
@@ -327,10 +323,9 @@ pub fn mark_check_fn(base: &Dirs, roots: &RootSet, exe: PathBuf, tty: bool) -> A
 /// The roots as `RootSet::resolve_on` gives them now, from `config.toml` alone (the explorer never takes a
 /// `--root`, ADR-006 O-8). The apply calls this again and compares the result with the reviewed plan.
 pub fn resolve_roots_now(base: &Dirs) -> Result<RootSet, String> {
-    let config = disk_cleanup_adapters::config::read_config(
-        &disk_cleanup_adapters::config::config_path(base),
-    )
-    .map_err(|e| format!("error: {e}."))?;
+    let config =
+        dunnage_adapters::config::read_config(&dunnage_adapters::config::config_path(base))
+            .map_err(|e| format!("error: {e}."))?;
     let cwd = std::env::current_dir().unwrap_or_else(|_| base.home.clone());
     RootSet::resolve_on(
         base,
@@ -338,7 +333,7 @@ pub fn resolve_roots_now(base: &Dirs) -> Result<RootSet, String> {
         config.roots.as_deref(),
         &cwd,
         &super::dirs::real_canon,
-        &|p| disk_cleanup_core::ports::Fs::fs_type(&super::env::RealFs, p),
+        &|p| dunnage_core::ports::Fs::fs_type(&super::env::RealFs, p),
     )
     .map_err(|e| e.text())
 }
@@ -352,7 +347,7 @@ pub fn build_explorer_env(base: &Dirs, roots: &RootSet, settings: &Settings) -> 
         .as_ref()
         .filter(|_| wired.state.reserves_created)
         .map(|d| {
-            disk_cleanup_core::Warning::ReservesCreated {
+            dunnage_core::Warning::ReservesCreated {
                 state_dir: d.paths.dir.clone(),
             }
             .text()
@@ -391,7 +386,7 @@ pub fn build_explorer_env(base: &Dirs, roots: &RootSet, settings: &Settings) -> 
     });
     let run_id = format!(
         "{:x}-{:x}",
-        disk_cleanup_core::ports::Clock::now_epoch(&clock),
+        dunnage_core::ports::Clock::now_epoch(&clock),
         std::process::id()
     );
     let ports = Arc::new(ExplorerPorts {
@@ -451,7 +446,7 @@ pub fn build_explorer_env(base: &Dirs, roots: &RootSet, settings: &Settings) -> 
             .map_err(|e| e.to_string()),
         headroom_path,
         reserves_note,
-        config_path: disk_cleanup_adapters::config::config_path(base),
+        config_path: dunnage_adapters::config::config_path(base),
         cleaner_roots: roots.scan_roots().to_vec(),
         now_unix,
         start_note: in_flux_note(base),

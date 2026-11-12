@@ -1,7 +1,7 @@
-//! `disk-cleanup kinds` (Story 1.2.4, Task 1.2.4e, `design/ux.md` S5): the table of selectors with their
+//! `dunnage kinds` (Story 1.2.4, Task 1.2.4e, `design/ux.md` S5): the table of selectors with their
 //! availability in this build. Exit 0 whatever the availability.
 
-use disk_cleanup_core::SelectorId;
+use dunnage_core::SelectorId;
 
 use crate::render::render_kinds;
 use crate::render_json::{kind_rows_with, kinds_doc, to_text};

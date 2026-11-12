@@ -9,9 +9,9 @@ use std::fs;
 use std::path::Path;
 
 use common::discovery::{canon, fixture, roots_for, Fixture};
-use disk_cleanup_adapters::{delete_tree, open_parent, open_verified_root, RealDirOps};
-use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
-use disk_cleanup_core::{
+use dunnage_adapters::{delete_tree, open_parent, open_verified_root, RealDirOps};
+use dunnage_core::guard::{decide_path_common, Facts, GuardDecision};
+use dunnage_core::{
     AbortFlag, Allowed, AllowedTarget, ApplyToken, DeleteError, DeletePolicy, Identity, Kind,
     RootDev, SkipReason,
 };
@@ -43,7 +43,7 @@ fn policy(f: &Fixture, scope: &Allowed) -> DeletePolicy {
     let roots = roots_for(f);
     let mnt = RealDirOps::confined_to(&f.code);
     let root = open_verified_root(&mnt, &f.code, ident(&f.code)).unwrap();
-    let opened = disk_cleanup_adapters::DirOps::fstat(&mnt, root.dir()).unwrap();
+    let opened = dunnage_adapters::DirOps::fstat(&mnt, root.dir()).unwrap();
     DeletePolicy::for_allowed(
         scope,
         RootDev(ident(&f.code).dev),

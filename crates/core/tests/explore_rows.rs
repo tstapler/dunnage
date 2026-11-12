@@ -7,17 +7,17 @@ use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
-use disk_cleanup_core::explore::msg::{FileRow, FileRows, NodeEvent, ScanMode, NO_PARENT};
-use disk_cleanup_core::explore::ports::DirLister;
-use disk_cleanup_core::explore::rows::{
+use dunnage_core::explore::msg::{FileRow, FileRows, NodeEvent, ScanMode, NO_PARENT};
+use dunnage_core::explore::ports::DirLister;
+use dunnage_core::explore::rows::{
     build_rows, Badge, Filter, ListedFiles, Row, RowId, RowKind, RowList, RowSource, Sort, SortKey,
     ROW_CAP,
 };
-use disk_cleanup_core::explore::testing::FakeDirLister;
-use disk_cleanup_core::explore::tree::{ExploreTree, NodeId};
-use disk_cleanup_core::explore::view::{no_badge, ViewState};
-use disk_cleanup_scan::estimate::Stats;
-use disk_cleanup_scan::index::DirInfo;
+use dunnage_core::explore::testing::FakeDirLister;
+use dunnage_core::explore::tree::{ExploreTree, NodeId};
+use dunnage_core::explore::view::{no_badge, ViewState};
+use dunnage_scan::estimate::Stats;
+use dunnage_scan::index::DirInfo;
 
 /// A directory's own entries: `files` files of `alloc` bytes allocated and `size` bytes long, and `subdirs`
 /// subdirectory entries.

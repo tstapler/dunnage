@@ -10,7 +10,7 @@ SCAN = ["//crates/scan:scan"]
 dc_library(
     name = "core",
     srcs = glob(["src/**/*.rs"]),
-    crate_name = "disk_cleanup_core",
+    crate_name = "dunnage_core",
     # Cargo feature test-support: the shipped target only has it behind the explicit taint flag (see //build).
     crate_features = select({
         "//build:test_support_on": ["test-support"],

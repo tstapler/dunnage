@@ -2,13 +2,13 @@
 
 use std::path::Path;
 
-use disk_cleanup_adapters::snapshots::{Held, SnapshotInfo, SnapshotLayout, SnapshotSize};
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::testing::{
+use dunnage_adapters::snapshots::{Held, SnapshotInfo, SnapshotLayout, SnapshotSize};
+use dunnage_core::ports::Env;
+use dunnage_core::testing::{
     FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe, FakeRunGuard,
     FakeSpaceMeter,
 };
-use disk_cleanup_core::{Dirs, Platform};
+use dunnage_core::{Dirs, Platform};
 
 struct World {
     fs: FakeFs,

@@ -13,15 +13,15 @@ mod explore_rig;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_adapters::dirops::DirOps;
-use disk_cleanup_adapters::targets::explorer_selection::{candidate_of, ExplorerSelectionTarget};
-use disk_cleanup_adapters::testing::{At, FaultDirOps};
-use disk_cleanup_adapters::RealDirOps;
-use disk_cleanup_core::delete_types::{DirEntryInfo, StatInfo};
-use disk_cleanup_core::explore::confirm::ReviewedPlan;
-use disk_cleanup_core::ports::Fs;
-use disk_cleanup_core::target::{Guarded, Target};
-use disk_cleanup_core::{ApplyToken, Candidate, DeleteError, Identity, SkipReason};
+use dunnage_adapters::dirops::DirOps;
+use dunnage_adapters::targets::explorer_selection::{candidate_of, ExplorerSelectionTarget};
+use dunnage_adapters::testing::{At, FaultDirOps};
+use dunnage_adapters::RealDirOps;
+use dunnage_core::delete_types::{DirEntryInfo, StatInfo};
+use dunnage_core::explore::confirm::ReviewedPlan;
+use dunnage_core::ports::Fs;
+use dunnage_core::target::{Guarded, Target};
+use dunnage_core::{ApplyToken, Candidate, DeleteError, Identity, SkipReason};
 use explore_rig::{manifest, Ex};
 
 /// `DirOps` that edits what the engine sees, keyed on the name a directory was opened by.
@@ -301,7 +301,7 @@ fn explorer_selection_target_should_build_its_policy_only_through_the_witness_co
 
 #[test]
 fn candidate_of_should_say_whether_the_entry_is_a_directory() {
-    use disk_cleanup_core::KindFacts;
+    use dunnage_core::KindFacts;
     let ex = Ex::new();
     let d = ex.tree("app/dist", 1, 100);
     let f = d.join("f0");
@@ -316,8 +316,8 @@ fn candidate_of_should_say_whether_the_entry_is_a_directory() {
 
 #[test]
 fn target_should_name_its_selector_and_discover_the_reviewed_marks_that_still_exist() {
-    use disk_cleanup_core::selector::Selection;
-    use disk_cleanup_core::SelectorId;
+    use dunnage_core::selector::Selection;
+    use dunnage_core::SelectorId;
     let ex = Ex::new();
     let a = ex.tree("app/dist", 1, 100);
     let b = ex.tree("app/out", 1, 100);

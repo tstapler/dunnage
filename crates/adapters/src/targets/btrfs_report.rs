@@ -7,8 +7,8 @@
 use std::fs;
 use std::path::Path;
 
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_scan::btrfs::{btrfs_source_for_path, fs_dir_for_source, SYSFS_BTRFS};
+use dunnage_core::ports::Env;
+use dunnage_scan::btrfs::{btrfs_source_for_path, fs_dir_for_source, SYSFS_BTRFS};
 
 use crate::snapshots::{SnapshotInfo, SnapshotLayout};
 

@@ -5,7 +5,7 @@
 #   env -u CARGO_TARGET_DIR cargo mutants --no-shuffle -j 3 --timeout 120 \
 #     -f crates/adapters/src/targets/explorer_selection.rs -f crates/cli/src/explore/apply.rs \
 #     -f crates/cli/src/explore/handle.rs -f crates/adapters/src/audit_verify_explorer.rs \
-#     --test-package disk-cleanup --cargo-test-arg=--test=explore_apply --cargo-test-arg=--test=explore_target \
+#     --test-package dunnage --cargo-test-arg=--test=explore_apply --cargo-test-arg=--test=explore_target \
 #     --cargo-test-arg=--test=explore_apply_matrix --cargo-test-arg=--test=explore_apply_mounts \
 #     --cargo-test-arg=--test=explore_apply_signals --cargo-test-arg=--test=audit_verify_explorer \
 #     --cargo-test-arg=--test=explore_review

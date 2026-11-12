@@ -5,16 +5,16 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_adapters::snapshots::{SnapshotEntry, SnapshotInfo, SnapshotLayout, SnapshotSize};
-use disk_cleanup_adapters::targets::btrfs_report::{
+use dunnage_adapters::snapshots::{SnapshotEntry, SnapshotInfo, SnapshotLayout, SnapshotSize};
+use dunnage_adapters::targets::btrfs_report::{
     qgroup_note, report_notes_from, snapshot_note, QGROUP_NOTE,
 };
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::testing::{
+use dunnage_core::ports::Env;
+use dunnage_core::testing::{
     FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe, FakeRunGuard,
     FakeSpaceMeter,
 };
-use disk_cleanup_core::{Dirs, Platform};
+use dunnage_core::{Dirs, Platform};
 
 fn entry(name: &str, date: Option<&str>) -> SnapshotEntry {
     SnapshotEntry {

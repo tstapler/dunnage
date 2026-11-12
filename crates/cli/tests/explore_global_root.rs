@@ -27,7 +27,7 @@ fn a_global_root_before_explore_should_exit_64_naming_config_toml_with_an_empty_
         assert!(err.contains("Nothing was deleted."), "{argv:?}: {err}");
     }
     assert_eq!(tree_manifest(f.root()), before, "the fixture changed");
-    assert!(!f.xdg("state").join("disk-cleanup").exists());
+    assert!(!f.xdg("state").join("dunnage").exists());
 }
 
 #[cfg(feature = "explore")]

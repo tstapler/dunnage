@@ -101,7 +101,7 @@ pub struct ItemFacts {
 /// `execute` cannot be called without a token value:
 ///
 /// ```compile_fail
-/// use disk_cleanup_core::{target::Target, Candidate, ports::Env};
+/// use dunnage_core::{target::Target, Candidate, ports::Env};
 /// fn no_token(t: &dyn Target, c: &Candidate, env: &Env) {
 ///     let _ = t.execute(c, env);
 /// }

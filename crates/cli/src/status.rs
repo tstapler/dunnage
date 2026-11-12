@@ -1,11 +1,11 @@
-//! `disk-cleanup status [PATH] [--fs DIR] [--json]` (Story 1.2.4, Task 1.2.4e, `design/ux.md` S4). Takes no
+//! `dunnage status [PATH] [--fs DIR] [--json]` (Story 1.2.4, Task 1.2.4e, `design/ux.md` S4). Takes no
 //! lock and writes neither the audit log nor `last_plan`; the caller appends the one outcome line.
 
 use std::path::Path;
 
-use disk_cleanup_adapters::status::{assess, read_status};
-use disk_cleanup_core::ports::SpaceMeter;
-use disk_cleanup_core::{DiskVerdict, FatalError};
+use dunnage_adapters::status::{assess, read_status};
+use dunnage_core::ports::SpaceMeter;
+use dunnage_core::{DiskVerdict, FatalError};
 
 use crate::args::StatusArgs;
 use crate::render::render_status;

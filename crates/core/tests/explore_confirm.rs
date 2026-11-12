@@ -3,14 +3,14 @@
 
 use std::path::PathBuf;
 
-use disk_cleanup_core::delete_types::FileKind;
-use disk_cleanup_core::explore::confirm::{Confirm, ReviewedItem, ReviewedPlan};
-use disk_cleanup_core::explore::msg::{DeleteMsg, DeleteSummary};
-use disk_cleanup_core::explore::ports::{ExplorerActions, TypedCountSource};
-use disk_cleanup_core::explore::testing::{FakeExplorerActions, FakeTypedCount};
-use disk_cleanup_core::ids::Identity;
-use disk_cleanup_core::plan::{ItemIdentity, PlanId};
-use disk_cleanup_core::roots::RootIdentity;
+use dunnage_core::delete_types::FileKind;
+use dunnage_core::explore::confirm::{Confirm, ReviewedItem, ReviewedPlan};
+use dunnage_core::explore::msg::{DeleteMsg, DeleteSummary};
+use dunnage_core::explore::ports::{ExplorerActions, TypedCountSource};
+use dunnage_core::explore::testing::{FakeExplorerActions, FakeTypedCount};
+use dunnage_core::ids::Identity;
+use dunnage_core::plan::{ItemIdentity, PlanId};
+use dunnage_core::roots::RootIdentity;
 
 fn item(path: &str, ino: u64) -> ReviewedItem {
     ReviewedItem {
@@ -205,7 +205,7 @@ fn the_plan_id_should_come_from_the_items_and_roots_never_from_a_loose_field() {
 
 #[test]
 fn delete_should_take_only_a_confirmed_plan_and_the_fake_should_record_its_record() {
-    let actions = FakeExplorerActions::new(disk_cleanup_core::explore::msg::PlanPreview {
+    let actions = FakeExplorerActions::new(dunnage_core::explore::msg::PlanPreview {
         plan_id: String::new(),
         saved: true,
         rows: vec![],

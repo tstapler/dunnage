@@ -3,7 +3,7 @@
 
 use std::fs;
 
-use disk_cleanup_core::Tri;
+use dunnage_core::Tri;
 
 /// The kernel truncates `comm` to 15 bytes, so longer names are compared on their first 15.
 fn comm_matches(comm: &str, name: &str) -> bool {

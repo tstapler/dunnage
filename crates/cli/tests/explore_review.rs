@@ -13,16 +13,16 @@ use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use disk_cleanup_adapters::RealProbe;
-use disk_cleanup_cli::explore::actions::ExplorerPorts;
-use disk_cleanup_cli::explore::handle::{review_marks, DeleteWiring};
-use disk_cleanup_cli::wiring::env::RealFs;
-use disk_cleanup_core::plan::PlanId;
-use disk_cleanup_core::ports::PlanStore;
-use disk_cleanup_core::testing::{
+use dunnage_adapters::RealProbe;
+use dunnage_cli::explore::actions::ExplorerPorts;
+use dunnage_cli::explore::handle::{review_marks, DeleteWiring};
+use dunnage_cli::wiring::env::RealFs;
+use dunnage_core::plan::PlanId;
+use dunnage_core::ports::PlanStore;
+use dunnage_core::testing::{
     FakeAuditSink, FakeClock, FakeCommandRunner, FakePlanStore, FakeRunGuard, FakeSpaceMeter,
 };
-use disk_cleanup_core::{BuildInfo, RunRoots};
+use dunnage_core::{BuildInfo, RunRoots};
 use explore_rig::{Ex, NOW};
 
 fn ports_over(ex: &Ex, plans: Arc<FakePlanStore>) -> ExplorerPorts {
@@ -58,7 +58,7 @@ fn wiring(ex: &Ex) -> Arc<DeleteWiring> {
     Arc::new(DeleteWiring {
         base: ex.base_dirs.clone(),
         roots: ex.roots(),
-        exe: ex.p("bin/disk-cleanup"),
+        exe: ex.p("bin/dunnage"),
     })
 }
 
@@ -133,14 +133,14 @@ fn review_should_refuse_an_overlapping_set_and_an_oversized_one() {
 
 #[test]
 fn plan_rows_should_explain_a_file_mark_and_say_nothing_extra_for_other_refusals() {
-    use disk_cleanup_core::plan::Planned;
-    use disk_cleanup_core::SkipReason;
+    use dunnage_core::plan::Planned;
+    use dunnage_core::SkipReason;
     let ex = Ex::new();
     let dir = ex.tree("app/dist", 1, 100);
     let file = ex.code.join("app/notes.txt");
     std::fs::write(&file, b"n").unwrap();
-    let own = disk_cleanup_core::explore::mark_check::OwnState::new(
-        &disk_cleanup_core::Dirs {
+    let own = dunnage_core::explore::mark_check::OwnState::new(
+        &dunnage_core::Dirs {
             state: dir.clone(),
             ..ex.base_dirs.clone()
         },

@@ -1,4 +1,4 @@
-//! Build-directory discovery for the read-only report (Story 1.3.1): one `disk_cleanup_scan` pass finds
+//! Build-directory discovery for the read-only report (Story 1.3.1): one `dunnage_scan` pass finds
 //! `node_modules` and `target` directories, then each goes through the cheap guards (`Allowed`, Story 1.1.3)
 //! and only the survivors are probed for their real last-use time.
 //!
@@ -12,15 +12,15 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
-use disk_cleanup_core::ports::{Clock, SystemProbe};
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::{
+use dunnage_core::guard::{decide_path_common, Facts, GuardDecision};
+use dunnage_core::ports::{Clock, SystemProbe};
+use dunnage_core::roots::RootSet;
+use dunnage_core::{
     AllocatedBytes, Allowed, BuildDirFacts, BuildDirFlavor, Candidate, DeleteError, Identity, Kind,
     KindFacts, Locator, RootDev, SkipReason,
 };
-use disk_cleanup_scan::scan::{BackendChoice, BuildKind, ScanOptions, ScanReport};
-use disk_cleanup_scan::walker::CacheConfig;
+use dunnage_scan::scan::{BackendChoice, BuildKind, ScanOptions, ScanReport};
+use dunnage_scan::walker::CacheConfig;
 
 use crate::dirops::DirOps;
 use crate::mtime_probe::{
@@ -174,7 +174,7 @@ pub fn discover_build_dirs<D: DirOps>(
     env: &BuildEnv<'_, D>,
     opts: &BuildOpts,
 ) -> Result<BuildDiscovery, DiscoverError> {
-    let report = disk_cleanup_scan::scan::scan(&scan_options(env.roots, opts))
+    let report = dunnage_scan::scan::scan(&scan_options(env.roots, opts))
         .map_err(|e| DiscoverError::Scan(e.to_string()))?;
     let mut store = match (&opts.walker_cache, opts.rescan) {
         (Some(p), false) => NewestStore::open(NewestStore::sidecar_path(p)),

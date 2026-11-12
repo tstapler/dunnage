@@ -450,15 +450,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "disk-cleanup"
+name = "document-features"
+version = "0.2.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61"
+dependencies = [
+ "litrs",
+]
+
+[[package]]
+name = "dunnage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "disk-cleanup-adapters",
- "disk-cleanup-core",
- "disk-cleanup-scan",
- "disk-cleanup-tui",
+ "dunnage-adapters",
+ "dunnage-core",
+ "dunnage-scan",
+ "dunnage-tui",
  "expectrl",
  "rustix",
  "serde",
@@ -467,12 +476,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "disk-cleanup-adapters"
+name = "dunnage-adapters"
 version = "0.1.0"
 dependencies = [
- "disk-cleanup-adapters",
- "disk-cleanup-core",
- "disk-cleanup-scan",
+ "dunnage-adapters",
+ "dunnage-core",
+ "dunnage-scan",
  "libc",
  "peak_alloc",
  "proptest",
@@ -487,11 +496,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "disk-cleanup-core"
+name = "dunnage-core"
 version = "0.1.0"
 dependencies = [
- "disk-cleanup-core",
- "disk-cleanup-scan",
+ "dunnage-core",
+ "dunnage-scan",
  "insta",
  "proptest",
  "serde",
@@ -502,7 +511,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "disk-cleanup-scan"
+name = "dunnage-scan"
 version = "0.1.0"
 dependencies = [
  "libc",
@@ -513,26 +522,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "disk-cleanup-tui"
+name = "dunnage-tui"
 version = "0.1.0"
 dependencies = [
  "crossterm",
- "disk-cleanup-adapters",
- "disk-cleanup-core",
+ "dunnage-adapters",
+ "dunnage-core",
  "expectrl",
  "insta",
  "proptest",
  "ratatui",
  "unicode-width",
-]
-
-[[package]]
-name = "document-features"
-version = "0.2.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61"
-dependencies = [
- "litrs",
 ]
 
 [[package]]

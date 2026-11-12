@@ -8,8 +8,8 @@ use std::io::{BufRead, Write};
 use std::sync::mpsc::{channel, TryRecvError};
 use std::time::Duration;
 
-use disk_cleanup_adapters::RealTermSignals;
-use disk_cleanup_core::explore::ports::TermSignals;
+use dunnage_adapters::RealTermSignals;
+use dunnage_core::explore::ports::TermSignals;
 
 fn say(line: &str) {
     let mut out = std::io::stdout().lock();
@@ -18,9 +18,9 @@ fn say(line: &str) {
 }
 
 fn apply_mode() {
-    let state = std::sync::Arc::new(disk_cleanup_adapters::signals::SignalState::new());
-    let installed = disk_cleanup_adapters::signals::install(
-        disk_cleanup_adapters::signals::Mode::Apply,
+    let state = std::sync::Arc::new(dunnage_adapters::signals::SignalState::new());
+    let installed = dunnage_adapters::signals::install(
+        dunnage_adapters::signals::Mode::Apply,
         state,
         Box::new(std::io::sink()),
     );

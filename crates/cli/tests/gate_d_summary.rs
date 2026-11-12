@@ -3,22 +3,16 @@
 
 mod support;
 
-use disk_cleanup_cli::apply::render_apply;
-use disk_cleanup_core::ports::ExtentAttribution;
-use disk_cleanup_core::snapshot_types::Settled;
-use disk_cleanup_core::summary::{
-    DiskVerdict, FinishInput, RunSummary, StageTimings, WalkerCounters,
-};
-use disk_cleanup_core::{Kind, SelectorId, Status};
+use dunnage_cli::apply::render_apply;
+use dunnage_core::ports::ExtentAttribution;
+use dunnage_core::snapshot_types::Settled;
+use dunnage_core::summary::{DiskVerdict, FinishInput, RunSummary, StageTimings, WalkerCounters};
+use dunnage_core::{Kind, SelectorId, Status};
 use support::*;
 
 const GIB: u64 = 1 << 30;
 
-fn run_with(
-    outcomes: Vec<disk_cleanup_core::Outcome>,
-    data_fell: u64,
-    unallocated_after: u64,
-) -> RunFx {
+fn run_with(outcomes: Vec<dunnage_core::Outcome>, data_fell: u64, unallocated_after: u64) -> RunFx {
     let before = fs_btrfs().snapshot;
     let mut after = before.clone();
     let b = after.btrfs.as_mut().unwrap();

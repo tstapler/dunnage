@@ -8,7 +8,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
 use common::Spy;
-use disk_cleanup_tui::terminal::{
+use dunnage_tui::terminal::{
     fixed_terminal, install_panic_hook, DiagQueue, RawMode, TerminalGuard, EXIT_TERMINAL,
     RESTORE_FAILED,
 };

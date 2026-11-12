@@ -14,14 +14,14 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use common::Fixture;
-use disk_cleanup_adapters::explore::cache_paint::CacheMode;
-use disk_cleanup_cli::explore::json::run_json;
-use disk_cleanup_cli::explore::text::run_text;
-use disk_cleanup_cli::wiring::explore::{build_text_env, Settings};
-use disk_cleanup_core::explore::rows::Sort;
-use disk_cleanup_core::explore::testing::FakeTermSignals;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::Dirs;
+use dunnage_adapters::explore::cache_paint::CacheMode;
+use dunnage_cli::explore::json::run_json;
+use dunnage_cli::explore::text::run_text;
+use dunnage_cli::wiring::explore::{build_text_env, Settings};
+use dunnage_core::explore::rows::Sort;
+use dunnage_core::explore::testing::FakeTermSignals;
+use dunnage_core::roots::RootSet;
+use dunnage_core::Dirs;
 
 /// `<fixture>/home/code/{app,lib}` with a few files.
 fn tree(f: &Fixture) -> PathBuf {
@@ -73,7 +73,7 @@ fn roomy() -> bool {
             .arg(&root)
             .output()
             .unwrap();
-        out.status.success() && f.xdg("cache").join("disk-cleanup/explorer.cache").is_file()
+        out.status.success() && f.xdg("cache").join("dunnage/explorer.cache").is_file()
     });
     if !ok {
         assert!(
@@ -86,18 +86,14 @@ fn roomy() -> bool {
 }
 
 /// The library's view of the same tree, run in this process over a fake signal source.
-fn library_env(
-    f: &Fixture,
-    root: &Path,
-    top: usize,
-) -> disk_cleanup_cli::explore::text::ExploreEnv {
+fn library_env(f: &Fixture, root: &Path, top: usize) -> dunnage_cli::explore::text::ExploreEnv {
     let dirs = dirs_of(f);
     let roots = RootSet::resolve(
         &dirs,
         &[],
         Some(&[root.to_path_buf()]),
         &f.home(),
-        &disk_cleanup_cli::wiring::dirs::real_canon,
+        &dunnage_cli::wiring::dirs::real_canon,
     )
     .unwrap();
     let mut env = build_text_env(
@@ -186,10 +182,10 @@ fn a_text_run_should_write_the_explorer_cache_and_no_state_at_all() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(0));
-    assert!(f.xdg("cache").join("disk-cleanup/explorer.cache").is_file());
-    assert!(!f.xdg("cache").join("disk-cleanup/walker.cache").exists());
+    assert!(f.xdg("cache").join("dunnage/explorer.cache").is_file());
+    assert!(!f.xdg("cache").join("dunnage/walker.cache").exists());
     assert!(
-        !f.xdg("state").join("disk-cleanup").exists(),
+        !f.xdg("state").join("dunnage").exists(),
         "a text run created state: {:?}",
         fs::read_dir(f.xdg("state")).unwrap().collect::<Vec<_>>()
     );
@@ -318,7 +314,7 @@ impl Pty {
         let quoted: Vec<String> = args.iter().map(|a| format!("'{}'", a.display())).collect();
         cmd.arg("-c").arg(format!(
             "stty rows 30 cols 100; '{}' explore {}; echo EXIT=$?",
-            env!("CARGO_BIN_EXE_disk-cleanup"),
+            env!("CARGO_BIN_EXE_dunnage"),
             quoted.join(" ")
         ));
         let mut session = expectrl::Session::spawn(cmd).unwrap();
@@ -399,7 +395,7 @@ impl Pty {
 }
 
 fn state_names(f: &Fixture) -> Vec<String> {
-    let dir = f.xdg("state").join("disk-cleanup");
+    let dir = f.xdg("state").join("dunnage");
     let mut names: Vec<String> = fs::read_dir(dir)
         .map(|rd| {
             rd.flatten()
@@ -438,20 +434,19 @@ fn the_first_interactive_run_should_note_the_reserve_files_before_the_alternate_
         "only the reserve files may exist after a browse: {names:?}"
     );
     assert_eq!(names.len(), 2, "{names:?}");
-    assert!(f.xdg("cache").join("disk-cleanup/explorer.cache").is_file());
+    assert!(f.xdg("cache").join("dunnage/explorer.cache").is_file());
 }
 
 #[test]
 fn a_held_run_lock_should_not_stop_the_browse_and_should_show_the_in_flux_note() {
     let f = Fixture::new();
     let root = tree(&f);
-    let state = f.xdg("state").join("disk-cleanup");
+    let state = f.xdg("state").join("dunnage");
     fs::create_dir_all(&state).unwrap();
-    let lock =
-        disk_cleanup_adapters::lock::RunLock::try_acquire(&state.join("run.lock"), None).unwrap();
+    let lock = dunnage_adapters::lock::RunLock::try_acquire(&state.join("run.lock"), None).unwrap();
     let mut p = Pty::spawn(&f, &[&root]);
     p.wait_for(&format!(
-        "another disk-cleanup apply is running (pid {}); sizes are in flux",
+        "another dunnage apply is running (pid {}); sizes are in flux",
         std::process::id()
     ));
     p.send(b"q");

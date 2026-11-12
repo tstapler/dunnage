@@ -1,4 +1,4 @@
-//! The clap surface of `disk-cleanup` (Story 1.2.4, Task 1.2.4a, `design/ux.md` S8) and the one place that
+//! The clap surface of `dunnage` (Story 1.2.4, Task 1.2.4a, `design/ux.md` S8) and the one place that
 //! turns a parse error into an exit code: help and version exit 0, every other clap error exits 64 (the
 //! default of 2 collides with "fatal").
 //!
@@ -9,14 +9,14 @@ use std::path::PathBuf;
 
 use clap::error::{ContextKind, ErrorKind};
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
-use disk_cleanup_core::plan::PlanIdArg;
-use disk_cleanup_core::selector::{Discard, DockerVolumes, KindSelector, Selection, SelectorError};
-use disk_cleanup_core::SelectorId;
+use dunnage_core::plan::PlanIdArg;
+use dunnage_core::selector::{Discard, DockerVolumes, KindSelector, Selection, SelectorError};
+use dunnage_core::SelectorId;
 
 use crate::terminal::ColorChoice;
 
 pub const FORCE_TIP: &str = "Tip: there is no force or yes flag; use --kinds.";
-pub const DRY_RUN_WITH_APPLY: &str = "error: -n/--dry-run and --apply contradict each other; drop one. Dry run is the default, so plain 'disk-cleanup' is the dry run.";
+pub const DRY_RUN_WITH_APPLY: &str = "error: -n/--dry-run and --apply contradict each other; drop one. Dry run is the default, so plain 'dunnage' is the dry run.";
 
 const ABOUT: &str = "Free disk space. Dry run by default: nothing is deleted without --apply.";
 
@@ -24,10 +24,10 @@ const AFTER_HELP: &str = "\
 Exit codes: 0 ok, 1 partial failure (status: warn), 2 fatal (status: crit; audit verify: violations),
             3 btrfs starved, 64 usage, 74 status/audit verify could not read state,
             130 interrupted (SIGINT), 143 (SIGTERM)
-Example: disk-cleanup --json | jq -r '.items[] | [.status, .kind, .est_bytes, .path] | @tsv'
+Example: dunnage --json | jq -r '.items[] | [.status, .kind, .est_bytes, .path] | @tsv'
 
 Environment:
-  DISK_CLEANUP_UNGATED=<reason>  audited break-glass for the gate-stamp check of an unconfined --apply;
+  DUNNAGE_UNGATED=<reason>  audited break-glass for the gate-stamp check of an unconfined --apply;
                                  you must also type BYPASS on the terminal
   NO_COLOR                       turn colour off (--color always overrides it)";
 
@@ -35,7 +35,7 @@ Environment:
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Parser, Debug)]
 #[command(
-    name = "disk-cleanup",
+    name = "dunnage",
     about = ABOUT,
     after_help = AFTER_HELP,
     disable_version_flag = true,
@@ -87,7 +87,7 @@ pub struct Cli {
     pub keep_newest: Option<u32>,
 
     /// Worker threads for deletes
-    #[arg(long, value_name = "N", default_value_t = disk_cleanup_core::executor::DEFAULT_JOBS)]
+    #[arg(long, value_name = "N", default_value_t = dunnage_core::executor::DEFAULT_JOBS)]
     pub jobs: usize,
 
     /// Allow removing that class of unreferenced volume (needs docker-volumes)
@@ -199,14 +199,14 @@ const EXPLORE_AFTER_HELP: &str = "\
 Exit codes: 0 ok, 2 a PATH does not exist or is unreadable, 64 usage, 74 the terminal cannot be set up,
             130 interrupted (Ctrl-C, SIGINT), 143 (SIGTERM, SIGHUP, SIGQUIT)
 Environment:
-  DISK_CLEANUP_PLAIN=1  always print the text view
+  DUNNAGE_PLAIN=1  always print the text view
   NO_COLOR              turn colour off (--color always overrides it)";
 
 /// What `explore` refuses with exit 64 (UX-T2; owner decision 2026-11-10: the explorer deletes with a key,
 /// never with a flag).
-pub const EXPLORE_NO_APPLY: &str = "error: explore has no --apply. In the explorer mark items with Space, press p for the plan and d to delete after typing the count; from the shell, dry run 'disk-cleanup' and use a Next: line. Nothing was deleted.";
+pub const EXPLORE_NO_APPLY: &str = "error: explore has no --apply. In the explorer mark items with Space, press p for the plan and d to delete after typing the count; from the shell, dry run 'dunnage' and use a Next: line. Nothing was deleted.";
 const EXPLORE_NO_CROSS: &str = "error: explore has no --cross-device: it never crosses into another filesystem (other filesystems show as 'x' rows). Nothing was deleted.";
-const EXPLORE_NO_GLOBAL_ROOT: &str = "error: explore does not take the cleaner's --root before the subcommand: the folders it may delete from are the 'roots' of config.toml, and adding one is an edit of that file ('disk-cleanup explore --root PATH' only chooses what to show). Nothing was deleted.";
+const EXPLORE_NO_GLOBAL_ROOT: &str = "error: explore does not take the cleaner's --root before the subcommand: the folders it may delete from are the 'roots' of config.toml, and adding one is an edit of that file ('dunnage explore --root PATH' only chooses what to show). Nothing was deleted.";
 const EXPLORE_NO_MOUSE: &str = "error: explore has no --mouse: mouse reporting stays off so the terminal's own selection copies paths. Nothing was deleted.";
 const EXPLORE_NO_VERBOSITY: &str = "error: explore has no -q or -v: it prints one fixed view. Use --text or --json for plain output. Nothing was deleted.";
 
@@ -214,7 +214,7 @@ const SCAN_AFTER_HELP: &str = "\
 The first run is cold: the old metascope/walker.cache is not migrated; this command keeps its own scan.cache.
 Exit codes: 0 ok, 2 fatal, 64 usage (a nonexistent root), 130 interrupted (SIGINT), 143 (SIGTERM).
 --json prints the scanner's own report document; it is not the schema_version 1 agent contract.
-The old `metascope status` is the `disk-cleanup status` command.";
+The old `metascope status` is the `dunnage status` command.";
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScanBy {
@@ -260,7 +260,7 @@ pub struct ScanArgs {
     /// Ignore cached directory records but write fresh ones (walker only)
     #[arg(long)]
     pub rescan: bool,
-    /// Cache file (default: $XDG_CACHE_HOME/disk-cleanup/scan.cache)
+    /// Cache file (default: $XDG_CACHE_HOME/dunnage/scan.cache)
     #[arg(long, value_name = "FILE")]
     pub cache_file: Option<PathBuf>,
     /// Re-list cached directories older than this many hours
@@ -290,7 +290,7 @@ pub enum ExploreSortArg {
     Name,
 }
 
-/// `disk-cleanup explore` (Story 6.5.4, `tui/ux-explorer.md` 1.1). The hidden flags exist only to be refused
+/// `dunnage explore` (Story 6.5.4, `tui/ux-explorer.md` 1.1). The hidden flags exist only to be refused
 /// with the right text: clap's own "unexpected argument" would not say that nothing was deleted.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Args, Debug, Default)]
@@ -562,7 +562,7 @@ where
     I: IntoIterator<Item = T>,
     T: Into<std::ffi::OsString> + Clone,
 {
-    let raw: Vec<std::ffi::OsString> = std::iter::once("disk-cleanup".into())
+    let raw: Vec<std::ffi::OsString> = std::iter::once("dunnage".into())
         .chain(args.into_iter().map(Into::into))
         .collect();
     let words: Vec<String> = raw
@@ -673,7 +673,7 @@ impl Cli {
             .worktree_ignored
             .map(|DiscardArg::Discard| Discard::Discard);
         sel.only.clone_from(&self.only);
-        sel.scan = disk_cleanup_core::selector::ScanControl {
+        sel.scan = dunnage_core::selector::ScanControl {
             max_seconds: self.max_seconds,
             rescan: self.rescan,
             no_cache: self.no_cache,
@@ -694,7 +694,7 @@ impl Cli {
 fn parse_kinds(list: &str) -> Result<KindSelector, UsageError> {
     for word in list.split(',') {
         if word == "all" {
-            return Err(UsageError("error: 'all' is not accepted: name the kinds you mean (see 'disk-cleanup kinds'). Nothing was deleted.".into()));
+            return Err(UsageError("error: 'all' is not accepted: name the kinds you mean (see 'dunnage kinds'). Nothing was deleted.".into()));
         }
         if let Some(rest) = word.strip_prefix('+') {
             return Err(UsageError(format!("error: '+{rest}' is not accepted: --kinds replaces the default set, so write the whole list, for example --kinds caches,worktrees,build-dirs. Nothing was deleted.")));

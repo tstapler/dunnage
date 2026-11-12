@@ -21,28 +21,28 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use disk_cleanup_adapters::audit::{unclean_run_warning, RealAuditSink};
-use disk_cleanup_adapters::gate_stamp::{
+use dunnage_adapters::audit::{unclean_run_warning, RealAuditSink};
+use dunnage_adapters::gate_stamp::{
     current_exe_sha256, open_controlling_tty, read_stamp, stamp_path,
 };
-use disk_cleanup_adapters::lock::RealRunGuard;
-use disk_cleanup_adapters::signals::{SignalState, SwallowBrokenPipe};
-use disk_cleanup_adapters::space_meter::run_meter;
-use disk_cleanup_adapters::state::{
+use dunnage_adapters::lock::RealRunGuard;
+use dunnage_adapters::signals::{SignalState, SwallowBrokenPipe};
+use dunnage_adapters::space_meter::run_meter;
+use dunnage_adapters::state::{
     append_outcome, LastPlanRead, OutcomeLine, OutcomeMode, Owner, RealPlanStore, StateDir,
     StatePaths, OUTCOME_SCHEMA,
 };
-use disk_cleanup_adapters::treestat::TreestatSizer;
-use disk_cleanup_adapters::{RealDirOps, RealProbe, RealSpaceMeter};
-use disk_cleanup_core::executor::{ExitClass, Refused, RunHooks};
-use disk_cleanup_core::explore::confirm::ConfirmedPlan;
-use disk_cleanup_core::explore::mark_check::OwnState;
-use disk_cleanup_core::plan::PlanId;
-use disk_cleanup_core::plan_state::BuildInfo;
-use disk_cleanup_core::ports::{Clock, Env, SystemProbe};
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::selector::KindSelector;
-use disk_cleanup_core::{
+use dunnage_adapters::treestat::TreestatSizer;
+use dunnage_adapters::{RealDirOps, RealProbe, RealSpaceMeter};
+use dunnage_core::executor::{ExitClass, Refused, RunHooks};
+use dunnage_core::explore::confirm::ConfirmedPlan;
+use dunnage_core::explore::mark_check::OwnState;
+use dunnage_core::plan::PlanId;
+use dunnage_core::plan_state::BuildInfo;
+use dunnage_core::ports::{Clock, Env, SystemProbe};
+use dunnage_core::roots::RootSet;
+use dunnage_core::selector::KindSelector;
+use dunnage_core::{
     build_flavor, ApplyToken, Candidate, Dirs, DiskVerdict, FatalError, Locator, Warning,
 };
 
@@ -364,7 +364,7 @@ fn unix_now() -> i64 {
 /// variant takes only the [`ConfirmedPlan`] (the typed count bound to the plan the owner reviewed); the
 /// per-run switches in [`ExplorerRun`] carry no authority.
 pub enum ApplyRequest<'a> {
-    /// `disk-cleanup --apply ...`: `argv` is parsed again by [`compose_apply`].
+    /// `dunnage --apply ...`: `argv` is parsed again by [`compose_apply`].
     Cleaner { argv: Vec<OsString>, cli: &'a Cli },
     /// The explorer's `d` after the typed count (Story 6.6.3). Bypasses `parse_args`, `kind_availability` and
     /// the selection (review C4).
@@ -390,8 +390,8 @@ struct RealApply {
     probe: RealProbe,
     audit: RealAuditSink,
     plans: RealPlanStore,
-    space: Box<dyn disk_cleanup_core::ports::SpaceMeter>,
-    runner: Box<dyn disk_cleanup_core::ports::CommandRunner>,
+    space: Box<dyn dunnage_core::ports::SpaceMeter>,
+    runner: Box<dyn dunnage_core::ports::CommandRunner>,
     guard: RealRunGuard,
     confined: bool,
     build: BuildInfo,
@@ -452,7 +452,7 @@ impl RealApply {
         }
     }
 
-    /// The stamp step for `gate`; `ungated` is `DISK_CLEANUP_UNGATED` (the explorer passes `None`: it owns the
+    /// The stamp step for `gate`; `ungated` is `DUNNAGE_UNGATED` (the explorer passes `None`: it owns the
     /// terminal, so there is no break-glass prompt).
     fn stamp(&self, gate: char, ungated: Option<&str>) -> Result<StampOutcome, GateExit> {
         let installed = read_stamp(&stamp_path(&self.dirs.state));
@@ -565,7 +565,7 @@ fn run_cleaner_apply(
     // Phase one: which selectors may delete in this build? A build with none never mints the capability.
     let read_only_ops = {
         let read = read.clone();
-        move || disk_cleanup_adapters::RealDirOps::confined_to(&read)
+        move || dunnage_adapters::RealDirOps::confined_to(&read)
     };
     let probe_ctx = KindCtx {
         roots: roots.clone(),
@@ -618,8 +618,8 @@ fn run_cleaner_apply(
     let (paths, owner) = (real.paths.clone(), real.owner);
     let build = real.build.clone();
     let run_id = run_id_now();
-    let via = std::env::var("DISK_CLEANUP_VIA").ok();
-    let ungated = std::env::var("DISK_CLEANUP_UNGATED").ok();
+    let via = crate::wiring::env::tool_env("VIA").and_then(|v| v.into_string().ok());
+    let ungated = crate::wiring::env::tool_env("UNGATED").and_then(|v| v.into_string().ok());
     let stamp = |gate: char| real.stamp(gate, ungated.as_deref());
     let outcome_run_id = run_id.clone();
     let outcome_via = via.clone();

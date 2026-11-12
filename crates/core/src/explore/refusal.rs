@@ -73,14 +73,14 @@ impl MarkRefusal {
                 Some(real) => format!(
                     "{path} is a symbolic link and the explorer never follows links. The cleaner's \
                      folders are named by their real paths ({}); open the real path: \
-                     disk-cleanup explore {}",
+                     dunnage explore {}",
                     roots_list(cx.roots, cx.tty),
                     shell_quote(real.as_os_str(), !cx.tty)
                 ),
                 None => format!(
                     "{path} is a symbolic link and the explorer never follows links. The cleaner's \
                      folders are named by their real paths ({}); open the real path with \
-                     disk-cleanup explore.",
+                     dunnage explore.",
                     roots_list(cx.roots, cx.tty)
                 ),
             },
@@ -106,7 +106,7 @@ impl MarkRefusal {
                 esc(mount.as_os_str(), cx.tty)
             ),
             MarkRefusal::OwnState => format!(
-                "{path} holds disk-cleanup's own state (audit log, plans, cache or config). \
+                "{path} holds dunnage's own state (audit log, plans, cache or config). \
                  It is never deleted from here."
             ),
             MarkRefusal::InsideMarked(outer) => {

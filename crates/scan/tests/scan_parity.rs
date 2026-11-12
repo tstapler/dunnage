@@ -7,7 +7,7 @@
 //! differences allowed are the fields that depend on the clock or the host, named in `CLOCK_KEYS`, and the
 //! absolute fixture root, which is substituted. Everything else must match byte for byte.
 
-use disk_cleanup_scan::scan::{scan, BackendChoice, ScanOptions, ScanReport};
+use dunnage_scan::scan::{scan, BackendChoice, ScanOptions, ScanReport};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;

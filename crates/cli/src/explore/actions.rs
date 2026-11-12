@@ -10,20 +10,20 @@ use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use disk_cleanup_core::executor::{Executor, Mode, RunOptions, RunReport};
-use disk_cleanup_core::explore::confirm::{ConfirmedPlan, ReviewedPlan};
-use disk_cleanup_core::explore::msg::{DeleteMsg, MarkRefusal, PlanPreview, PreviewRow, ScanMsg};
-use disk_cleanup_core::explore::ports::{DeleteHandle, ExplorerActions, Handoff, PreviewHandle};
-use disk_cleanup_core::explore::refusal::RefusalCtx;
-use disk_cleanup_core::outcome::SkipReason;
-use disk_cleanup_core::plan::{OnlyMode, Plan, PlanId, Planned};
-use disk_cleanup_core::plan_state::{BuildInfo, SaveOutcome};
-use disk_cleanup_core::ports::{
+use dunnage_core::executor::{Executor, Mode, RunOptions, RunReport};
+use dunnage_core::explore::confirm::{ConfirmedPlan, ReviewedPlan};
+use dunnage_core::explore::msg::{DeleteMsg, MarkRefusal, PlanPreview, PreviewRow, ScanMsg};
+use dunnage_core::explore::ports::{DeleteHandle, ExplorerActions, Handoff, PreviewHandle};
+use dunnage_core::explore::refusal::RefusalCtx;
+use dunnage_core::outcome::SkipReason;
+use dunnage_core::plan::{OnlyMode, Plan, PlanId, Planned};
+use dunnage_core::plan_state::{BuildInfo, SaveOutcome};
+use dunnage_core::ports::{
     AuditSink, Clock, CommandRunner, Env, Fs, PlanStore, RunGuard, SpaceMeter, SystemProbe,
 };
-use disk_cleanup_core::selector::{KindSelector, Selection};
-use disk_cleanup_core::target::Target;
-use disk_cleanup_core::{Dirs, RunRoots, SelectorId};
+use dunnage_core::selector::{KindSelector, Selection};
+use dunnage_core::target::Target;
+use dunnage_core::{Dirs, RunRoots, SelectorId};
 
 use super::apply::{ExplorerRun, NOT_IN_BUILD};
 use super::handle::{review_marks, DeleteWiring};
@@ -276,7 +276,7 @@ fn plan_marks(
     if marks.is_empty() {
         return Err("Nothing is marked. Space marks an item.".to_string());
     }
-    if let Some(ms) = disk_cleanup_core::explore_plan_delay_ms() {
+    if let Some(ms) = dunnage_core::explore_plan_delay_ms() {
         std::thread::sleep(Duration::from_millis(ms));
     }
     let kinds = ports.path_kinds();
@@ -293,7 +293,7 @@ fn plan_marks(
         jobs: ports.jobs.max(1),
         settle_timeout: Duration::from_secs(30),
         meter_path: None,
-        meta: disk_cleanup_core::executor::RunMeta {
+        meta: dunnage_core::executor::RunMeta {
             run_id: ports.run_id.clone(),
             build: ports.build.clone(),
             stamp: None,
@@ -358,7 +358,7 @@ fn plan_input<'a>(
         not_built: Vec::new(),
         notes,
         wrapper_note: None,
-        exe: PathBuf::from(disk_cleanup_core::plan::BIN),
+        exe: PathBuf::from(dunnage_core::plan::BIN),
         euid: env.probe.euid(),
         state_dir: ports.dirs.state.clone(),
         home: Some(ports.dirs.home.clone()),
@@ -396,7 +396,7 @@ fn skip_reason_text(
     let ctx = TextCtx {
         selection,
         selector,
-        exe: Path::new(disk_cleanup_core::plan::BIN),
+        exe: Path::new(dunnage_core::plan::BIN),
         ascii_only: true,
     };
     reasontext::reason(r, facts, &ctx)
@@ -414,9 +414,9 @@ fn preview_of(ports: &ExplorerPorts, mp: &MarkPlan) -> PlanPreview {
     for i in &plan.items {
         let c = &i.candidate;
         let path = match c.locator() {
-            disk_cleanup_core::candidate::Locator::Path(p)
-            | disk_cleanup_core::candidate::Locator::Steam(_, p) => p.clone(),
-            disk_cleanup_core::candidate::Locator::Docker(_) => continue,
+            dunnage_core::candidate::Locator::Path(p)
+            | dunnage_core::candidate::Locator::Steam(_, p) => p.clone(),
+            dunnage_core::candidate::Locator::Docker(_) => continue,
         };
         let status = match i.planned {
             Planned::Will => "FREE",
@@ -425,7 +425,7 @@ fn preview_of(ports: &ExplorerPorts, mp: &MarkPlan) -> PlanPreview {
                 let f = facts.get(&c.id()).unwrap_or(&none);
                 skips.push(format!(
                     "{}: {}",
-                    disk_cleanup_core::escape::escape_os(path.as_os_str(), false),
+                    dunnage_core::escape::escape_os(path.as_os_str(), false),
                     skip_reason_text(r, f, &mp.selection, c.selector())
                 ));
                 "SKIP"

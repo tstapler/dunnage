@@ -12,9 +12,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
-use disk_cleanup_adapters::{FiemapProbe, RealSpaceMeter};
-use disk_cleanup_core::ports::{ExtentAttribution, ExtentProbe, SpaceMeter};
-use disk_cleanup_core::Platform;
+use dunnage_adapters::{FiemapProbe, RealSpaceMeter};
+use dunnage_core::ports::{ExtentAttribution, ExtentProbe, SpaceMeter};
+use dunnage_core::Platform;
 
 const MIB: u64 = 1 << 20;
 const BTRFS_MAGIC: u64 = 0x9123_683E;

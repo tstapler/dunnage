@@ -5,12 +5,12 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use disk_cleanup_core::guard::Facts;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::targets::build_dir::{
+use dunnage_core::guard::Facts;
+use dunnage_core::roots::RootSet;
+use dunnage_core::targets::build_dir::{
     decide_build_dir, effective_min_age, BuildFacts, BuildGuard, Reproducibility, BUILD_DIR_MIN_AGE,
 };
-use disk_cleanup_core::{Dirs, Identity, Kind, RootDev, SkipReason};
+use dunnage_core::{Dirs, Identity, Kind, RootDev, SkipReason};
 
 const NOW: i64 = 1_000_000;
 const MIN: i64 = 60;

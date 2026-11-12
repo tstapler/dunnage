@@ -1,7 +1,7 @@
 #![cfg(feature = "gate-d")]
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 //! Gate D, the Docker selection flags through the spawned binary under `fixture_cmd()` (validation T-503,
-//! second half). Run with `GATE=D cargo test --workspace --features disk-cleanup/gate-d`.
+//! second half). Run with `GATE=D cargo test --workspace --features dunnage/gate-d`.
 
 mod common;
 

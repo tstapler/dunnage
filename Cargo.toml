@@ -6,7 +6,7 @@ members = ["crates/scan", "crates/cli", "crates/core", "crates/adapters", "crate
 edition = "2021"
 license = "MIT"
 # The one place the GitHub URL lives (rename: RENAME.md); dist reads it for the release workflow.
-repository = "https://github.com/tstapler/disk-cleanup"
+repository = "https://github.com/tstapler/dunnage"
 
 # One lint set for every member, including the imported scan crate (ADR-007).
 [workspace.lints.clippy]

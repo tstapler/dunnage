@@ -12,12 +12,12 @@ use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use disk_cleanup_adapters::explore::facts::ClassifyFactsLoader;
-use disk_cleanup_core::delete_types::DeleteError;
-use disk_cleanup_core::explore::msg::ScanMsg;
-use disk_cleanup_core::ids::AppId;
-use disk_cleanup_core::ports::{CmdOutput, CommandRunner};
-use disk_cleanup_core::testing::FakeCommandRunner;
+use dunnage_adapters::explore::facts::ClassifyFactsLoader;
+use dunnage_core::delete_types::DeleteError;
+use dunnage_core::explore::msg::ScanMsg;
+use dunnage_core::ids::AppId;
+use dunnage_core::ports::{CmdOutput, CommandRunner};
+use dunnage_core::testing::FakeCommandRunner;
 
 /// `libraryfolders.vdf`, `appmanifest_620.acf`, `compatdata/{620,999}` and `common/OldGame`.
 fn steam_fixture(base: &Path) -> PathBuf {

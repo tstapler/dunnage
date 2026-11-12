@@ -4,10 +4,10 @@
 
 mod stream_common;
 
-use disk_cleanup_scan::index::{
+use dunnage_scan::index::{
     Backend, CollectRequest, Collected, DirEvent, DirInfo, StreamRequest, NO_PARENT,
 };
-use disk_cleanup_scan::walker::{CacheConfig, WalkerBackend};
+use dunnage_scan::walker::{CacheConfig, WalkerBackend};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::os::unix::fs::MetadataExt;
@@ -195,7 +195,7 @@ fn collect_streaming_should_build_through_dyn_backend_and_replay_collect_When_ba
         fn extents_exact(&self) -> bool {
             false
         }
-        fn collect(&self, _req: &CollectRequest<'_>) -> disk_cleanup_scan::Result<Collected> {
+        fn collect(&self, _req: &CollectRequest<'_>) -> dunnage_scan::Result<Collected> {
             let info = |m| DirInfo {
                 mtime: m,
                 ..DirInfo::default()

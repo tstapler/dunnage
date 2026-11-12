@@ -3,7 +3,7 @@
 //! Story 6.5.6, Task 6.5.6d (Gate F, UX-T35, UX-T36, UX-T38): the live explorer delete on the real binary, built
 //! with `gate-d` (the explorer's delete exists only there), over a fixture HOME. Keys on a pty: Space on two rows,
 //! `p`, `d`, the typed count, Enter. Afterwards the directories are gone, the audit log holds `run_start`, one
-//! `explorer_confirm` with the typed count, an `intent` and a `result` per item and `run_end`, `disk-cleanup
+//! `explorer_confirm` with the typed count, an `intent` and a `result` per item and `run_end`, `dunnage
 //! audit verify` exits 0 and the closing line names the count and the measured bytes. A SIGTERM during the
 //! delete ends it with 143, `run_end` says `interrupted` and the terminal is restored.
 //!
@@ -27,7 +27,7 @@ const SCAN_DONE: &str = "SCAN D";
 const CHILD_VAR: &str = "DC_DELETE_PTY_CHILD";
 
 fn write_config(f: &Fixture, root: &Path) {
-    let dir = f.xdg("config").join("disk-cleanup");
+    let dir = f.xdg("config").join("dunnage");
     fs::create_dir_all(&dir).unwrap();
     fs::write(
         dir.join("config.toml"),
@@ -52,7 +52,7 @@ fn tree(f: &Fixture) -> PathBuf {
 }
 
 fn audit_lines(f: &Fixture) -> Vec<Value> {
-    let text = fs::read_to_string(f.xdg("state").join("disk-cleanup/audit.jsonl")).unwrap();
+    let text = fs::read_to_string(f.xdg("state").join("dunnage/audit.jsonl")).unwrap();
     text.lines()
         .map(|l| serde_json::from_str(l).unwrap())
         .collect()
@@ -242,7 +242,7 @@ fn sigterm_during_the_delete_should_exit_143_record_run_end_interrupted_and_rest
     write_config(&f, &root);
     let mut p = spawn(&f, &root, &[("DC_EXPLORE_DELETE_DELAY_MS", "8000")]);
     mark_two_and_confirm(&mut p, "2");
-    let log = f.xdg("state").join("disk-cleanup/audit.jsonl");
+    let log = f.xdg("state").join("dunnage/audit.jsonl");
     let end = std::time::Instant::now() + Duration::from_secs(20);
     while !fs::read_to_string(&log).is_ok_and(|t| t.contains("\"type\":\"result\"")) {
         assert!(

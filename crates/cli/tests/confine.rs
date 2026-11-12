@@ -10,15 +10,15 @@ use std::path::Path;
 use std::process::Command;
 
 use common::Fixture;
-use disk_cleanup_adapters::command_confined::ConfinedCommandRunner;
-use disk_cleanup_adapters::dirops::is_scope_violation;
-use disk_cleanup_adapters::{DirOps, RealCommandRunner};
-use disk_cleanup_cli::wiring::confine::{
+use dunnage_adapters::command_confined::ConfinedCommandRunner;
+use dunnage_adapters::dirops::is_scope_violation;
+use dunnage_adapters::{DirOps, RealCommandRunner};
+use dunnage_cli::wiring::confine::{
     apply_dir_ops, apply_runner, confine_mode, Confine, Vars, BAD_ROOT, DEBUG_REFUSES,
     TEST_ENV_REFUSES,
 };
-use disk_cleanup_core::ports::{Cmd, CommandRunner};
-use disk_cleanup_core::{ApplyToken, DeleteError};
+use dunnage_core::ports::{Cmd, CommandRunner};
+use dunnage_core::{ApplyToken, DeleteError};
 
 const RELEASE: &str = "dc-flavor=release";
 const TEST_SUPPORT: &str = "dc-flavor=test-support;9f3ac7e1";
@@ -195,7 +195,7 @@ fn confine_mode_should_follow_its_input_table() {
         (
             "CARGO_BIN_EXE_*, release flavor, DC_DEV_APPLY_REAL",
             vars(&[
-                ("CARGO_BIN_EXE_disk-cleanup", &empty),
+                ("CARGO_BIN_EXE_dunnage", &empty),
                 ("DC_DEV_APPLY_REAL", &one),
             ]),
             RELEASE,
@@ -294,7 +294,7 @@ fn safety_confined_runner_refuses_brew_cleanup_outside_the_fixture() {
 }
 
 fn binary() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_disk-cleanup"))
+    Command::new(env!("CARGO_BIN_EXE_dunnage"))
 }
 
 #[test]

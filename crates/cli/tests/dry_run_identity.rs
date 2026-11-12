@@ -63,7 +63,7 @@ fn the_hash_of_the_fixture_home_should_be_unchanged_and_the_state_should_exist_u
     }
 
     // The test cannot pass because nothing was written at all: the plan was saved under xdg.
-    let state = f.xdg("state").join("disk-cleanup");
+    let state = f.xdg("state").join("dunnage");
     assert!(
         state.join("last_plan").is_file(),
         "no last_plan under xdg/state"
@@ -84,7 +84,7 @@ fn the_hash_of_the_fixture_home_should_be_unchanged_and_the_state_should_exist_u
         .unwrap();
     assert_eq!(out.status.code(), Some(0), "{}", text_of(&out).1);
     assert!(
-        f.xdg("cache").join("disk-cleanup/scan.cache").is_file(),
+        f.xdg("cache").join("dunnage/scan.cache").is_file(),
         "no walker cache under xdg/cache"
     );
     assert_eq!(tree_hash(&f.home()), h, "scan changed the fixture home");

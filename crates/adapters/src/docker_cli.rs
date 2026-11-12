@@ -5,14 +5,14 @@
 
 use std::collections::BTreeMap;
 
-use disk_cleanup_core::docker::{
+use dunnage_core::docker::{
     is_anonymous, is_local_context, parse_label_string, parse_si_size, version_gate,
     DockerBuildCacheEntry, DockerClient, DockerContainer, DockerError, DockerImage,
     DockerInventory, DockerProbe, DockerVolume,
 };
-use disk_cleanup_core::ports::{Cmd, CommandRunner};
-use disk_cleanup_core::target::KindGate;
-use disk_cleanup_core::{DeleteError, SkipReason};
+use dunnage_core::ports::{Cmd, CommandRunner};
+use dunnage_core::target::KindGate;
+use dunnage_core::{DeleteError, SkipReason};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer};
 

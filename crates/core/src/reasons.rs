@@ -71,7 +71,7 @@ impl SkipReason {
             SkipReason::DaemonUnavailable => "start Docker yourself; the tool never starts it",
             SkipReason::LibraryUnmounted => "mount it, re-run",
             SkipReason::SteamRunning => "quit Steam, re-run",
-            SkipReason::NeedsRoot => "sudo <absolute path>/disk-cleanup --apply --kinds <exact-id> (see C5 and 1.5)",
+            SkipReason::NeedsRoot => "sudo <absolute path>/dunnage --apply --kinds <exact-id> (see C5 and 1.5)",
             SkipReason::ToolMissing => "none",
             SkipReason::AlreadyRunning => "btrfs balance status /",
             SkipReason::Gone => "none",
@@ -81,10 +81,10 @@ impl SkipReason {
             SkipReason::RootRestricted => "run as your user; use sudo only for cache-apt (the decision is euid 0, whatever HOME holds: sudoers decides whether sudo sets HOME to /root, and that file is root-only, so the tool does not assume it; section 1.5)",
             SkipReason::NonLocalDockerContext => "docker context use default",
             SkipReason::UnsupportedOnThisOS => "none",
-            SkipReason::UnrecognisedOutput => "update disk-cleanup or report the output shape (the tool never guesses)",
+            SkipReason::UnrecognisedOutput => "update dunnage or report the output shape (the tool never guesses)",
             SkipReason::DockerVersionUntested => "none (removal needs a tested Docker version)",
             SkipReason::LooksLikeDatabase => "name it with --volume <name> if you are sure",
-            SkipReason::ContentsUnknown => "--volume <name>, or dry run as root: sudo <absolute path>/disk-cleanup --kinds docker-volumes (its plan-id is root's, so apply as root too; section 1.5)",
+            SkipReason::ContentsUnknown => "--volume <name>, or dry run as root: sudo <absolute path>/dunnage --kinds docker-volumes (its plan-id is root's, so apply as root too; section 1.5)",
             SkipReason::LocalOnlyImage => "docker rmi <name> by hand if you are sure",
             SkipReason::InUse => "close that session or wait; the tool never stops a process",
             SkipReason::HasIgnoredFiles => "back them up or remove them yourself, or --worktree-ignored discard if they are disposable",
@@ -208,7 +208,7 @@ impl FatalError {
     pub fn text(&self) -> String {
         match self {
             FatalError::LockHeld { pid } => format!(
-                "error: another disk-cleanup run is active (pid {pid}). Nothing was deleted. Wait for it to finish ('pgrep -a disk-cleanup' shows it), then run again."
+                "error: another dunnage run is active (pid {pid}). Nothing was deleted. Wait for it to finish ('pgrep -a dunnage' shows it), then run again."
             ),
             FatalError::AuditUnwritable { path, errno: 28 | 122 } => format!(
                 "error: cannot write the audit log {} (no space left on device). Nothing was deleted. The log shares the full filesystem: free about 1 MiB by hand (empty the trash, remove one disposable file), then run again.",
@@ -276,7 +276,7 @@ impl Warning {
     pub fn text(&self) -> String {
         match self {
             Warning::PreviousRunUnfinished { run_id, audit_path } => format!(
-                "warning: previous run {run_id} did not finish (killed or power loss); {a} may show a partly removed item. Check it with 'disk-cleanup audit verify' or jq 'select(.run_id==\"{run_id}\")' {a}. A partly removed build dir: dry run again; a partly removed worktree: 'git -C <repo> worktree list', then 'git -C <repo> worktree prune' once its directory is gone.",
+                "warning: previous run {run_id} did not finish (killed or power loss); {a} may show a partly removed item. Check it with 'dunnage audit verify' or jq 'select(.run_id==\"{run_id}\")' {a}. A partly removed build dir: dry run again; a partly removed worktree: 'git -C <repo> worktree list', then 'git -C <repo> worktree prune' once its directory is gone.",
                 a = audit_path.display()
             ),
             Warning::PlanNotSaved { errno, path } => format!(
@@ -289,7 +289,7 @@ impl Warning {
                 path.display()
             ),
             Warning::PlanDuringApply { pid } => format!(
-                "note: another disk-cleanup apply is running (pid {pid}); sizes and items below are in flux and a plan-id from this report may be refused as changed once it finishes."
+                "note: another dunnage apply is running (pid {pid}); sizes and items below are in flux and a plan-id from this report may be refused as changed once it finishes."
             ),
             Warning::ReservesCreated { state_dir } => format!(
                 "note: created 2 reserve files of 1 MiB in {} (they let the tool save a plan and open its audit log when the disk is full)",

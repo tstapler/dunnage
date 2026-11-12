@@ -5,8 +5,8 @@
 //! It exists only in a `test-support` build; [`fixture_destructive_target`] returns `None` otherwise, which is
 //! what keeps the string out of a release binary.
 
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::target::Target;
+use dunnage_core::roots::RootSet;
+use dunnage_core::target::Target;
 
 use crate::dirops::DirOps;
 
@@ -17,11 +17,11 @@ mod imp {
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
 
-    use disk_cleanup_core::ports::Env;
-    use disk_cleanup_core::roots::RootSet;
-    use disk_cleanup_core::selector::Selection;
-    use disk_cleanup_core::target::{Guarded, Target};
-    use disk_cleanup_core::{
+    use dunnage_core::ports::Env;
+    use dunnage_core::roots::RootSet;
+    use dunnage_core::selector::Selection;
+    use dunnage_core::target::{Guarded, Target};
+    use dunnage_core::{
         AllocatedBytes, AllowedTarget, ApplyToken, Candidate, CandidateId, DeleteError,
         DeleteFailure, DeletePolicy, FixtureFacts, Freed, Identity, KindFacts, Locator, RootDev,
         SelectorId, SkipReason,

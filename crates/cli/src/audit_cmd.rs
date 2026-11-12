@@ -1,10 +1,10 @@
-//! `disk-cleanup audit verify [--log PATH] [--json]` (Story 1.2.4, Task 1.2.4d). Read-only: no lock, no audit
+//! `dunnage audit verify [--log PATH] [--json]` (Story 1.2.4, Task 1.2.4d). Read-only: no lock, no audit
 //! write, no state write. Exit 0 clean, 2 a deletion outside the allowed roots, 74 log unreadable.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_adapters::audit_verify::{
+use dunnage_adapters::audit_verify::{
     verify_file_with, AllowedTable, VerifyExtras, VerifyInputs, VerifyReport,
 };
 use serde_json::json;
@@ -38,7 +38,7 @@ fn document(report: &VerifyReport, code: i32) -> String {
 
 pub fn run(
     log: &Path,
-    dirs: &disk_cleanup_core::Dirs,
+    dirs: &dunnage_core::Dirs,
     config_roots: Option<&[PathBuf]>,
     json: bool,
 ) -> AuditRun {
@@ -51,7 +51,7 @@ pub fn run(
     };
     // The tool's own directories come from this machine now, never from the log (review 2 N6).
     let extras = VerifyExtras {
-        own_dirs: disk_cleanup_adapters::own_dirs(&dirs.state, &dirs.cache, &dirs.config),
+        own_dirs: dunnage_adapters::own_dirs(&dirs.state, &dirs.cache, &dirs.config),
     };
     let report = match verify_file_with(log, &inputs, &extras) {
         Ok(r) => r,

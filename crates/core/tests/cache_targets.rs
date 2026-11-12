@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 //! The cache table per OS (Story 1.3.2; validation T-120, T-124, T-306).
 
-use disk_cleanup_core::roots::CacheTool;
-use disk_cleanup_core::{
+use dunnage_core::roots::CacheTool;
+use dunnage_core::{
     cache_table, cache_table_with_availability, CacheRow, CacheSource, Platform, CACHE_ROWS,
 };
 

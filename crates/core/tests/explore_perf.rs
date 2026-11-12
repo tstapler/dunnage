@@ -11,9 +11,9 @@ use ex::*;
 use std::ffi::OsString;
 use std::time::Instant;
 
-use disk_cleanup_core::explore::msg::{NodeEvent, ScanMode, NO_PARENT, PAINT_ID_BASE};
-use disk_cleanup_core::explore::tree::ExploreTree;
-use disk_cleanup_scan::index::DirInfo;
+use dunnage_core::explore::msg::{NodeEvent, ScanMode, NO_PARENT, PAINT_ID_BASE};
+use dunnage_core::explore::tree::ExploreTree;
+use dunnage_scan::index::DirInfo;
 
 /// `n` directories, eight children each, basenames of 14 bytes.
 fn synthetic(n: usize, base: u64, painted: bool) -> Vec<NodeEvent> {

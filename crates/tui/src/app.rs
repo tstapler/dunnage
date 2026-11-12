@@ -11,36 +11,36 @@ use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::sync::Arc;
 use std::thread;
 
-use disk_cleanup_core::escape::escape;
-use disk_cleanup_core::explore::confirm::ReviewedPlan;
-use disk_cleanup_core::explore::delete_flow::{
+use dunnage_core::escape::escape;
+use dunnage_core::explore::confirm::ReviewedPlan;
+use dunnage_core::explore::delete_flow::{
     rescan_target, DPress, DeleteRun, Prompt, PromptKey, Remeasured, ReviewedSet, Submitted, Tally,
     MSG_PLAN_CHANGED, MSG_REVIEW_FIRST,
 };
-use disk_cleanup_core::explore::headroom::headroom_line;
-use disk_cleanup_core::explore::hint::{hint_of_node, kind_line, shape_of_node};
-use disk_cleanup_core::explore::input::{
+use dunnage_core::explore::headroom::headroom_line;
+use dunnage_core::explore::hint::{hint_of_node, kind_line, shape_of_node};
+use dunnage_core::explore::input::{
     handle_key, Action, ExitKind, ExploreState, KeyEnv, MarkQuery, Mode, Rescan,
 };
-use disk_cleanup_core::explore::keymap::Key;
-use disk_cleanup_core::explore::layout::{layout_for_width, Layout, Tier};
-use disk_cleanup_core::explore::mark_check::MarkOk;
-use disk_cleanup_core::explore::marks::MarkSetId;
-use disk_cleanup_core::explore::msg::{
+use dunnage_core::explore::keymap::Key;
+use dunnage_core::explore::layout::{layout_for_width, Layout, Tier};
+use dunnage_core::explore::mark_check::MarkOk;
+use dunnage_core::explore::marks::MarkSetId;
+use dunnage_core::explore::msg::{
     ClassifyFacts, FileRows, MarkRefusal, NodeEvent, PlanPreview, ScanMode, ScanMsg, ScanSummary,
     StopCause,
 };
-use disk_cleanup_core::explore::ports::{
+use dunnage_core::explore::ports::{
     DeleteHandle, DirLister, ExplorerActions, Handoff, PreviewHandle, ScanHandle, ScanOpts,
     ScanSource, TermSignals, TypedCountSource, NEEDS_TERMINAL,
 };
-use disk_cleanup_core::explore::rows::ROW_CAP;
-use disk_cleanup_core::explore::rows::{Badge, Sort};
-use disk_cleanup_core::explore::tree::{ExploreTree, NodeId};
-use disk_cleanup_core::explore::view::ViewState;
-use disk_cleanup_core::ports::SharedEstimate;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::snapshot_types::FsSnapshot;
+use dunnage_core::explore::rows::ROW_CAP;
+use dunnage_core::explore::rows::{Badge, Sort};
+use dunnage_core::explore::tree::{ExploreTree, NodeId};
+use dunnage_core::explore::view::ViewState;
+use dunnage_core::ports::SharedEstimate;
+use dunnage_core::roots::RootSet;
+use dunnage_core::snapshot_types::FsSnapshot;
 use ratatui::Frame;
 
 use crate::overlays::UnreadableEntry;
@@ -863,7 +863,7 @@ impl App {
         let press = self.reviewed.press_d(&self.state.marks);
         if press == DPress::NothingMarked {
             self.state.input.message =
-                Some(disk_cleanup_core::explore::input::MSG_NOTHING_MARKED.to_string());
+                Some(dunnage_core::explore::input::MSG_NOTHING_MARKED.to_string());
             return;
         }
         if !self.ports.typed.is_terminal() {
@@ -1226,7 +1226,7 @@ impl App {
             cursor.map_or((None, None, None), |row| {
                 let path = row_path(&self.tree, row);
                 let kind = match row.id {
-                    disk_cleanup_core::explore::rows::RowId::Dir(id) => {
+                    dunnage_core::explore::rows::RowId::Dir(id) => {
                         let hint = hint_of_node(&self.tree, id, &self.cfg.roots, &self.facts);
                         let shape = shape_of_node(&self.tree, id, &self.facts);
                         Some(kind_line(hint, shape))
@@ -1286,6 +1286,6 @@ impl App {
     }
 }
 
-fn map_tier(t: Tier) -> disk_cleanup_core::explore::layout::Tier {
+fn map_tier(t: Tier) -> dunnage_core::explore::layout::Tier {
     t
 }

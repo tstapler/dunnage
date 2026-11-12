@@ -5,7 +5,7 @@
 mod rig;
 mod support;
 
-use disk_cleanup_core::kind::SelectorId;
+use dunnage_core::kind::SelectorId;
 use rig::{confined, run, FakeTarget, Rig};
 use support::cache;
 

@@ -1,9 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Story 6.5.4, Task 6.5.4b: the whole truth table of `choose_mode` (UX-T26).
 
-use disk_cleanup_cli::explore::mode::{
-    choose_mode, Mode, ModeFlags, MIN_START_COLUMNS, MIN_START_ROWS,
-};
+use dunnage_cli::explore::mode::{choose_mode, Mode, ModeFlags, MIN_START_COLUMNS, MIN_START_ROWS};
 
 const NONE: ModeFlags = ModeFlags {
     text: false,
@@ -89,7 +87,7 @@ fn the_smallest_window_that_starts_the_screen_should_be_the_documented_minimum()
 #[test]
 fn the_plain_variable_should_choose_the_text_view() {
     let m = choose_mode(true, true, Some("xterm"), Some((80, 24)), NONE, true);
-    assert!(matches!(m, Mode::Text { note: Some(n) } if n.contains("DISK_CLEANUP_PLAIN")));
+    assert!(matches!(m, Mode::Text { note: Some(n) } if n.contains("DUNNAGE_PLAIN")));
 }
 
 #[test]

@@ -8,7 +8,7 @@ use std::os::fd::OwnedFd;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Component, Path, PathBuf};
 
-use disk_cleanup_core::{ApplyToken, DeleteError, DirEntryInfo, FileKind, Identity, StatInfo};
+use dunnage_core::{ApplyToken, DeleteError, DirEntryInfo, FileKind, Identity, StatInfo};
 use rustix::fs::{AtFlags, FileType, Mode, OFlags};
 
 /// Max subdirectory names `delete_tree` buffers per open level; non-directories are unlinked as they stream.

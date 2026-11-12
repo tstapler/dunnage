@@ -6,9 +6,9 @@ use std::fs;
 use std::os::unix::fs::{symlink, MetadataExt};
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_adapters::treestat::{measure, MeasureOpts};
-use disk_cleanup_adapters::{delete_tree, open_parent, open_verified_root, RealDirOps};
-use disk_cleanup_core::{
+use dunnage_adapters::treestat::{measure, MeasureOpts};
+use dunnage_adapters::{delete_tree, open_parent, open_verified_root, RealDirOps};
+use dunnage_core::{
     AbortFlag, AllowedTarget, ApplyToken, DeletePolicy, Freed, Identity, NamePattern, RootDev,
 };
 
@@ -80,12 +80,12 @@ fn delete(w: &World) -> Freed {
     .unwrap()
 }
 
-fn measured(w: &World) -> disk_cleanup_adapters::treestat::TreeStats {
+fn measured(w: &World) -> dunnage_adapters::treestat::TreeStats {
     let ops = RealDirOps::confined_to(&w.base);
     let root = open_verified_root(&ops, &w.base, ident(&w.base)).unwrap();
     let parent = open_parent(&ops, &root, Path::new("home/code/app")).unwrap();
     let dir = {
-        use disk_cleanup_adapters::DirOps;
+        use dunnage_adapters::DirOps;
         ops.open_dir(parent.dir(), "node_modules".as_ref()).unwrap()
     };
     measure(&ops, &dir, policy(w).root_dev, MeasureOpts::default())

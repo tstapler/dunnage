@@ -7,7 +7,7 @@ tests extended in the same change, and those tests are written apart from the co
 ## Set up
 
 ```bash
-git clone https://github.com/tstapler/disk-cleanup && cd disk-cleanup
+git clone https://github.com/tstapler/dunnage && cd dunnage
 lefthook install                       # pre-commit: fmt, clippy, core-deps; pre-push: make gate GATE=A
 cargo build --workspace
 cargo test --workspace

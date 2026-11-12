@@ -11,11 +11,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use common::Fixture;
-use disk_cleanup_adapters::RealDirOps;
-use disk_cleanup_cli::wiring::dirs::real_canon;
-use disk_cleanup_cli::wiring::kinds::{build_gate, KindCtx, KindRegistry, GATES};
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::{Dirs, SelectorId};
+use dunnage_adapters::RealDirOps;
+use dunnage_cli::wiring::dirs::real_canon;
+use dunnage_cli::wiring::kinds::{build_gate, KindCtx, KindRegistry, GATES};
+use dunnage_core::roots::RootSet;
+use dunnage_core::{Dirs, SelectorId};
 
 struct Row {
     id: String,
@@ -169,8 +169,9 @@ fn the_binary_should_list_and_apply_exactly_what_its_build_gate_registers() {
     let (gate, explicit) = gate_in_force();
     if explicit {
         assert_eq!(
-            built, gate,
-            "GATE={gate} needs a build with --features disk-cleanup/gate-{}; scripts/gate.sh passes it",
+            built,
+            gate,
+            "GATE={gate} needs a build with --features dunnage/gate-{}; scripts/gate.sh passes it",
             gate.to_ascii_lowercase()
         );
     }
@@ -249,7 +250,7 @@ fn the_explorer_selection_kind_should_be_registered_from_its_gate_only_and_hidde
         assert!(!reg.apply_capable().contains(&SelectorId::ExplorerSelection));
     }
     assert_eq!(
-        disk_cleanup_cli::wiring::kinds::explorer_selection_registered(),
+        dunnage_cli::wiring::kinds::explorer_selection_registered(),
         build_gate() >= row.listed,
         "the binary registers it exactly when its build gate reached D"
     );
@@ -268,7 +269,7 @@ fn naming_the_explorer_selection_kind_should_exit_64_and_kinds_should_not_list_i
         assert!(out.stdout.is_empty(), "{args:?}");
         assert_eq!(
             String::from_utf8_lossy(&out.stderr).trim_end(),
-            "error: explorer-selection is not a kind you can name; it exists only inside 'disk-cleanup explore'. Nothing was deleted.",
+            "error: explorer-selection is not a kind you can name; it exists only inside 'dunnage explore'. Nothing was deleted.",
             "{args:?}"
         );
     }
@@ -305,7 +306,7 @@ fn cargo_build(target: &Path, args: &[&str]) -> PathBuf {
             "build",
             "--locked",
             "-p",
-            "disk-cleanup",
+            "dunnage",
             "--message-format=json",
         ])
         .args(args)
@@ -319,14 +320,14 @@ fn cargo_build(target: &Path, args: &[&str]) -> PathBuf {
     String::from_utf8_lossy(&out.stdout)
         .lines()
         .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-        .filter(|v| v["reason"] == "compiler-artifact" && v["target"]["name"] == "disk-cleanup")
+        .filter(|v| v["reason"] == "compiler-artifact" && v["target"]["name"] == "dunnage")
         .filter(|v| {
             v["target"]["kind"]
                 .as_array()
                 .is_some_and(|k| k.iter().any(|x| x == "bin"))
         })
         .find_map(|v| v["executable"].as_str().map(PathBuf::from))
-        .expect("the disk-cleanup executable in cargo's output")
+        .expect("the dunnage executable in cargo's output")
 }
 
 fn bytes_contain(bin: &Path, needle: &str) -> bool {
@@ -368,7 +369,7 @@ fn refuses_apply(bin: &Path, label: &str) {
         "{label}: a refused apply deleted something"
     );
     assert!(
-        !f.xdg("state").join("disk-cleanup").exists(),
+        !f.xdg("state").join("dunnage").exists(),
         "{label}: a refused apply wrote state"
     );
     // No test-only string survives into a shipped binary.

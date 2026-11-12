@@ -10,9 +10,9 @@ use std::sync::{Arc, Once};
 use std::time::{Duration, Instant};
 
 use super::cache_paint::paint_batches;
-use disk_cleanup_core::explore::msg::{ScanMsg, ScanSummary, StopCause};
-use disk_cleanup_core::explore::ports::{ScanHandle, ScanOpts, ScanSource};
-use disk_cleanup_scan::index::{
+use dunnage_core::explore::msg::{ScanMsg, ScanSummary, StopCause};
+use dunnage_core::explore::ports::{ScanHandle, ScanOpts, ScanSource};
+use dunnage_scan::index::{
     Backend, CollectRequest, DirEvent, SaveGuard, StreamRequest, DEFAULT_BATCH_MAX,
 };
 

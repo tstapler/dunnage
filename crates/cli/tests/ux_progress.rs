@@ -2,7 +2,7 @@
 //! Story 1.2.4, Task 1.2.4b: progress on a shared terminal (UX-59, gap G-17). The decision is a pure function
 //! over its whole truth table; the lines are checked against a clock the test advances by hand.
 
-use disk_cleanup_cli::progress::{
+use dunnage_cli::progress::{
     progress_mode, Progress, ProgressMode, MIN_LINE_GAP_MS, STALL_AFTER_MS,
 };
 

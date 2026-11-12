@@ -9,14 +9,12 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use disk_cleanup_adapters::audit::RealAuditSink;
-use disk_cleanup_adapters::state::{
-    OutcomeLine, OutcomeMode, RealPlanStore, StateDir, OUTCOME_SCHEMA,
-};
-use disk_cleanup_adapters::{RealCommandRunner, RealProbe, RealSpaceMeter};
-use disk_cleanup_core::delete_types::{AbortFlag, DirEntryInfo, FileKind, StatInfo};
-use disk_cleanup_core::ports::{Clock, DryRunRunner, Env, Fs, PlanStore, RunGuard, SystemProbe};
-use disk_cleanup_core::{
+use dunnage_adapters::audit::RealAuditSink;
+use dunnage_adapters::state::{OutcomeLine, OutcomeMode, RealPlanStore, StateDir, OUTCOME_SCHEMA};
+use dunnage_adapters::{RealCommandRunner, RealProbe, RealSpaceMeter};
+use dunnage_core::delete_types::{AbortFlag, DirEntryInfo, FileKind, StatInfo};
+use dunnage_core::ports::{Clock, DryRunRunner, Env, Fs, PlanStore, RunGuard, SystemProbe};
+use dunnage_core::{
     Dirs, DiskVerdict, FatalError, Identity, SaveOutcome, SavedPlan, SavedSelection,
 };
 
@@ -66,7 +64,7 @@ impl Fs for RealFs {
             size: m.size(),
             mtime_secs: m.mtime(),
             mtime_nsec: u32::try_from(m.mtime_nsec()).unwrap_or(0),
-            mnt_id: disk_cleanup_adapters::mount_id_of(path),
+            mnt_id: dunnage_adapters::mount_id_of(path),
         })
     }
 
@@ -88,7 +86,7 @@ impl Fs for RealFs {
     }
 
     fn fs_type(&self, path: &Path) -> Option<u64> {
-        disk_cleanup_adapters::fs_type_of(path)
+        dunnage_adapters::fs_type_of(path)
     }
 }
 
@@ -126,7 +124,21 @@ impl PlanStore for UnsavedPlans {
     }
 }
 
-/// The state directory of a run: `<XDG_STATE_HOME>/disk-cleanup`, opened (reserves created) or the errno.
+/// Reads `DUNNAGE_<name>`, else the pre-rename `DISK_CLEANUP_<name>` (accepted for one release) with one NOTE
+/// on stderr per variable.
+pub fn tool_env(name: &str) -> Option<std::ffi::OsString> {
+    if let Some(v) = std::env::var_os(format!("DUNNAGE_{name}")) {
+        return Some(v);
+    }
+    let old = format!("DISK_CLEANUP_{name}");
+    let v = std::env::var_os(&old)?;
+    eprintln!(
+        "NOTE: {old} is deprecated and is read for one more release. Set DUNNAGE_{name} instead."
+    );
+    Some(v)
+}
+
+/// The state directory of a run: `<XDG_STATE_HOME>/dunnage`, opened (reserves created) or the errno.
 pub struct State {
     pub dir: Option<StateDir>,
     pub open_errno: Option<i32>,
@@ -136,7 +148,7 @@ pub struct State {
 /// Opens the state directory. Called by the modes that write state (plan, apply, status), after their
 /// refusals, so a refused run leaves no file behind.
 pub fn open_state(dirs: &Dirs, euid: u32) -> State {
-    let avail = |p: &Path| disk_cleanup_adapters::statvfs::df(p).map(|d| d.avail_bytes);
+    let avail = |p: &Path| dunnage_adapters::statvfs::df(p).map(|d| d.avail_bytes);
     match StateDir::open(&dirs.state, euid, &avail) {
         Ok((sd, init)) => State {
             dir: Some(sd),
@@ -166,10 +178,10 @@ pub struct Wired {
 }
 
 /// `$XDG_STATE_HOME` and friends resolved by `wiring::dirs`; the tool's own state directory is the
-/// `disk-cleanup` directory below it (`Dirs.state` of the `Env`).
+/// `dunnage` directory below it (`Dirs.state` of the `Env`).
 pub fn tool_dirs(base: &Dirs) -> Dirs {
     Dirs {
-        state: base.state.join("disk-cleanup"),
+        state: base.state.join("dunnage"),
         ..base.clone()
     }
 }
@@ -189,7 +201,7 @@ impl Wired {
                 reserves_created: false,
             }
         };
-        let paths = disk_cleanup_adapters::state::StatePaths {
+        let paths = dunnage_adapters::state::StatePaths {
             dir: dirs.state.clone(),
         };
         let owner = state.dir.as_ref().and_then(|d| d.owner);
@@ -242,7 +254,7 @@ impl Wired {
         let Some(sd) = &self.state.dir else {
             return Ok(());
         };
-        disk_cleanup_adapters::state::append_outcome(
+        dunnage_adapters::state::append_outcome(
             &sd.paths,
             sd.owner,
             &OutcomeLine {

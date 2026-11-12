@@ -14,18 +14,18 @@ use std::sync::{Arc, Barrier};
 use common::{
     build_dir, cache, caches_selection, freed, run, selection, spin_until, FakeTarget, Rig, NOW,
 };
-use disk_cleanup_core::audit_types::AuditRecord;
-use disk_cleanup_core::delete_types::{DeleteError, DeleteFailure, Freed};
-use disk_cleanup_core::executor::{changed_since_scan_note, AbortCause, ExitClass};
-use disk_cleanup_core::ports::RunGuard as _;
-use disk_cleanup_core::target::{Guarded, KindGate};
-use disk_cleanup_core::testing::{AuditCall, EventLog, FakeAuditSink, FakeSpaceMeter, MeterCall};
-use disk_cleanup_core::{
+use dunnage_core::audit_types::AuditRecord;
+use dunnage_core::delete_types::{DeleteError, DeleteFailure, Freed};
+use dunnage_core::executor::{changed_since_scan_note, AbortCause, ExitClass};
+use dunnage_core::ports::RunGuard as _;
+use dunnage_core::target::{Guarded, KindGate};
+use dunnage_core::testing::{AuditCall, EventLog, FakeAuditSink, FakeSpaceMeter, MeterCall};
+use dunnage_core::{
     AllocSnapshot, AllocatedBytes, ItemKey, SavedSelection, SelectorId, SkipReason, SpaceUse,
     Status,
 };
 
-fn three_caches() -> Vec<disk_cleanup_core::Candidate> {
+fn three_caches() -> Vec<dunnage_core::Candidate> {
     (1..=3).map(|i| cache(i, 4096 * i)).collect()
 }
 
@@ -384,7 +384,7 @@ fn pool_should_run_4_items_at_once_with_jobs_4_never_more_and_stop_dispatching_a
     assert_eq!(r.exit.code(), 2);
 }
 
-fn old_build_dirs(n: u64) -> Vec<disk_cleanup_core::Candidate> {
+fn old_build_dirs(n: u64) -> Vec<dunnage_core::Candidate> {
     (1..=n).map(|i| build_dir(i, 1 << 20, 70)).collect()
 }
 
@@ -429,7 +429,7 @@ fn saved(id: &str, kinds: &str, items: &[&str]) -> SavedSelection {
 fn apply_should_print_the_docker_down_line_before_the_gate_and_exit_1_when_only_volumes_are_selected(
 ) {
     let mut rig = Rig::new();
-    rig.plans = disk_cleanup_core::testing::FakePlanStore::with_existing(vec![saved(
+    rig.plans = dunnage_core::testing::FakePlanStore::with_existing(vec![saved(
         "91be04d7",
         "build-dirs,docker-volumes",
         &["node-modules:/home/u/code/p1/node_modules"],
@@ -446,7 +446,7 @@ fn apply_should_print_the_docker_down_line_before_the_gate_and_exit_1_when_only_
     let docker = docker_down("docker");
     let sel = selection(&[SelectorId::BuildDirs, SelectorId::DockerVolumes]);
     let supplied = "91be04d7"
-        .parse::<disk_cleanup_core::plan::PlanIdArg>()
+        .parse::<dunnage_core::plan::PlanIdArg>()
         .unwrap()
         .plan_id();
     let e = run(&rig, &[&builds, &docker], &sel, true, 1, Some(supplied)).unwrap_err();
@@ -494,7 +494,7 @@ fn executor_should_plan_100_000_fake_candidates_and_keep_report_output_bounded_t
     );
 }
 
-fn btrfs_snap(data_used: u64) -> disk_cleanup_core::FsSnapshot {
+fn btrfs_snap(data_used: u64) -> dunnage_core::FsSnapshot {
     let mut s = FakeSpaceMeter::plain_snapshot("/home/u", 500, 1000);
     s.fs_type = "btrfs".into();
     let space = SpaceUse {
@@ -578,14 +578,14 @@ fn plan_run_with_discovery_workers(workers: usize) -> (String, Vec<ItemKey>, Vec
     let c = FakeTarget::caches((4..=5).map(|i| cache(i, 4096 * i)).collect());
     let rig = Rig::new();
     let env = rig.env();
-    let ex = disk_cleanup_core::executor::Executor::new(
+    let ex = dunnage_core::executor::Executor::new(
         &env,
-        vec![&a as &dyn disk_cleanup_core::target::Target, &b, &c],
+        vec![&a as &dyn dunnage_core::target::Target, &b, &c],
         common::options(4),
     )
     .with_discovery_workers(workers);
     let r = ex
-        .run(&sel, &disk_cleanup_core::executor::Mode::Plan, None)
+        .run(&sel, &dunnage_core::executor::Mode::Plan, None)
         .unwrap();
     (
         format!("{}", r.plan_id),

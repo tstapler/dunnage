@@ -4,9 +4,9 @@
 
 mod stream_common;
 
-use disk_cleanup_scan::cache;
-use disk_cleanup_scan::index::{CollectRequest, DirEvent, StreamRequest};
-use disk_cleanup_scan::walker::{CacheConfig, WalkerBackend};
+use dunnage_scan::cache;
+use dunnage_scan::index::{CollectRequest, DirEvent, StreamRequest};
+use dunnage_scan::walker::{CacheConfig, WalkerBackend};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -235,19 +235,19 @@ impl cache::SaveIo for HeldIo {
     }
 }
 
-use disk_cleanup_scan::walker::WalkHooks;
+use dunnage_scan::walker::WalkHooks;
 
 impl WalkHooks for HeldSave {
     fn load_cache(&self, path: &Path) -> std::collections::HashMap<PathBuf, cache::Rec> {
         self.fake.load_cache(path)
     }
-    fn stat_override(&self, p: &Path) -> Option<Result<disk_cleanup_scan::walker::DirStat, i32>> {
+    fn stat_override(&self, p: &Path) -> Option<Result<dunnage_scan::walker::DirStat, i32>> {
         self.fake.stat_override(p)
     }
     fn list_override(
         &self,
         p: &Path,
-        st: &disk_cleanup_scan::walker::DirStat,
+        st: &dunnage_scan::walker::DirStat,
     ) -> Option<Result<cache::Rec, i32>> {
         self.fake.list_override(p, st)
     }

@@ -20,7 +20,7 @@ pub enum Kind {
     SteamRemnant,
     BtrfsBalance,
     BtrfsTrim,
-    /// The explorer's marked set (Story 6.6.2, ADR-006). Not in [`Kind::ALL`]: only `disk-cleanup explore`
+    /// The explorer's marked set (Story 6.6.2, ADR-006). Not in [`Kind::ALL`]: only `dunnage explore`
     /// builds candidates of this kind.
     ExplorerSelection,
     /// Test-only (Story 2.3.4): a stale directory removed by the `fixture-destructive` target. The variant
@@ -188,7 +188,7 @@ impl SelectorId {
         SelectorId::Steam => "orphan prefixes, shader caches, uninstalled-game remnants",
         SelectorId::Btrfs => "balance (usage ladder)",
         SelectorId::BtrfsTrim => "fstrim",
-        SelectorId::ExplorerSelection => "the paths marked in 'disk-cleanup explore' (explore only)",
+        SelectorId::ExplorerSelection => "the paths marked in 'dunnage explore' (explore only)",
         #[cfg(feature = "test-support")]
         SelectorId::FixtureDestructive => "directories named stale-* below --root (test only)",
         }

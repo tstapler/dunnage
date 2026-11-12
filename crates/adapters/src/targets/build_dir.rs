@@ -14,23 +14,23 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use disk_cleanup_core::guard::Facts;
-use disk_cleanup_core::ports::{Env, SystemProbe};
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::target::{Guarded, Target};
-use disk_cleanup_core::targets::build_dir::{
+use dunnage_core::guard::Facts;
+use dunnage_core::ports::{Env, SystemProbe};
+use dunnage_core::roots::RootSet;
+use dunnage_core::selector::Selection;
+use dunnage_core::target::{Guarded, Target};
+use dunnage_core::targets::build_dir::{
     decide_build_dir, effective_min_age, kept_note, plan_keep_newest, run_state_skip, BuildFacts,
     BuildGuard, ClusterInput, KeepNewest, Placement, Reproducibility, DETAIL_LINKED_OUTSIDE,
     DETAIL_NO_LOCKFILE, FLOOR_RAISED_NOTE,
 };
-use disk_cleanup_core::{
+use dunnage_core::{
     AbortFlag, Allowed, AllowedTarget, ApplyToken, BuildDirFlavor, Candidate, CandidateId,
     DeleteError, DeleteFailure, DeletePolicy, FileKind, Freed, Identity, Kind, KindFacts, Locator,
     NamePattern, RootDev, SelectorId, SkipReason, StatInfo,
 };
-use disk_cleanup_scan::classify::classify_path;
-use disk_cleanup_scan::scan::BuildKind;
+use dunnage_scan::classify::classify_path;
+use dunnage_scan::scan::BuildKind;
 
 use crate::delete_tree;
 use crate::dirops::{open_parent, open_verified_root, DirOps};
@@ -380,7 +380,7 @@ pub(crate) fn delete_error_of(r: SkipReason) -> DeleteError {
 
 /// The `build-dirs` kind: `node_modules` and cargo `target` below the scan roots.
 /// The cleaner's own walker cache below `Dirs.cache`.
-const WALKER_CACHE_FILE: &str = "disk-cleanup/walker.cache";
+const WALKER_CACHE_FILE: &str = "dunnage/walker.cache";
 
 pub struct BuildDirTarget<D: DirOps> {
     roots: RootSet,

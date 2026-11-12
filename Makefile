@@ -20,7 +20,7 @@ lint:
 
 # The shipped binary as the release archives build it.
 dist:
-	$(BAZEL) build --config=dist //crates/cli:disk-cleanup
+	$(BAZEL) build --config=dist //crates/cli:dunnage
 
 sync:
 	scripts/check-bazel-cargo-sync.sh
@@ -54,7 +54,7 @@ mutants:
 # Copies the gated binary and its stamp only if the stamp's hash equals the hash of the file copied. The binary is the
 # Bazel `-c opt --config=gate-X` build that `make gate` copied beside the stamp (Bazel reuses one output path for
 # every gate, so that copy, not bazel-bin, is what the stamp names).
-# The final `disk-cleanup status` creates the two 1 MiB reserve files (audit.reserve, last_plan.reserve) in the state
+# The final `dunnage status` creates the two 1 MiB reserve files (audit.reserve, last_plan.reserve) in the state
 # dir while the disk still has room; its exit code (1 warn, 2 crit) is the verdict, not a failure of the install.
 install-gated:
 	@test -n "$(GATE)" || { echo "usage: make install-gated GATE=<A-F>"; exit 64; }
@@ -63,9 +63,9 @@ install-gated:
 	bin=$$dir/bin-$(GATE); test -f "$$bin" || { echo "no gated binary $$bin: run make gate GATE=$(GATE)"; exit 1; }; \
 	want=$$(jq -r .binary_sha256 "$$stamp"); have=$$(sha256sum $$bin | cut -d' ' -f1); \
 	test "$$want" = "$$have" || { echo "stamp hash $$want does not match $$bin ($$have)"; exit 1; }; \
-	state=$${XDG_STATE_HOME:-$$HOME/.local/state}/disk-cleanup; \
+	state=$${XDG_STATE_HOME:-$$HOME/.local/state}/dunnage; \
 	mkdir -p "$$state" "$$HOME/.cargo/bin"; \
-	install -m 0755 $$bin "$$HOME/.cargo/bin/disk-cleanup"; \
+	install -m 0755 $$bin "$$HOME/.cargo/bin/dunnage"; \
 	cp "$$stamp" "$$state/gate-stamp.json"; \
-	"$$HOME/.cargo/bin/disk-cleanup" status >/dev/null 2>&1 || true; \
-	echo "installed $$HOME/.cargo/bin/disk-cleanup (stamp gate $(GATE))"
+	"$$HOME/.cargo/bin/dunnage" status >/dev/null 2>&1 || true; \
+	echo "installed $$HOME/.cargo/bin/dunnage (stamp gate $(GATE))"

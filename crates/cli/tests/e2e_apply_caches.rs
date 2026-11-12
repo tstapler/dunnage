@@ -1,7 +1,7 @@
 #![cfg(feature = "gate-b")]
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 //! Story 2.3.3, Task 2.3.3a: Gate B, `--apply --kinds caches` end to end through the spawned binary under
-//! `fixture_cmd()`. Run with `GATE=B cargo test --workspace --features disk-cleanup/gate-b`; a default build
+//! `fixture_cmd()`. Run with `GATE=B cargo test --workspace --features dunnage/gate-b`; a default build
 //! refuses `--apply --kinds caches` by design, so this file is compiled only with the feature.
 //!
 //! Destructive-flow cases run on the test-only `fixture-destructive` kind (`stale-*` directories below the scan
@@ -111,7 +111,7 @@ fn kinds_should_list_caches_as_available_and_the_other_gates_as_not_available_Wh
             assert!(out.stdout.is_empty(), "{args:?}");
             assert!(
                 text_of(&out).1.contains(&format!(
-                    "'{id}' is not available in this build (see 'disk-cleanup kinds')"
+                    "'{id}' is not available in this build (see 'dunnage kinds')"
                 )),
                 "{args:?}: {}",
                 text_of(&out).1
@@ -125,14 +125,14 @@ fn kinds_should_list_caches_as_available_and_the_other_gates_as_not_available_Wh
 #[test]
 fn the_two_command_flow_should_remove_the_caches_with_no_prompt_and_apply_the_destructive_line_only_with_its_id(
 ) {
-    // First command: the printed `disk-cleanup --apply` line removes the caches.
+    // First command: the printed `dunnage --apply` line removes the caches.
     let f = Fixture::new();
     let proj = cold(&f);
     let dry = plain(&f, &[]);
     assert_eq!(dry.status.code(), Some(0));
     let cmds = next_commands(&text_of(&dry).0);
     assert_eq!(cmds.len(), 2, "{cmds:?}\n{}", text_of(&dry).0);
-    assert_eq!(cmds[0], "disk-cleanup --apply");
+    assert_eq!(cmds[0], "dunnage --apply");
     assert!(!cmds[0].contains("--plan-id"));
     let out = run_line(&f, &cmds[0]);
     assert_eq!(out.status.code(), Some(0), "{}", text_of(&out).1);
@@ -179,7 +179,7 @@ fn the_two_command_flow_should_remove_the_caches_with_no_prompt_and_apply_the_de
 /// Rewrites `saved_at` of the `last_plan` entry `id` to `age_secs` before now (the binary has no injectable
 /// clock, so the fixture clock "moves" by moving the saved entry back).
 fn age_saved_plan(f: &Fixture, id: &str, age_secs: i64) {
-    let path = f.xdg("state").join("disk-cleanup/last_plan");
+    let path = f.xdg("state").join("dunnage/last_plan");
     let mut doc: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     let now = i64::try_from(
@@ -683,7 +683,7 @@ fn safety_fixture_home_canary() {
             || l.contains("/bin/go\"") && !l.contains(f.root().to_str().unwrap())),
         "a system go was executed: {execs:#?}"
     );
-    let audit = std::fs::read_to_string(f.xdg("state").join("disk-cleanup/audit.jsonl")).unwrap();
+    let audit = std::fs::read_to_string(f.xdg("state").join("dunnage/audit.jsonl")).unwrap();
     let intents: Vec<serde_json::Value> = audit
         .lines()
         .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
@@ -704,20 +704,20 @@ mod enospc {
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
 
-    use disk_cleanup_adapters::targets::cache::CacheTarget;
-    use disk_cleanup_adapters::testing::FaultDirOps;
-    use disk_cleanup_adapters::RealDirOps;
-    use disk_cleanup_cli::app::{ApplyMode, Ports};
-    use disk_cleanup_cli::terminal::Terminal;
-    use disk_cleanup_cli::wiring::audit::{GateExit, StampOutcome};
-    use disk_cleanup_cli::wiring::compose::{compose_apply, ApplyState, ApplyWiring, Sink, Trace};
-    use disk_cleanup_core::ports::Env;
-    use disk_cleanup_core::roots::RootSet;
-    use disk_cleanup_core::testing::{
+    use dunnage_adapters::targets::cache::CacheTarget;
+    use dunnage_adapters::testing::FaultDirOps;
+    use dunnage_adapters::RealDirOps;
+    use dunnage_cli::app::{ApplyMode, Ports};
+    use dunnage_cli::terminal::Terminal;
+    use dunnage_cli::wiring::audit::{GateExit, StampOutcome};
+    use dunnage_cli::wiring::compose::{compose_apply, ApplyState, ApplyWiring, Sink, Trace};
+    use dunnage_core::ports::Env;
+    use dunnage_core::roots::RootSet;
+    use dunnage_core::testing::{
         FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe,
         FakeRunGuard, FakeSpaceMeter,
     };
-    use disk_cleanup_core::{
+    use dunnage_core::{
         ApplyToken, AuditRecord, BuildInfo, Dirs, FatalError, Identity, RunRoots, Status,
     };
 
@@ -780,9 +780,9 @@ mod enospc {
         std::fs::create_dir_all(home.join("code")).unwrap();
         let dirs = Dirs {
             home: home.clone(),
-            state: home.join(".local/state/disk-cleanup"),
-            cache: home.join(".cache/disk-cleanup"),
-            config: home.join(".config/disk-cleanup"),
+            state: home.join(".local/state/dunnage"),
+            cache: home.join(".cache/dunnage"),
+            config: home.join(".config/dunnage"),
         };
         let roots = RootSet::resolve(&dirs, &[home.join("code")], None, &home, &canon).unwrap();
         let target = CacheTarget::new(
@@ -837,7 +837,7 @@ mod enospc {
             },
             roots: RunRoots::default(),
             scan_roots: 1,
-            exe: PathBuf::from("/usr/bin/disk-cleanup"),
+            exe: PathBuf::from("/usr/bin/dunnage"),
             term: Terminal::pipe(),
             stdout_tty: false,
             run_id: "run-1".into(),
@@ -903,10 +903,10 @@ fn an_enospc_while_removing_the_second_cache_should_leave_the_first_removed_the_
     };
     assert_eq!(
         status_of(".npm/_cacache"),
-        Some(disk_cleanup_core::Status::Removed)
+        Some(dunnage_core::Status::Removed)
     );
     assert!(
-        matches!(status_of(".gradle/caches"), Some(disk_cleanup_core::Status::Error(m)) if m.contains("no space left on device")),
+        matches!(status_of(".gradle/caches"), Some(dunnage_core::Status::Error(m)) if m.contains("no space left on device")),
         "{results:?}"
     );
     assert_eq!(
@@ -925,7 +925,7 @@ fn an_enospc_while_removing_the_second_cache_should_leave_the_first_removed_the_
     );
     assert!(
         stdout.contains("btrfs metadata/unallocated is the limit")
-            && stdout.contains("disk-cleanup status"),
+            && stdout.contains("dunnage status"),
         "no recovery hint:\n{stdout}"
     );
     assert!(stdout.ends_with("APPLY FINISHED - exit 2.\n"), "{stdout}");
@@ -997,8 +997,8 @@ fn a_full_state_dir_with_the_reserves_should_release_the_audit_reserve_and_still
     let f = full_disk::fixture_with_stale();
     let inner = format!(
         "{fx} --apply --kinds caches >\"{root}/apply.out\" 2>\"{root}/apply.err\"; echo rc=$?; \
-         echo audit_reserve=$(stat -c %s \"$XDG_STATE_HOME/disk-cleanup/audit.reserve\"); \
-         echo audit_lines=$(wc -l < \"$XDG_STATE_HOME/disk-cleanup/audit.jsonl\")",
+         echo audit_reserve=$(stat -c %s \"$XDG_STATE_HOME/dunnage/audit.reserve\"); \
+         echo audit_lines=$(wc -l < \"$XDG_STATE_HOME/dunnage/audit.jsonl\")",
         fx = full_disk::fx(&f),
         root = f.root().display()
     );
@@ -1138,7 +1138,7 @@ fn release_gate_b() -> Option<PathBuf> {
             "build",
             "--locked",
             "-p",
-            "disk-cleanup",
+            "dunnage",
             "--release",
             "--features",
             "gate-b",
@@ -1150,7 +1150,7 @@ fn release_gate_b() -> Option<PathBuf> {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    Some(target.join("release/disk-cleanup"))
+    Some(target.join("release/dunnage"))
 }
 
 fn sha256_of(path: &Path) -> String {
@@ -1173,7 +1173,7 @@ fn git_head() -> String {
 }
 
 fn write_stamp(f: &Fixture, commit: &str, sha: &str) {
-    let dir = f.xdg("state").join("disk-cleanup");
+    let dir = f.xdg("state").join("dunnage");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("gate-stamp.json"),
@@ -1227,7 +1227,7 @@ fn safety_ungated_apply_needs_stamp() {
         );
         assert!(stderr.contains("Nothing was deleted"), "{name}: {stderr}");
         assert!(!caches_gone(&f), "{name}: a cache was deleted");
-        let state = f.xdg("state").join("disk-cleanup");
+        let state = f.xdg("state").join("dunnage");
         for created in ["run.lock", "audit.jsonl", "audit.reserve", "last_plan"] {
             assert!(
                 !state.join(created).exists(),

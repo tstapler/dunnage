@@ -9,11 +9,11 @@ use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use disk_cleanup_cli::render_json::{
+use dunnage_cli::render_json::{
     apply_doc, fatal_doc, kind_rows, kinds_doc, plan_doc, status_doc, to_text, JQ_TSV_ONE_LINER,
 };
-use disk_cleanup_cli::view::PlanView;
-use disk_cleanup_core::reasons::FatalError;
+use dunnage_cli::view::PlanView;
+use dunnage_core::reasons::FatalError;
 use serde_json::Value;
 use support::*;
 

@@ -52,7 +52,7 @@ pub struct Freed {
 /// `DeleteError` and `DeleteFailure` are `Clone` but not `Copy` because `CommandFailed` carries a message:
 ///
 /// ```compile_fail
-/// use disk_cleanup_core::DeleteError;
+/// use dunnage_core::DeleteError;
 /// fn is_copy<T: Copy>() {}
 /// is_copy::<DeleteError>();
 /// ```

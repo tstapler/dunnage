@@ -5,10 +5,10 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use disk_cleanup_core::explore::msg::{NodeEvent, ScanMode, NO_PARENT, PAINT_ID_BASE};
-use disk_cleanup_core::explore::tree::ExploreTree;
-use disk_cleanup_scan::estimate::Stats;
-use disk_cleanup_scan::index::DirInfo;
+use dunnage_core::explore::msg::{NodeEvent, ScanMode, NO_PARENT, PAINT_ID_BASE};
+use dunnage_core::explore::tree::ExploreTree;
+use dunnage_scan::estimate::Stats;
+use dunnage_scan::index::DirInfo;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum K {

@@ -98,7 +98,7 @@ use std::collections::{HashMap, HashSet};
 use std::ffi::{OsStr, OsString};
 use std::io;
 
-use disk_cleanup_core::{
+use dunnage_core::{
     AbortFlag, AllocatedBytes, ApparentBytes, ApplyToken, DeleteError, DeleteFailure, DeletePolicy,
     FileKind, Freed, Identity, RootDev, StatInfo,
 };

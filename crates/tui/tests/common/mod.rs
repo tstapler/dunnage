@@ -7,15 +7,15 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use disk_cleanup_core::explore::input::ExploreState;
-use disk_cleanup_core::explore::msg::{NodeEvent, ScanMode, ScanSummary, NO_PARENT};
-use disk_cleanup_core::explore::rows::{Badge, Sort};
-use disk_cleanup_core::explore::testing::{DirInfo, Stats};
-use disk_cleanup_core::explore::tree::{ExploreTree, NodeId};
-use disk_cleanup_core::explore::view::ViewState;
-use disk_cleanup_core::snapshot_types::{AllocSnapshot, FsSnapshot, SpaceUse};
-use disk_cleanup_tui::theme::Theme;
-use disk_cleanup_tui::view::{ScanFacts, Screen};
+use dunnage_core::explore::input::ExploreState;
+use dunnage_core::explore::msg::{NodeEvent, ScanMode, ScanSummary, NO_PARENT};
+use dunnage_core::explore::rows::{Badge, Sort};
+use dunnage_core::explore::testing::{DirInfo, Stats};
+use dunnage_core::explore::tree::{ExploreTree, NodeId};
+use dunnage_core::explore::view::ViewState;
+use dunnage_core::snapshot_types::{AllocSnapshot, FsSnapshot, SpaceUse};
+use dunnage_tui::theme::Theme;
+use dunnage_tui::view::{ScanFacts, Screen};
 use ratatui::backend::{Backend, ClearType, TestBackend, WindowSize};
 use ratatui::buffer::Cell;
 use ratatui::layout::{Position, Size};
@@ -186,7 +186,7 @@ impl Fixture {
             headroom_path: Path::new("/"),
             scan: ScanFacts {
                 elapsed_tenths: self.elapsed_tenths,
-                stop: disk_cleanup_core::explore::msg::StopCause::None,
+                stop: dunnage_core::explore::msg::StopCause::None,
                 max_seconds: None,
                 summary: self.summary.as_ref(),
                 cache_age: self.cache_age.as_deref(),
@@ -289,25 +289,25 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use disk_cleanup_core::explore::confirm::ConfirmedPlan;
-use disk_cleanup_core::explore::keymap::Key;
-use disk_cleanup_core::explore::msg::{PlanPreview, ScanMsg};
-use disk_cleanup_core::explore::ports::{
+use dunnage_core::explore::confirm::ConfirmedPlan;
+use dunnage_core::explore::keymap::Key;
+use dunnage_core::explore::msg::{PlanPreview, ScanMsg};
+use dunnage_core::explore::ports::{
     DeleteHandle, DirLister, ExplorerActions, Handoff, PreviewHandle, ScanHandle, ScanOpts,
     ScanSource, TermSignals,
 };
-use disk_cleanup_core::explore::testing::FakeDirLister;
-use disk_cleanup_core::ids::Identity;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_tui::app::{ExplorerConfig, Ports};
-use disk_cleanup_tui::event_loop::{
+use dunnage_core::explore::testing::FakeDirLister;
+use dunnage_core::ids::Identity;
+use dunnage_core::roots::RootSet;
+use dunnage_tui::app::{ExplorerConfig, Ports};
+use dunnage_tui::event_loop::{
     run_explorer, Clock, EventSource, ExplorerExit, Input, Restore, Runtime, SizeSource,
     SystemClock, Tuning,
 };
-use disk_cleanup_tui::terminal::{fixed_terminal, DiagQueue};
+use dunnage_tui::terminal::{fixed_terminal, DiagQueue};
 
 pub fn root_set() -> RootSet {
-    let dirs = disk_cleanup_core::dirs::Dirs {
+    let dirs = dunnage_core::dirs::Dirs {
         home: "/h".into(),
         state: "/h/.local/state".into(),
         cache: "/h/.cache".into(),
@@ -747,7 +747,7 @@ pub fn run(r: Run) -> Outcome {
         lister: r.lister,
         signals: r.signals,
         actions: r.actions,
-        typed: Arc::new(disk_cleanup_core::explore::testing::FakeTypedCount::new(
+        typed: Arc::new(dunnage_core::explore::testing::FakeTypedCount::new(
             r.terminal,
         )),
     };
@@ -809,7 +809,7 @@ pub fn root_batch(kids: &[(&str, u64)], open: bool) -> ScanMsg {
 pub fn finished(
     generation: u32,
     truncated: bool,
-    stop: disk_cleanup_core::explore::msg::StopCause,
+    stop: dunnage_core::explore::msg::StopCause,
 ) -> ScanMsg {
     ScanMsg::Finished(ScanSummary {
         generation,
@@ -838,7 +838,7 @@ pub fn buffer_text(buf: &ratatui::buffer::Buffer) -> String {
         .join("\n")
 }
 
-use disk_cleanup_tui::view::render;
+use dunnage_tui::view::render;
 use ratatui::Terminal;
 
 /// The screen drawn into a `TestBackend` of `w` x `h`; returns the terminal for style checks.
@@ -852,9 +852,9 @@ pub fn draw_text(s: &Screen<'_>, w: u16, h: u16) -> String {
     buffer_text(draw(s, w, h).backend().buffer())
 }
 
-use disk_cleanup_core::explore::layout::cells;
-use disk_cleanup_core::explore::marks::Mark;
-use disk_cleanup_core::explore::rows::SortKey;
+use dunnage_core::explore::layout::cells;
+use dunnage_core::explore::marks::Mark;
+use dunnage_core::explore::rows::SortKey;
 
 impl Fixture {
     /// Re-sorts with a badge function of (tree, node) so rows carry cleaner badges.
@@ -893,10 +893,8 @@ pub fn assert_fits(text: &str, w: usize) {
 
 // ----- a scripted delete (Story 6.6.4) -----
 
-use disk_cleanup_core::explore::confirm::{ConfirmRecord, ReviewedPlan};
-use disk_cleanup_core::explore::msg::{
-    DeleteItemOutcome, DeleteItemResult, DeleteMsg, DeleteSummary,
-};
+use dunnage_core::explore::confirm::{ConfirmRecord, ReviewedPlan};
+use dunnage_core::explore::msg::{DeleteItemOutcome, DeleteItemResult, DeleteMsg, DeleteSummary};
 use std::sync::mpsc::SyncSender;
 
 /// What a scripted delete does on its worker: the item paths, the sender and the abort flag.
@@ -949,7 +947,7 @@ impl ControlActions {
             plan: plan_fixture(),
             calls: Log::default(),
             review_fn: Box::new(|_, marks| {
-                Ok(disk_cleanup_core::explore::testing::reviewed_of(marks, GIB))
+                Ok(dunnage_core::explore::testing::reviewed_of(marks, GIB))
             }),
             on_delete: remove_all(),
             reviews: Mutex::new(Vec::new()),
@@ -979,10 +977,7 @@ impl ExplorerActions for ControlActions {
         }
     }
 
-    fn delete(
-        &self,
-        confirmed: disk_cleanup_core::explore::confirm::ConfirmedPlan,
-    ) -> DeleteHandle {
+    fn delete(&self, confirmed: dunnage_core::explore::confirm::ConfirmedPlan) -> DeleteHandle {
         self.calls.push("delete");
         self.confirmed.lock().unwrap().push(confirmed.record());
         let paths: Vec<PathBuf> = confirmed

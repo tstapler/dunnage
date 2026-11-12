@@ -18,7 +18,7 @@ impl SpaceUse {
     }
 }
 
-/// btrfs allocation (DC's own copy of what `disk_cleanup_scan::btrfs::read_allocation` returns).
+/// btrfs allocation (DC's own copy of what `dunnage_scan::btrfs::read_allocation` returns).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AllocSnapshot {
     pub data: SpaceUse,

@@ -4,14 +4,14 @@
 
 use std::ffi::OsString;
 
-use disk_cleanup_core::explore::layout::{layout_for_width, ColumnKind, Layout, SortMark};
-use disk_cleanup_core::explore::msg::{NodeEvent, ScanMode, NO_PARENT};
-use disk_cleanup_core::explore::tree::{ExploreTree, NodeId};
-use disk_cleanup_core::explore::view::{
+use dunnage_core::explore::layout::{layout_for_width, ColumnKind, Layout, SortMark};
+use dunnage_core::explore::msg::{NodeEvent, ScanMode, NO_PARENT};
+use dunnage_core::explore::tree::{ExploreTree, NodeId};
+use dunnage_core::explore::view::{
     no_badge, RowId, Sort, SortKey, ViewState, QUIET_AFTER_KEY_MS, RESORT_EVERY_MS,
 };
-use disk_cleanup_scan::estimate::Stats;
-use disk_cleanup_scan::index::DirInfo;
+use dunnage_scan::estimate::Stats;
+use dunnage_scan::index::DirInfo;
 use proptest::prelude::*;
 
 /// `files` files of `alloc` bytes allocated, `size` long, plus `subdirs` subdirectory entries.
@@ -56,7 +56,7 @@ fn child(t: &ExploreTree, parent: NodeId, name: &str) -> NodeId {
 fn order(v: &ViewState) -> Vec<String> {
     v.rows()
         .iter()
-        .map(disk_cleanup_core::explore::rows::Row::display_name)
+        .map(dunnage_core::explore::rows::Row::display_name)
         .collect()
 }
 

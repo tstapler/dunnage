@@ -12,7 +12,7 @@ use crate::serde_remote::IdentityDef;
 /// both-`Some` pair is representable).
 ///
 /// ```compile_fail
-/// use disk_cleanup_core::Locator;
+/// use dunnage_core::Locator;
 /// // a locator with no place at all does not exist
 /// let _ = Locator::Neither;
 /// ```
@@ -24,7 +24,7 @@ pub enum Locator {
     Steam(AppId, PathBuf),
 }
 
-/// DC-owned mirror of what the scan crate knows about a build directory, so `disk_cleanup_scan` types stay inside
+/// DC-owned mirror of what the scan crate knows about a build directory, so `dunnage_scan` types stay inside
 /// `adapters`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BuildDirFacts {
@@ -96,7 +96,7 @@ pub struct FixtureFacts {
 /// with docker facts does not type-check:
 ///
 /// ```compile_fail
-/// use disk_cleanup_core::{DockerFacts, KindFacts};
+/// use dunnage_core::{DockerFacts, KindFacts};
 /// let _ = KindFacts::Cache(DockerFacts::BuildCache);
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -145,14 +145,14 @@ impl KindFacts {
 /// candidate cannot disagree with its facts, and `Kind::Cache` cannot be paired with docker facts.
 ///
 /// ```compile_fail
-/// use disk_cleanup_core::{Candidate, SelectorId};
+/// use dunnage_core::{Candidate, SelectorId};
 /// fn tamper(c: &mut Candidate) {
 ///     c.selector = SelectorId::Steam;
 /// }
 /// ```
 ///
 /// ```compile_fail
-/// use disk_cleanup_core::{Candidate, Kind};
+/// use dunnage_core::{Candidate, Kind};
 /// fn tamper(c: &mut Candidate) {
 ///     c.kind = Kind::Cache;
 /// }

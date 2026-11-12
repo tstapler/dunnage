@@ -14,15 +14,15 @@ use std::time::{Duration, Instant};
 
 use rustix::process::{getpgid, kill_process, Pid, Signal};
 
-use disk_cleanup_adapters::lock::{LockError, RealRunGuard, RunLock};
-use disk_cleanup_adapters::signals::{
+use dunnage_adapters::lock::{LockError, RealRunGuard, RunLock};
+use dunnage_adapters::signals::{
     self, ChildInFlight, Machine, Mode, Reaction, SignalState, SwallowBrokenPipe, SCAN_INTERRUPTED,
 };
-use disk_cleanup_adapters::RealCommandRunner;
-use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
-use disk_cleanup_core::ports::{CommandRunner, RunGuard};
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::{ApplyToken, Dirs, FatalError, Identity, Kind, RootDev, WorktreeRemoval};
+use dunnage_adapters::RealCommandRunner;
+use dunnage_core::guard::{decide_path_common, Facts, GuardDecision};
+use dunnage_core::ports::{CommandRunner, RunGuard};
+use dunnage_core::roots::RootSet;
+use dunnage_core::{ApplyToken, Dirs, FatalError, Identity, Kind, RootDev, WorktreeRemoval};
 
 /// A fork in another test thread briefly shares this process's open lock files until it execs, which can
 /// make a just-released in-process lock look held; in-process lock tests and spawns take turns.
@@ -305,7 +305,7 @@ fn acquire_should_give_LockHeld_with_the_text_of_the_catalogue_When_another_proc
     assert_eq!(err.exit_code(), 2);
     assert_eq!(
         err.text(),
-        format!("error: another disk-cleanup run is active (pid {pid}). Nothing was deleted. Wait for it to finish ('pgrep -a disk-cleanup' shows it), then run again.")
+        format!("error: another dunnage run is active (pid {pid}). Nothing was deleted. Wait for it to finish ('pgrep -a dunnage' shows it), then run again.")
     );
     let mut holder = holder;
     holder.child.kill().unwrap();

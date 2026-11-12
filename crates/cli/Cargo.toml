@@ -1,5 +1,5 @@
 [package]
-name = "disk-cleanup"
+name = "dunnage"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
@@ -9,17 +9,17 @@ repository.workspace = true
 workspace = true
 
 [lib]
-name = "disk_cleanup_cli"
+name = "dunnage_cli"
 path = "src/lib.rs"
 
 [[bin]]
-name = "disk-cleanup"
+name = "dunnage"
 path = "src/main.rs"
 
 [features]
-# `disk-cleanup explore`; off, the subcommand exits 64 with "'explore' is not available in this build".
+# `dunnage explore`; off, the subcommand exits 64 with "'explore' is not available in this build".
 default = ["explore"]
-explore = ["dep:disk-cleanup-tui"]
+explore = ["dep:dunnage-tui"]
 # Per-gate kind registry (Story 2.3.4, owner decision 2026-11-10): a build registers an apply-capable kind only
 # once the owner has reviewed its gate. No feature is on by default, so the shipped binary refuses `--apply`;
 # `make gate GATE=B` builds with `gate-b`, and the owner adds it to `default` after the Gate B review.
@@ -28,10 +28,10 @@ gate-c = ["gate-b"]
 gate-d = ["gate-c"]
 
 [dependencies]
-disk-cleanup-tui = { path = "../tui", optional = true }
-disk-cleanup-core = { path = "../core" }
-disk-cleanup-scan = { path = "../scan" }
-disk-cleanup-adapters = { path = "../adapters" }
+dunnage-tui = { path = "../tui", optional = true }
+dunnage-core = { path = "../core" }
+dunnage-scan = { path = "../scan" }
+dunnage-adapters = { path = "../adapters" }
 clap.workspace = true
 anyhow.workspace = true
 serde.workspace = true
@@ -41,5 +41,5 @@ rustix = { workspace = true, features = ["termios"] }
 [dev-dependencies]
 tempfile = "3"
 expectrl = "0.7"
-disk-cleanup-core = { path = "../core", features = ["test-support"] }
-disk-cleanup-adapters = { path = "../adapters", features = ["test-support"] }
+dunnage-core = { path = "../core", features = ["test-support"] }
+dunnage-adapters = { path = "../adapters", features = ["test-support"] }

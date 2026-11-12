@@ -1,7 +1,7 @@
 //! Registry slot for `docker` (dangling images and builder cache): listed and apply-capable from Gate D
 //! (Story 4.1.2). A build that has not reached Gate D does not have the kind at all.
 
-use disk_cleanup_adapters::targets::docker_images::DockerImagesTarget;
+use dunnage_adapters::targets::docker_images::DockerImagesTarget;
 
 use super::{KindCtx, Registrar};
 

@@ -6,11 +6,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use disk_cleanup_adapters::space_meter::{estimate_is_lower_bound, AllocSource, SysfsAllocSource};
-use disk_cleanup_adapters::RealSpaceMeter;
-use disk_cleanup_core::ports::SpaceMeter;
-use disk_cleanup_core::testing::FakeProbe;
-use disk_cleanup_core::{AllocSnapshot, Platform};
+use dunnage_adapters::space_meter::{estimate_is_lower_bound, AllocSource, SysfsAllocSource};
+use dunnage_adapters::RealSpaceMeter;
+use dunnage_core::ports::SpaceMeter;
+use dunnage_core::testing::FakeProbe;
+use dunnage_core::{AllocSnapshot, Platform};
 
 const GIB: u64 = 1 << 30;
 
@@ -146,7 +146,7 @@ fn snapshot_should_not_read_allocation_When_platform_is_macos() {
     let calls = Arc::new(AtomicUsize::new(0));
     let probe = FakeProbe::new().with_platform(Platform::Macos);
     let m = RealSpaceMeter::with_source(
-        disk_cleanup_core::ports::SystemProbe::platform(&probe),
+        dunnage_core::ports::SystemProbe::platform(&probe),
         Box::new(CountingSource(calls.clone())),
     );
     let dir = tempfile::tempdir().unwrap();

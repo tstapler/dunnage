@@ -6,13 +6,13 @@ use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use disk_cleanup_core::explore::msg::{MarkRefusal, NodeEvent, ScanMode, NO_PARENT};
-use disk_cleanup_core::explore::refusal::{
+use dunnage_core::explore::msg::{MarkRefusal, NodeEvent, ScanMode, NO_PARENT};
+use dunnage_core::explore::refusal::{
     count_items_below, count_text, RefusalCtx, CONTAINS_CAP, MARK_LIMIT,
 };
-use disk_cleanup_core::explore::tree::{ExploreTree, NodeId};
-use disk_cleanup_core::SkipReason;
-use disk_cleanup_scan::index::DirInfo;
+use dunnage_core::explore::tree::{ExploreTree, NodeId};
+use dunnage_core::SkipReason;
+use dunnage_scan::index::DirInfo;
 
 fn roots(n: usize) -> Vec<PathBuf> {
     (0..n).map(|i| PathBuf::from(format!("/h/r{i}"))).collect()
@@ -23,7 +23,7 @@ fn text(r: MarkRefusal, path: &Path, roots: &[PathBuf], real: Option<&Path>) -> 
     r.text(&RefusalCtx {
         path,
         roots,
-        config_path: Path::new("/h/.config/disk-cleanup/config.toml"),
+        config_path: Path::new("/h/.config/dunnage/config.toml"),
         real_path: real,
         tty: false,
     })
@@ -37,7 +37,7 @@ fn outside_root_should_name_at_most_three_roots_then_plus_n_more_and_say_how_to_
         t,
         "/data/x/node_modules is outside the folders the cleaner may touch (/h/r0, /h/r1). \
          The explorer never widens them; to include it add its parent to 'roots' in \
-         /h/.config/disk-cleanup/config.toml and run explore again."
+         /h/.config/dunnage/config.toml and run explore again."
     );
     let t = text(MarkRefusal::OutsideRoot, p, &roots(5), None);
     assert!(t.contains("(/h/r0, /h/r1, /h/r2, +2 more)"), "{t}");
@@ -82,7 +82,7 @@ fn a_symlink_row_should_name_the_real_path_shell_quoted_and_not_the_generic_root
         t,
         "/h/code is a symbolic link and the explorer never follows links. The cleaner's folders \
          are named by their real paths (/data/code); open the real path: \
-         disk-cleanup explore '/data/my code'"
+         dunnage explore '/data/my code'"
     );
     assert!(!t.contains("'roots'"));
     // the real path is not known: the text still says what to do
@@ -296,7 +296,7 @@ fn the_rule_m3_to_m6_texts_should_read_as_the_plan_words_them() {
     assert!(text(MarkRefusal::MountPoint, p, &[], None)
         .starts_with("/h/code/app is a mount point; the explorer does not delete mount points."));
     assert!(text(MarkRefusal::OwnState, p, &[], None).contains(
-        "holds disk-cleanup's own state (audit log, plans, cache or config). It is never deleted from here."
+        "holds dunnage's own state (audit log, plans, cache or config). It is never deleted from here."
     ));
     assert_eq!(
         text(MarkRefusal::BindMountBelow(PathBuf::from("/h/code/app/b")), p, &[], None),

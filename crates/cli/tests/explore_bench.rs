@@ -25,18 +25,18 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use disk_cleanup_adapters::explore::cache_paint::{
+use dunnage_adapters::explore::cache_paint::{
     cache_config, explorer_cache_path, CacheMode, DEFAULT_MAX_AGE,
 };
-use disk_cleanup_adapters::explore::scan_source::WalkerScanSource;
-use disk_cleanup_core::explore::fmt::fmt_size_cell;
-use disk_cleanup_core::explore::msg::{ScanMode, ScanMsg};
-use disk_cleanup_core::explore::ports::{ScanOpts, ScanSource};
-use disk_cleanup_core::explore::tree::ExploreTree;
-use disk_cleanup_core::Dirs;
-use disk_cleanup_scan::cache::{self, Rec};
-use disk_cleanup_scan::estimate::Stats;
-use disk_cleanup_scan::walker::WalkerBackend;
+use dunnage_adapters::explore::scan_source::WalkerScanSource;
+use dunnage_core::explore::fmt::fmt_size_cell;
+use dunnage_core::explore::msg::{ScanMode, ScanMsg};
+use dunnage_core::explore::ports::{ScanOpts, ScanSource};
+use dunnage_core::explore::tree::ExploreTree;
+use dunnage_core::Dirs;
+use dunnage_scan::cache::{self, Rec};
+use dunnage_scan::estimate::Stats;
+use dunnage_scan::walker::WalkerBackend;
 use explore_pty_rig::{find, fuzzy_find, screen_text_of, Pty, ENTER_ALT};
 
 const FRAME_END: &[u8] = b"\x1b[39m\x1b[49m\x1b[59m\x1b[0m";

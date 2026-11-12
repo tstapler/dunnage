@@ -186,17 +186,17 @@
   "mode": "plan",
   "next": [
     {
-      "command": "disk-cleanup --apply",
+      "command": "dunnage --apply",
       "explain": "the 4 FREE rows (selected now)",
       "plan_id": null
     },
     {
-      "command": "disk-cleanup --apply --kinds build-dirs,caches,docker,worktrees --plan-id ec21a198",
+      "command": "dunnage --apply --kinds build-dirs,caches,docker,worktrees --plan-id ec21a198",
       "explain": "adds the 3 RISK rows",
       "plan_id": "ec21a198"
     },
     {
-      "command": "disk-cleanup --kinds docker-volumes,steam --docker-volumes anonymous",
+      "command": "dunnage --kinds docker-volumes,steam --docker-volumes anonymous",
       "explain": "a dry run of the kinds that need naming (prints its own plan-id)",
       "plan_id": null
     }

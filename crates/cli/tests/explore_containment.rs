@@ -15,16 +15,16 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 
-use disk_cleanup_cli::explore::actions::{ExplorerPorts, RealExplorerActions};
-use disk_cleanup_cli::explore::handle::DeleteWiring;
-use disk_cleanup_cli::wiring::kinds::explorer_selection_registered;
-use disk_cleanup_core::explore::msg::DeleteMsg;
-use disk_cleanup_core::explore::ports::ExplorerActions;
-use disk_cleanup_core::testing::{
+use dunnage_cli::explore::actions::{ExplorerPorts, RealExplorerActions};
+use dunnage_cli::explore::handle::DeleteWiring;
+use dunnage_cli::wiring::kinds::explorer_selection_registered;
+use dunnage_core::explore::msg::DeleteMsg;
+use dunnage_core::explore::ports::ExplorerActions;
+use dunnage_core::testing::{
     FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe, FakeRunGuard,
     FakeSpaceMeter,
 };
-use disk_cleanup_core::{BuildInfo, Dirs, RunRoots};
+use dunnage_core::{BuildInfo, Dirs, RunRoots};
 use explore_rig::Ex;
 
 fn repo_root() -> PathBuf {
@@ -139,7 +139,7 @@ fn actions_over_fakes(wired: bool) -> (RealExplorerActions, Ex) {
         actions = actions.with_delete_wiring(Arc::new(DeleteWiring {
             base: ex.base_dirs.clone(),
             roots: ex.roots(),
-            exe: PathBuf::from("/usr/bin/disk-cleanup"),
+            exe: PathBuf::from("/usr/bin/dunnage"),
         }));
     }
     (actions, ex)
@@ -150,7 +150,7 @@ fn actions_over_fakes(wired: bool) -> (RealExplorerActions, Ex) {
 fn safety_default_build_should_refuse_d_and_register_no_explorer_apply() {
     assert!(!explorer_selection_registered());
     for gate in ['A', 'B', 'C'] {
-        assert!(!disk_cleanup_cli::wiring::kinds::explorer_selection_registered_at(gate));
+        assert!(!dunnage_cli::wiring::kinds::explorer_selection_registered_at(gate));
     }
     // Even fully wired, a build below gate D refuses the review and the delete, and deletes nothing.
     let (actions, ex) = actions_over_fakes(true);
@@ -164,7 +164,7 @@ fn safety_default_build_should_refuse_d_and_register_no_explorer_apply() {
     );
     assert!(a.exists());
     // The default binary lists no kind that can delete from the explorer.
-    let out = Command::new(env!("CARGO_BIN_EXE_disk-cleanup"))
+    let out = Command::new(env!("CARGO_BIN_EXE_dunnage"))
         .arg("kinds")
         .output()
         .unwrap();
@@ -175,7 +175,7 @@ fn safety_default_build_should_refuse_d_and_register_no_explorer_apply() {
 #[test]
 fn gate_d_build_should_register_explorer_selection_and_review_the_marks() {
     assert!(explorer_selection_registered());
-    assert!(disk_cleanup_cli::wiring::kinds::GATES.contains(&'D'));
+    assert!(dunnage_cli::wiring::kinds::GATES.contains(&'D'));
     // Unwired actions still refuse: the wiring is what the explorer's composition root adds.
     let (unwired, ex) = actions_over_fakes(false);
     let a = ex.tree("app/dist", 1, 100);

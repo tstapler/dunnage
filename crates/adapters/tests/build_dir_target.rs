@@ -18,24 +18,22 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use disk_cleanup_adapters::targets::build_dir::{
-    build_opts, BuildDirTarget, DETAIL_MOUNTS_UNREADABLE,
-};
-use disk_cleanup_adapters::testing::{At, FaultDirOps, Op};
-use disk_cleanup_adapters::RealDirOps;
-use disk_cleanup_core::audit_types::RunRoots;
-use disk_cleanup_core::executor::{
+use dunnage_adapters::targets::build_dir::{build_opts, BuildDirTarget, DETAIL_MOUNTS_UNREADABLE};
+use dunnage_adapters::testing::{At, FaultDirOps, Op};
+use dunnage_adapters::RealDirOps;
+use dunnage_core::audit_types::RunRoots;
+use dunnage_core::executor::{
     AbortCause, Executor, Mode, RunMeta, RunOptions, RunReport, DEFAULT_JOBS,
 };
-use disk_cleanup_core::ports::{Env, RunState};
-use disk_cleanup_core::selector::{KindSelector, Selection};
-use disk_cleanup_core::target::{Guarded, Target};
-use disk_cleanup_core::targets::build_dir::{FLOOR_RAISED_NOTE, KEEP_NEWEST_ZERO_WARNING};
-use disk_cleanup_core::testing::{
+use dunnage_core::ports::{Env, RunState};
+use dunnage_core::selector::{KindSelector, Selection};
+use dunnage_core::target::{Guarded, Target};
+use dunnage_core::targets::build_dir::{FLOOR_RAISED_NOTE, KEEP_NEWEST_ZERO_WARNING};
+use dunnage_core::testing::{
     FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs, FakePlanStore, FakeProbe, FakeRunGuard,
     FakeSpaceMeter,
 };
-use disk_cleanup_core::{
+use dunnage_core::{
     ApplyToken, BuildInfo, Candidate, CandidateId, DeleteError, DeleteFailure, Freed, MountEntry,
     SelectorId, SkipReason, Status,
 };
@@ -141,7 +139,7 @@ fn stale_node(f: &Fixture, name: &str, lock: Option<&str>, days: u64) -> PathBuf
 
 fn find<'a>(cs: &'a [Candidate], path: &Path) -> &'a Candidate {
     cs.iter()
-        .find(|c| matches!(c.locator(), disk_cleanup_core::Locator::Path(p) if p == path))
+        .find(|c| matches!(c.locator(), dunnage_core::Locator::Path(p) if p == path))
         .unwrap_or_else(|| panic!("no candidate {}", path.display()))
 }
 
@@ -781,7 +779,7 @@ fn candidate_ids_should_differ_per_path_When_two_dirs_share_a_lockfile() {
 // ------------------------------------------------------------------ --rescan, --no-cache, --max-seconds
 
 fn walker_cache_of(f: &Fixture) -> PathBuf {
-    f.home.join(".cache/disk-cleanup/walker.cache")
+    f.home.join(".cache/dunnage/walker.cache")
 }
 
 fn mtime_of(p: &Path) -> std::time::SystemTime {
@@ -865,7 +863,7 @@ fn build_opts_should_map_max_seconds_rescan_and_no_cache_and_not_report_partial_
     assert_eq!((o.max_duration, o.rescan), (None, false));
     assert_eq!(
         o.walker_cache.as_deref(),
-        Some(Path::new("/c/disk-cleanup/walker.cache"))
+        Some(Path::new("/c/dunnage/walker.cache"))
     );
 
     let mut s = sel();

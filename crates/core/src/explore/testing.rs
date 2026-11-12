@@ -14,8 +14,8 @@ use super::ports::{
 };
 /// The walker's record types, so a crate that builds `NodeEvent`s in tests (the `tui` crate, which may not
 /// depend on the scan crate) names them here.
-pub use disk_cleanup_scan::estimate::Stats;
-pub use disk_cleanup_scan::index::DirInfo;
+pub use dunnage_scan::estimate::Stats;
+pub use dunnage_scan::index::DirInfo;
 
 /// The channel depth of the real source; a consumer that stops receiving blocks the sender.
 pub const FAKE_CHANNEL_DEPTH: usize = 64;

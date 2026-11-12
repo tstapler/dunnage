@@ -16,18 +16,14 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-use disk_cleanup_core::explore::msg::{NodeEvent, ScanMode, ScanMsg, NO_PARENT};
-use disk_cleanup_core::explore::ports::{
-    DirLister, ExplorerActions, ScanOpts, ScanSource, TermSignals,
-};
-use disk_cleanup_core::explore::testing::{
+use dunnage_core::explore::msg::{NodeEvent, ScanMode, ScanMsg, NO_PARENT};
+use dunnage_core::explore::ports::{DirLister, ExplorerActions, ScanOpts, ScanSource, TermSignals};
+use dunnage_core::explore::testing::{
     FakeDirLister, FakeExplorerActions, FakeScanSource, FakeTermSignals,
 };
-use disk_cleanup_core::explore::tree::{
-    ExploreTree, Inside, PartialCause, ReduceError, ScanStatus,
-};
-use disk_cleanup_core::ports::ExtentProbe;
-use disk_cleanup_scan::index::DirInfo;
+use dunnage_core::explore::tree::{ExploreTree, Inside, PartialCause, ReduceError, ScanStatus};
+use dunnage_core::ports::ExtentProbe;
+use dunnage_scan::index::DirInfo;
 use proptest::prelude::*;
 
 fn dir(id: u64, parent: u64, name: &str, alloc: u64, subdirs: u32) -> NodeEvent {
@@ -46,7 +42,7 @@ fn dir(id: u64, parent: u64, name: &str, alloc: u64, subdirs: u32) -> NodeEvent 
     }
 }
 
-fn find(t: &ExploreTree, path: &str) -> disk_cleanup_core::explore::tree::NodeId {
+fn find(t: &ExploreTree, path: &str) -> dunnage_core::explore::tree::NodeId {
     t.iter()
         .find(|n| t.path_of(*n) == std::path::Path::new(path))
         .unwrap()
@@ -64,7 +60,7 @@ fn ports_should_be_shared_across_scoped_threads_and_the_fakes_should_script_batc
     let lister = FakeDirLister::default();
     let sig = FakeTermSignals::at_tick(2, 15);
     let actions: Box<dyn ExplorerActions> = Box::new(FakeExplorerActions::new(
-        disk_cleanup_core::explore::msg::PlanPreview {
+        dunnage_core::explore::msg::PlanPreview {
             plan_id: "p".into(),
             saved: false,
             rows: vec![],
@@ -117,8 +113,8 @@ impl ExtentProbe for Probe {
         &self,
         _items: &[&std::path::Path],
         _budget: usize,
-    ) -> disk_cleanup_core::ports::ExtentAttribution {
-        disk_cleanup_core::ports::ExtentAttribution::Measured(vec![])
+    ) -> dunnage_core::ports::ExtentAttribution {
+        dunnage_core::ports::ExtentAttribution::Measured(vec![])
     }
 }
 
@@ -433,7 +429,7 @@ fn a_permuted_fake_source_should_still_reduce_to_the_reference_totals() {
             })
             .collect();
         script.push(ScanMsg::Finished(
-            disk_cleanup_core::explore::msg::ScanSummary::default(),
+            dunnage_core::explore::msg::ScanSummary::default(),
         ));
         let src = FakeScanSource::new(script).permuted(seed);
         let h = src.start(&[PathBuf::from("/r")], &ScanOpts::default());

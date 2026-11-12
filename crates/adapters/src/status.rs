@@ -1,13 +1,13 @@
-//! What `disk-cleanup status` reads (Story 1.2.4, Task 1.2.4e): one snapshot of the filesystem of a path,
+//! What `dunnage status` reads (Story 1.2.4, Task 1.2.4e): one snapshot of the filesystem of a path,
 //! the btrfs sysfs directory it came from, the old `metascope status` allocation document, and the verdict of
 //! the scanner's `health::assess` thresholds (the same ones `metascope status` used). Read-only.
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::ports::SpaceMeter;
-use disk_cleanup_core::{errno_phrase, DiskVerdict, FsSnapshot};
-use disk_cleanup_scan::btrfs;
-use disk_cleanup_scan::health::{self, Finding, Thresholds, Verdict};
+use dunnage_core::ports::SpaceMeter;
+use dunnage_core::{errno_phrase, DiskVerdict, FsSnapshot};
+use dunnage_scan::btrfs;
+use dunnage_scan::health::{self, Finding, Thresholds, Verdict};
 use serde_json::Value;
 
 use crate::space_meter::map_allocation;

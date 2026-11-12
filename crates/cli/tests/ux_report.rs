@@ -9,18 +9,18 @@ use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::process::Command;
 
-use disk_cleanup_cli::escape::{escape, path_hex, shell_quote, unescape};
-use disk_cleanup_cli::reasontext::ReasonFacts;
-use disk_cleanup_cli::render::{render_plan, wrapper_note};
-use disk_cleanup_cli::render_json::plan_doc;
-use disk_cleanup_cli::terminal::Terminal;
-use disk_cleanup_cli::units;
-use disk_cleanup_cli::view::{saved_entries, Options, PlanInput, PlanView, SortKey};
-use disk_cleanup_core::candidate::BuildDirFlavor;
-use disk_cleanup_core::kind::SelectorId;
-use disk_cleanup_core::plan::PlanId;
-use disk_cleanup_core::plan_state::SaveOutcome;
-use disk_cleanup_core::selector::Selection;
+use dunnage_cli::escape::{escape, path_hex, shell_quote, unescape};
+use dunnage_cli::reasontext::ReasonFacts;
+use dunnage_cli::render::{render_plan, wrapper_note};
+use dunnage_cli::render_json::plan_doc;
+use dunnage_cli::terminal::Terminal;
+use dunnage_cli::units;
+use dunnage_cli::view::{saved_entries, Options, PlanInput, PlanView, SortKey};
+use dunnage_core::candidate::BuildDirFlavor;
+use dunnage_core::kind::SelectorId;
+use dunnage_core::plan::PlanId;
+use dunnage_core::plan_state::SaveOutcome;
+use dunnage_core::selector::Selection;
 use support::*;
 
 fn text(input: &PlanInput, term: &Terminal) -> String {
@@ -33,7 +33,7 @@ fn lines(s: &str) -> Vec<&str> {
 
 fn next_commands(out: &str) -> Vec<String> {
     out.lines()
-        .filter(|l| l.starts_with("  disk-cleanup") || l.starts_with("  sudo "))
+        .filter(|l| l.starts_with("  dunnage") || l.starts_with("  sudo "))
         .map(str::to_string)
         .collect()
 }
@@ -110,7 +110,7 @@ fn partial_scan_and_wrapper_note_should_add_one_line_each_and_next_should_end_by
     let fx = Fixture::s1_root();
     let mut input = fx.input();
     input.partial_scan = Some(120);
-    input.wrapper_note = wrapper_note(Some("disk-cleanup"), false);
+    input.wrapper_note = wrapper_note(Some("dunnage"), false);
     let out = text(&input, &pipe(80));
     let ls = lines(&out);
     let table_at = ls.iter().position(|l| l.starts_with("STATUS ")).unwrap();
@@ -300,8 +300,8 @@ fn names_with_newline_esc_invalid_utf8_backslash_and_emoji_should_print_ascii_es
 
     // through the renderer, into a pipe, with the hostile names as directory names
     let out = {
-        use disk_cleanup_core::candidate::{CacheFacts, Candidate, KindFacts, Locator};
-        use disk_cleanup_core::ids::{AllocatedBytes, Identity};
+        use dunnage_core::candidate::{CacheFacts, Candidate, KindFacts, Locator};
+        use dunnage_core::ids::{AllocatedBytes, Identity};
         let cands: Vec<Candidate> = names
             .iter()
             .enumerate()
@@ -328,7 +328,7 @@ fn names_with_newline_esc_invalid_utf8_backslash_and_emoji_should_print_ascii_es
         input.opts.top = 0;
         let human = text(&input, &pipe(80));
         let json =
-            disk_cleanup_cli::render_json::to_text(&plan_doc(&input, &PlanView::build(&input), 0));
+            dunnage_cli::render_json::to_text(&plan_doc(&input, &PlanView::build(&input), 0));
         assert!(serde_json::from_str::<serde_json::Value>(&json).is_ok());
         assert_eq!(
             json.matches("path_hex").count(),
@@ -423,10 +423,10 @@ fn next_command_lines_should_match_the_paste_pattern_pass_sh_n_and_keep_the_expl
         let Some(rest) = l.strip_prefix("  ") else {
             return false;
         };
-        rest.starts_with("disk-cleanup ")
+        rest.starts_with("dunnage ")
             || rest
                 .strip_prefix("sudo /")
-                .is_some_and(|r| r.contains("/disk-cleanup "))
+                .is_some_and(|r| r.contains("/dunnage "))
     };
     let ls = lines(&out);
     let mut seen = 0;
@@ -448,21 +448,20 @@ fn next_command_lines_should_match_the_paste_pattern_pass_sh_n_and_keep_the_expl
         let expl = ls[i + 1];
         assert!(expl.starts_with("      "), "{expl}");
         assert!(
-            !expl.trim_start().starts_with("disk-cleanup")
-                && !expl.trim_start().starts_with("sudo")
+            !expl.trim_start().starts_with("dunnage") && !expl.trim_start().starts_with("sudo")
         );
     }
     assert_eq!(seen, 4, "{out}");
     assert!(
-        out.contains("  sudo /home/tstapler/.cargo/bin/disk-cleanup --apply --kinds cache-apt"),
+        out.contains("  sudo /home/tstapler/.cargo/bin/dunnage --apply --kinds cache-apt"),
         "{out}"
     );
-    assert!(!out.contains("sudo disk-cleanup"));
+    assert!(!out.contains("sudo dunnage"));
 }
 
 #[test]
 fn next_lines_should_echo_each_selection_flag_in_the_fixed_order_and_never_the_display_flags() {
-    use disk_cleanup_core::selector::{Discard, DockerVolumes};
+    use dunnage_core::selector::{Discard, DockerVolumes};
     type Case = (&'static str, Box<dyn Fn(&mut Selection)>);
     let cases: Vec<Case> = vec![
         (
@@ -554,15 +553,18 @@ fn plan_not_saved_should_print_the_NOT_usable_block_and_no_destructive_next_line
         out.lines().next().unwrap().ends_with("(NOT saved)"),
         "{out}"
     );
-    assert!(flat.contains("plan-id NOT usable: could not save it (ENOSPC on ~/.local/state/disk-cleanup/last_plan)."), "{out}");
+    assert!(
+        flat.contains(
+            "plan-id NOT usable: could not save it (ENOSPC on ~/.local/state/dunnage/last_plan)."
+        ),
+        "{out}"
+    );
     assert!(flat.contains("Run the safe apply printed above first"));
     assert!(
         next_commands(&out).iter().all(|c| !c.contains("--plan-id")),
         "{out}"
     );
-    assert!(next_commands(&out)
-        .iter()
-        .any(|c| c == "  disk-cleanup --apply"));
+    assert!(next_commands(&out).iter().any(|c| c == "  dunnage --apply"));
     let doc = plan_doc(&input, &view, 0);
     assert_eq!(doc["plan_saved"], false);
     assert_eq!(doc["exit_code"], 0);
@@ -592,8 +594,8 @@ fn not_usable_block_should_not_point_at_a_safe_apply_when_the_plan_has_no_free_r
         flat.contains("There is no safe apply to run first."),
         "{out}"
     );
-    assert!(flat.contains("~/.local/state/disk-cleanup"));
-    assert!(flat.contains("'disk-cleanup status'"));
+    assert!(flat.contains("~/.local/state/dunnage"));
+    assert!(flat.contains("'dunnage status'"));
     assert!(next_commands(&out).is_empty(), "{out}");
 }
 
@@ -617,10 +619,10 @@ fn sudo_next_lines_should_name_the_binary_by_absolute_path_and_behave_the_same_w
     let as_root = mk("/root", 0);
     assert_eq!(as_user, as_root);
     assert!(
-        as_user[0].starts_with("  sudo /home/tstapler/.cargo/bin/disk-cleanup "),
+        as_user[0].starts_with("  sudo /home/tstapler/.cargo/bin/dunnage "),
         "{as_user:?}"
     );
-    assert!(!as_user.iter().any(|c| c.contains("sudo disk-cleanup")));
+    assert!(!as_user.iter().any(|c| c.contains("sudo dunnage")));
 }
 
 #[test]
@@ -629,7 +631,7 @@ fn line_1_of_a_dry_run_should_not_say_re_run_with_apply_and_wrapper_notes_should
     let fx = Fixture::s1();
     for dash_n in [true, false] {
         let mut input = fx.input();
-        input.wrapper_note = wrapper_note(Some("disk-cleanup"), dash_n);
+        input.wrapper_note = wrapper_note(Some("dunnage"), dash_n);
         let out = text(&input, &pipe(80));
         let ls = lines(&out);
         assert!(!ls[0].contains("Re-run") && !ls[0].contains("--apply"));
@@ -692,7 +694,7 @@ fn facts_should_fill_the_reason_text_of_a_skip_row_and_an_absent_fact_should_dro
         .plan
         .items
         .iter()
-        .find(|i| i.guard != disk_cleanup_core::target::Guarded::Allow)
+        .find(|i| i.guard != dunnage_core::target::Guarded::Allow)
         .unwrap()
         .candidate
         .id();
@@ -707,7 +709,7 @@ fn facts_should_fill_the_reason_text_of_a_skip_row_and_an_absent_fact_should_dro
 #[test]
 fn worktree_row_should_end_with_the_discard_note_and_the_floor_text_should_replace_the_age_text() {
     let mut sel = selection_of(&[SelectorId::Worktrees]);
-    sel.worktree_ignored = Some(disk_cleanup_core::selector::Discard::Discard);
+    sel.worktree_ignored = Some(dunnage_core::selector::Discard::Discard);
     let ok = "/home/tstapler/code/app/.claude/worktrees/agent-a1";
     let fx = Fixture::of(sel, vec![worktree(ok, 0.1, 30)]);
     let id = fx.plan.items[0].candidate.id();
@@ -726,21 +728,17 @@ fn worktree_row_should_end_with_the_discard_note_and_the_floor_text_should_repla
     );
 
     let facts = ReasonFacts {
-        detail: Some(disk_cleanup_core::targets::worktree_guard::FLOOR_DETAIL.to_string()),
+        detail: Some(dunnage_core::targets::worktree_guard::FLOOR_DETAIL.to_string()),
         ..ReasonFacts::default()
     };
-    let ctx = disk_cleanup_cli::reasontext::TextCtx {
+    let ctx = dunnage_cli::reasontext::TextCtx {
         selection: &fx.selection,
         selector: SelectorId::Worktrees,
         exe: std::path::Path::new("/bin/dc"),
         ascii_only: true,
     };
     assert_eq!(
-        disk_cleanup_cli::reasontext::reason(
-            disk_cleanup_core::SkipReason::TooRecent,
-            &facts,
-            &ctx
-        ),
+        dunnage_cli::reasontext::reason(dunnage_core::SkipReason::TooRecent, &facts, &ctx),
         "younger than 24 h (worktree floor; --min-age cannot lower it)"
     );
 }

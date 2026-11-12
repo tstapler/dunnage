@@ -6,9 +6,9 @@ mod explore_fixture;
 use std::sync::Arc;
 use std::time::Duration;
 
-use disk_cleanup_cli::explore::text::{run_text, INTERRUPTED};
-use disk_cleanup_core::explore::testing::FakeTermSignals;
-use disk_cleanup_core::shell_quote::sandbox::{find_on_path, run_printed_line};
+use dunnage_cli::explore::text::{run_text, INTERRUPTED};
+use dunnage_core::explore::testing::FakeTermSignals;
+use dunnage_core::shell_quote::sandbox::{find_on_path, run_printed_line};
 use explore_fixture::{env, golden};
 
 fn text(width: usize, truncated: bool, top: usize) -> (i32, String, String) {
@@ -146,14 +146,11 @@ fn progress_should_go_to_the_progress_sink_not_stdout() {
 fn the_next_lines_should_pass_sh_n_carry_no_annotation_and_deliver_names_as_one_argument() {
     let (_, out, _) = text(80, false, 0);
     let nexts: Vec<&str> = out.lines().filter(|l| l.starts_with("Next: ")).collect();
-    assert!(
-        nexts.contains(&"Next: disk-cleanup --kinds build-dirs"),
-        "{out}"
-    );
+    assert!(nexts.contains(&"Next: dunnage --kinds build-dirs"), "{out}");
     assert!(
         nexts
             .iter()
-            .any(|l| l.starts_with("Next: disk-cleanup explore ")),
+            .any(|l| l.starts_with("Next: dunnage explore ")),
         "{out}"
     );
     for l in &nexts {
@@ -165,19 +162,19 @@ fn the_next_lines_should_pass_sh_n_carry_no_annotation_and_deliver_names_as_one_
         ("caf\u{e9}", "caf\u{e9}".as_bytes().to_vec()),
         ("bad", b"bad\xffname".to_vec()),
     ] {
-        let q = disk_cleanup_core::shell_quote::shell_quote(
+        let q = dunnage_core::shell_quote::shell_quote(
             std::os::unix::ffi::OsStrExt::from_bytes(&[b"/h/code/".as_slice(), &bytes].concat()),
             true,
         );
         assert!(q.is_ascii(), "{name}");
-        let line = format!("disk-cleanup explore {q}");
+        let line = format!("dunnage explore {q}");
         for shell in ["bash", "zsh"] {
             if find_on_path(shell).is_none() {
                 continue;
             }
             let dir = tempfile::tempdir().unwrap();
             let run = run_printed_line(dir.path(), shell, &line).unwrap().unwrap();
-            let argv = run.argv_of("disk-cleanup").unwrap();
+            let argv = run.argv_of("dunnage").unwrap();
             assert_eq!(argv.len(), 2);
             assert_eq!(argv[1], [b"/h/code/".as_slice(), &bytes].concat());
             assert!(run.injected.is_empty());

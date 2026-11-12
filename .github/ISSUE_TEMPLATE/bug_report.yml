@@ -10,7 +10,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: Output of `disk-cleanup --version`
+      description: Output of `dunnage --version`
     validations:
       required: true
   - type: input

@@ -10,15 +10,13 @@ use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::sync::Mutex;
 
-use disk_cleanup_adapters::discover_cache::{discover_caches, CacheEnv, CacheItem, CacheVerdict};
-use disk_cleanup_adapters::targets::cache_cmd::{
-    plan_command, run_cache_command, CmdContext, CmdPlan,
-};
-use disk_cleanup_adapters::RealDirOps;
-use disk_cleanup_core::cache_targets::cache_command;
-use disk_cleanup_core::ports::{classify, Class, Cmd, CmdOutput, CommandRunner};
-use disk_cleanup_core::testing::{FakeCommandRunner, FakeProbe};
-use disk_cleanup_core::{
+use dunnage_adapters::discover_cache::{discover_caches, CacheEnv, CacheItem, CacheVerdict};
+use dunnage_adapters::targets::cache_cmd::{plan_command, run_cache_command, CmdContext, CmdPlan};
+use dunnage_adapters::RealDirOps;
+use dunnage_core::cache_targets::cache_command;
+use dunnage_core::ports::{classify, Class, Cmd, CmdOutput, CommandRunner};
+use dunnage_core::testing::{FakeCommandRunner, FakeProbe};
+use dunnage_core::{
     ApplyToken, DeleteError, Identity, Intent, Locator, RootDev, SelectorId, SkipReason,
     WorktreeRemoval,
 };
@@ -369,7 +367,7 @@ fn skip_of(i: &CacheItem) -> Option<SkipReason> {
 
 fn label_of(i: &CacheItem) -> String {
     match i.candidate.facts() {
-        disk_cleanup_core::KindFacts::Cache(c) => c.label.clone(),
+        dunnage_core::KindFacts::Cache(c) => c.label.clone(),
         other => panic!("{other:?}"),
     }
 }
@@ -423,8 +421,8 @@ fn root_runs_should_restrict_themselves_to_cache_apt_whatever_HOME_holds() {
 
 #[test]
 fn the_confined_runner_should_run_only_the_shim_under_the_fixture_and_the_delta_should_follow() {
-    use disk_cleanup_adapters::command_confined::ConfinedCommandRunner;
-    use disk_cleanup_adapters::RealCommandRunner;
+    use dunnage_adapters::command_confined::ConfinedCommandRunner;
+    use dunnage_adapters::RealCommandRunner;
     use std::os::unix::fs::PermissionsExt;
 
     let f = fixture();

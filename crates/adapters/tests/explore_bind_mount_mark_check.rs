@@ -8,18 +8,16 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use disk_cleanup_adapters::probe::basic::mount_sources;
-use disk_cleanup_adapters::{
-    delete_tree, mount_id_of, open_parent, open_verified_root, RealDirOps,
-};
-use disk_cleanup_core::explore::mark_check::{
+use dunnage_adapters::probe::basic::mount_sources;
+use dunnage_adapters::{delete_tree, mount_id_of, open_parent, open_verified_root, RealDirOps};
+use dunnage_core::explore::mark_check::{
     mark_check, MarkCtx, MarkEnv, MarkFacts, MarkMount, MountTable, OwnState, SymlinkFact,
 };
-use disk_cleanup_core::explore::marks::Marks;
-use disk_cleanup_core::explore::msg::MarkRefusal;
-use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::{
+use dunnage_core::explore::marks::Marks;
+use dunnage_core::explore::msg::MarkRefusal;
+use dunnage_core::guard::{decide_path_common, Facts, GuardDecision};
+use dunnage_core::roots::RootSet;
+use dunnage_core::{
     AbortFlag, ApplyToken, DeleteError, DeletePolicy, Dirs, Identity, Kind, RootDev,
 };
 

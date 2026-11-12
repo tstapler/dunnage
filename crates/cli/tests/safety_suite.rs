@@ -1,7 +1,7 @@
 #![cfg(feature = "gate-c")]
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 //! Story 5.1.3: safety guarantees that need a spawned binary, a mount namespace or the repository's checker scripts.
-//! Compiled with `--features disk-cleanup/gate-c` or later (`make safety` passes gate-d). Fixtures only.
+//! Compiled with `--features dunnage/gate-c` or later (`make safety` passes gate-d). Fixtures only.
 
 mod common;
 
@@ -49,7 +49,7 @@ fn safety_bind_mount_below_target_refused() {
         .env("SRC", &src)
         .env("MNT", nm.join("mounted"))
         .env("OUT", &out_dir)
-        .env("BIN", env!("CARGO_BIN_EXE_disk-cleanup"))
+        .env("BIN", env!("CARGO_BIN_EXE_dunnage"))
         .args(["-rm", "sh", "-c", script])
         .stdin(std::process::Stdio::null())
         .output()

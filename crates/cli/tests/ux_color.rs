@@ -5,10 +5,10 @@ mod support;
 
 use std::collections::HashMap;
 
-use disk_cleanup_cli::render::render_plan;
-use disk_cleanup_cli::render_json::{plan_doc, to_text};
-use disk_cleanup_cli::terminal::{color_on, ColorChoice, Terminal};
-use disk_cleanup_cli::view::PlanView;
+use dunnage_cli::render::render_plan;
+use dunnage_cli::render_json::{plan_doc, to_text};
+use dunnage_cli::terminal::{color_on, ColorChoice, Terminal};
+use dunnage_cli::view::PlanView;
 use support::*;
 
 fn env_of(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {

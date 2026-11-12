@@ -7,14 +7,12 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use disk_cleanup_core::explore::mark_check::OwnState;
-use disk_cleanup_core::explorer_plan::{ExplorerPlanCtx, NoCleanerView, TreeSize, TreeSizer};
-use disk_cleanup_core::ports::Fs;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::testing::{FakeClock, FakeProbe};
-use disk_cleanup_core::{
-    AllocatedBytes, DirEntryInfo, Dirs, FileKind, Identity, MountEntry, StatInfo,
-};
+use dunnage_core::explore::mark_check::OwnState;
+use dunnage_core::explorer_plan::{ExplorerPlanCtx, NoCleanerView, TreeSize, TreeSizer};
+use dunnage_core::ports::Fs;
+use dunnage_core::roots::RootSet;
+use dunnage_core::testing::{FakeClock, FakeProbe};
+use dunnage_core::{AllocatedBytes, DirEntryInfo, Dirs, FileKind, Identity, MountEntry, StatInfo};
 
 pub const NOW: i64 = 1_700_000_000;
 
@@ -199,7 +197,7 @@ pub fn roots(scan: &[&str]) -> RootSet {
 }
 
 pub fn own_state() -> OwnState {
-    OwnState::new(&dirs(), PathBuf::from("/usr/bin/disk-cleanup"))
+    OwnState::new(&dirs(), PathBuf::from("/usr/bin/dunnage"))
 }
 
 pub struct World {
@@ -243,7 +241,7 @@ impl World {
 /// Runs `f` with a context over the world.
 pub fn with_ctx<R>(
     w: &World,
-    cleaner: &dyn disk_cleanup_core::explorer_plan::CleanerView,
+    cleaner: &dyn dunnage_core::explorer_plan::CleanerView,
     f: impl FnOnce(&ExplorerPlanCtx<'_>) -> R,
 ) -> R {
     let sizer = XSizer(&w.fs);

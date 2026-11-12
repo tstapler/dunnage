@@ -2,7 +2,7 @@
 //! The `compile_fail` half of these checks lives in doctests (`cargo test --doc`) on `Locator`,
 //! `KindFacts`, `Candidate`, `CandidateId`, `Allowed` and `WorktreeRemoval`; this file holds the runtime half.
 
-use disk_cleanup_core::*;
+use dunnage_core::*;
 
 #[test]
 fn locator_should_make_both_none_or_both_some_unrepresentable_and_cache_kind_with_docker_facts_should_not_compile_When_doctests(

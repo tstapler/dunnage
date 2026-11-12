@@ -3,9 +3,9 @@
 
 use std::path::Path;
 
-use disk_cleanup_core::plan::BIN;
-use disk_cleanup_core::snapshot_types::FsSnapshot;
-use disk_cleanup_core::summary::DiskVerdict;
+use dunnage_core::plan::BIN;
+use dunnage_core::snapshot_types::FsSnapshot;
+use dunnage_core::summary::DiskVerdict;
 
 use crate::layout::{wrap_line, RowCells, Table, APPLY_COLS, PLAN_COLS};
 use crate::terminal::{Terminal, Tint};
@@ -253,9 +253,9 @@ pub fn plan_table(out: &mut Out, rows: &[ItemRow], top: usize, verbose: bool, ho
 
 pub fn tier_word(r: &ItemRow) -> String {
     match r.tier() {
-        disk_cleanup_core::kind::Risk::Safe => "safe",
-        disk_cleanup_core::kind::Risk::Guarded => "guarded",
-        disk_cleanup_core::kind::Risk::Destructive => "destructive",
+        dunnage_core::kind::Risk::Safe => "safe",
+        dunnage_core::kind::Risk::Guarded => "guarded",
+        dunnage_core::kind::Risk::Destructive => "destructive",
     }
     .to_string()
 }
@@ -368,7 +368,7 @@ fn next_block(out: &mut Out, view: &PlanView) {
         out.raw(format!("  {}", c.command));
         out.indented("      ", &c.explain);
         if c.only_filter_note {
-            out.indented("      ", disk_cleanup_core::plan::NO_PLAN_ID_ONLY_NOTE);
+            out.indented("      ", dunnage_core::plan::NO_PLAN_ID_ONLY_NOTE);
         }
     }
     if let Some(n) = &view.not_usable {
@@ -485,11 +485,11 @@ pub fn wrapper_note(via: Option<&str>, dry_run_flag: bool) -> Option<String> {
     Some(if dry_run_flag {
         "NOTE: dry-run is now the default; -n is a no-op. Copy a Next: line to delete (old behaviour deleted unless -n; destructive kinds need the --plan-id on that line).".to_string()
     } else {
-        "NOTE: disk-cleanup no longer deletes by default; this was a dry run. Copy a Next: line from the report to delete.".to_string()
+        "NOTE: dunnage no longer deletes by default; this was a dry run. Copy a Next: line from the report to delete.".to_string()
     })
 }
 
-/// `disk-cleanup status` (S4).
+/// `dunnage status` (S4).
 pub fn render_status(fs: &FsBlock, home: Option<&Path>, term: &Terminal) -> String {
     let mut out = Out::new(term);
     fs_block_with(&mut out, fs, home, true);
@@ -499,7 +499,7 @@ pub fn render_status(fs: &FsBlock, home: Option<&Path>, term: &Terminal) -> Stri
     out.finish()
 }
 
-/// `disk-cleanup kinds` (S5): one aligned row per selector.
+/// `dunnage kinds` (S5): one aligned row per selector.
 pub fn render_kinds(rows: &[crate::render_json::KindRow], term: &Terminal) -> String {
     let na = |o: &Option<String>| o.clone().unwrap_or_else(|| "n/a".into());
     let table: Vec<[String; 7]> = rows

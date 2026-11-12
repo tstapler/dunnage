@@ -7,8 +7,8 @@
 
 use std::path::PathBuf;
 
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::{Dirs, FatalError};
+use dunnage_core::roots::RootSet;
+use dunnage_core::{Dirs, FatalError};
 
 pub const EXIT_FATAL: i32 = 2;
 pub const EXIT_TERMINAL: i32 = 74;
@@ -65,13 +65,13 @@ mod interactive {
     use std::os::unix::ffi::OsStrExt;
     use std::sync::Arc;
 
-    use disk_cleanup_adapters::explore::cache_paint::CacheMode;
-    use disk_cleanup_adapters::signals::SwallowBrokenPipe;
-    use disk_cleanup_adapters::RealTermSignals;
-    use disk_cleanup_core::explore::ports::TermSignals;
-    use disk_cleanup_core::explore::rows::{Sort, SortKey};
-    use disk_cleanup_tui::app::{ExplorerConfig, Ports};
-    use disk_cleanup_tui::terminal::{query_size, run_on_stdout, write_stderr_lines};
+    use dunnage_adapters::explore::cache_paint::CacheMode;
+    use dunnage_adapters::signals::SwallowBrokenPipe;
+    use dunnage_adapters::RealTermSignals;
+    use dunnage_core::explore::ports::TermSignals;
+    use dunnage_core::explore::rows::{Sort, SortKey};
+    use dunnage_tui::app::{ExplorerConfig, Ports};
+    use dunnage_tui::terminal::{query_size, run_on_stdout, write_stderr_lines};
 
     use super::{normalize_exit, resolve_display_roots, Dirs, RootSet, EXIT_FATAL, EXIT_TERMINAL};
     use crate::args::{Cli, ExploreArgs, ExploreSortArg};
@@ -120,7 +120,7 @@ mod interactive {
                 text: args.wants_text(),
                 json: cli.json,
             },
-            std::env::var_os("DISK_CLEANUP_PLAIN").is_some_and(|v| !v.is_empty()),
+            crate::wiring::env::tool_env("PLAIN").is_some_and(|v| !v.is_empty()),
         );
         let signals = match RealTermSignals::new() {
             Ok(s) => Arc::new(s) as Arc<dyn TermSignals>,

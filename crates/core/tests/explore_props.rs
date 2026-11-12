@@ -14,8 +14,8 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use disk_cleanup_core::explore::msg::{NodeEvent, ScanMode};
-use disk_cleanup_core::explore::tree::{ExploreTree, ScanStatus};
+use dunnage_core::explore::msg::{NodeEvent, ScanMode};
+use dunnage_core::explore::tree::{ExploreTree, ScanStatus};
 use proptest::prelude::*;
 
 proptest! {

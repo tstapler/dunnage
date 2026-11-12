@@ -5,9 +5,9 @@ mod support;
 
 use std::collections::HashMap;
 
-use disk_cleanup_cli::render::render_plan;
-use disk_cleanup_cli::terminal::{ColorChoice, Terminal};
-use disk_cleanup_cli::view::PlanView;
+use dunnage_cli::render::render_plan;
+use dunnage_cli::terminal::{ColorChoice, Terminal};
+use dunnage_cli::view::PlanView;
 use support::*;
 
 fn env_of(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
@@ -59,7 +59,7 @@ fn layout_should_follow_the_width_source_and_never_truncate_anything_at_120_90_8
         assert!(!out.contains('\r') && out.is_ascii());
         for l in out
             .lines()
-            .filter(|l| !l.starts_with("  disk-cleanup") && !l.starts_with("  sudo"))
+            .filter(|l| !l.starts_with("  dunnage") && !l.starts_with("  sudo"))
         {
             assert!(l.chars().count() <= w, "{w}: {l}");
         }

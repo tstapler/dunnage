@@ -1,5 +1,5 @@
 //! The `explorer-selection` target (Task 6.6.3e, ADR-006): removes the directories the owner marked in
-//! `disk-cleanup explore`, one `delete_tree` each, only the ones the reviewed plan listed.
+//! `dunnage explore`, one `delete_tree` each, only the ones the reviewed plan listed.
 //!
 //! It has no discovery of its own: the marks are the items. Everything a delete trusts is read again at apply
 //! time and compared with what the owner reviewed:
@@ -21,17 +21,17 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use disk_cleanup_core::delete_types::FileKind;
-use disk_cleanup_core::explore::confirm::ReviewedItem;
-use disk_cleanup_core::explore::mark_check::OwnState;
-use disk_cleanup_core::explorer_plan::{judge_fresh, mount_facts, FreshCheck};
-use disk_cleanup_core::floor_rule::ForAllowedError;
-use disk_cleanup_core::plan::ItemIdentity;
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::roots::{strictly_below, RootIdentity, RootSet};
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::target::{Guarded, Target};
-use disk_cleanup_core::{
+use dunnage_core::delete_types::FileKind;
+use dunnage_core::explore::confirm::ReviewedItem;
+use dunnage_core::explore::mark_check::OwnState;
+use dunnage_core::explorer_plan::{judge_fresh, mount_facts, FreshCheck};
+use dunnage_core::floor_rule::ForAllowedError;
+use dunnage_core::plan::ItemIdentity;
+use dunnage_core::ports::Env;
+use dunnage_core::roots::{strictly_below, RootIdentity, RootSet};
+use dunnage_core::selector::Selection;
+use dunnage_core::target::{Guarded, Target};
+use dunnage_core::{
     AbortFlag, AllocatedBytes, Allowed, ApplyToken, Candidate, CandidateId, DeleteError,
     DeleteFailure, DeletePolicy, ExplorerFacts, Freed, Identity, KindFacts, Locator, RootDev,
     SelectorId, SkipReason,
@@ -53,7 +53,7 @@ fn failure(error: DeleteError) -> DeleteFailure {
 
 /// The candidate of one reviewed item, from the `lstat` taken now. The explorer's apply builds its items with
 /// this, so the target and the apply agree on what an item is.
-pub fn candidate_of(path: &Path, st: &disk_cleanup_core::delete_types::StatInfo) -> Candidate {
+pub fn candidate_of(path: &Path, st: &dunnage_core::delete_types::StatInfo) -> Candidate {
     Candidate::new(
         Locator::Path(path.to_path_buf()),
         KindFacts::Explorer(ExplorerFacts {
@@ -87,7 +87,7 @@ pub struct ExplorerSelectionTarget<D: DirOps> {
 
 impl<D: DirOps> ExplorerSelectionTarget<D> {
     /// `roots` are re-resolved by the caller at apply time; `reviewed` and `reviewed_roots` come from the
-    /// owner's [`ReviewedPlan`](disk_cleanup_core::explore::confirm::ReviewedPlan).
+    /// owner's [`ReviewedPlan`](dunnage_core::explore::confirm::ReviewedPlan).
     pub fn new(
         roots: RootSet,
         own_state: OwnState,

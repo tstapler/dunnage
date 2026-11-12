@@ -3,9 +3,9 @@
 
 use std::path::PathBuf;
 
-use disk_cleanup_core::ports::CmdOutput;
-use disk_cleanup_core::testing::FakeCommandRunner;
-use disk_cleanup_core::DeleteError;
+use dunnage_core::ports::CmdOutput;
+use dunnage_core::testing::FakeCommandRunner;
+use dunnage_core::DeleteError;
 
 pub fn fixture_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/docker")

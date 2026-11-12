@@ -31,7 +31,7 @@ config_setting(
     flag_values = {":gate": "d"},
 )
 
-# `disk-cleanup explore` (cli feature `explore`, default on). --//build:explore=false builds without it.
+# `dunnage explore` (cli feature `explore`, default on). --//build:explore=false builds without it.
 bool_flag(
     name = "explore",
     build_setting_default = True,

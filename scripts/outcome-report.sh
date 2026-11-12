@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # outcome-report.sh [--audit F] [--outcome F] [--wrapper-log F] [--cutover YYYY-MM-DD] [--bin PATH] | --selftest
-# Reads the state directory of disk-cleanup and prints the evidence the owner needs at Gates B, C and D:
+# Reads the state directory of dunnage and prints the evidence the owner needs at Gates B, C and D:
 # SM-2 (the first three qualifying real runs, classified from the recorded run_end), O-1, the reach table
 # (CV-1), O-2 and O-3. It reports and never acts: every outcome, a miss included, exits 0 (2 means a file or a
 # tool it needs is missing or unparsable). Classification reads run_end.{attribution_pct,causes,explained},
@@ -10,7 +10,7 @@ set -u -o pipefail
 
 MIN_DROP=5368709120   # 5 GiB: below this, concurrent writes can exceed the 5% tolerance (triad 3, P-j)
 
-state_dir=${XDG_STATE_HOME:-${HOME:-.}/.local/state}/disk-cleanup
+state_dir=${XDG_STATE_HOME:-${HOME:-.}/.local/state}/dunnage
 
 JQ_LIB='
 def r1: (. * 10 | round) as $t | "\(($t / 10) | floor).\($t % 10)";
@@ -334,7 +334,7 @@ selftest() {
 }
 
 main() {
-  local audit="" outcome="" wlog="" cutover="" bin=${DISK_CLEANUP_BIN:-disk-cleanup}
+  local audit="" outcome="" wlog="" cutover="" bin=${DUNNAGE_BIN:-dunnage}
   while [ $# -gt 0 ]; do
     case $1 in
       --selftest) selftest; exit $? ;;

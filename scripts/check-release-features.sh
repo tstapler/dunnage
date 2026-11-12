@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2154,SC2015
-# Fails if a shipped disk-cleanup artifact can carry the `test-support` feature.
+# Fails if a shipped dunnage artifact can carry the `test-support` feature.
 # Four independent legs (graph, built-feature set, marker bytes, marker reachability), each testable alone.
 # Every leg fails closed: missing tool, missing profile, an unselected core crate or empty input is a FAIL.
-#   check-release-features.sh                 Cargo leg (build -p disk-cleanup under release and dist) and Bazel leg
+#   check-release-features.sh                 Cargo leg (build -p dunnage under release and dist) and Bazel leg
 #                                             (bazel build --config=dist, the binary the release archives hold), all legs
 #   check-release-features.sh --artifact BIN  run only the byte legs on a built artifact (release job)
 #   check-release-features.sh --selftest      positive control + one negative per leg and per fail-open case (Cargo)
@@ -16,7 +16,7 @@ PANIC_MARKER='DC_EXPLORE_PANIC_AT'          # the forced-panic switch of the Gat
 DELAY_MARKER='DC_EXPLORE_PLAN_DELAY_MS'     # the slow-planner switch of the full-disk journeys: test-support only
 DELETE_MARKER='DC_EXPLORE_DELETE_DELAY_MS'  # the slow-delete switch of the live-delete journey: test-support only
 FLAVOR_PREFIX='dc-flavor='                  # both flavors start with it; present iff main reaches build_flavor()
-PKG=disk-cleanup CORE=disk-cleanup-core
+PKG=dunnage CORE=dunnage-core
 CORE_TARGET=${CORE//-/_}                    # cargo prints lib target names with underscores
 TAINT_DIR=""                                # set by selftest; removed by the trap on every exit path
 
@@ -97,7 +97,7 @@ build_and_check() {  # $1 = label, rest = cargo profile flags
 }
 
 BAZEL=${DC_BAZEL:-scripts/bazel.sh}
-BAZEL_TARGET=//crates/cli:disk-cleanup
+BAZEL_TARGET=//crates/cli:dunnage
 
 # Mirror of leg_profile for the Bazel side: --config=dist is opt plus thin LTO, as [profile.dist] is release plus thin.
 leg_bazel_profile() {
@@ -170,13 +170,13 @@ selftest() {
   TAINT_DIR=$(mktemp -d); trap cleanup_selftest EXIT INT TERM
   local t="$TAINT_DIR" rc=0
   # 1 each leg fails alone on crafted input, and passes on clean input
-  printf 'disk-cleanup-core v0.1.0 (/w/crates/core)\n└── disk-cleanup-core feature "test-support" (command-line)\n' | leg_graph && { echo "SELFTEST BAD: graph leg missed"; rc=1; } || echo "ok: graph leg fails on a test-support edge"
-  printf 'disk-cleanup-core v0.1.0 (/w/crates/core)\n└── disk-cleanup-core feature "default"\n' | leg_graph && echo "ok: graph leg passes on a clean tree" || { echo "SELFTEST BAD: graph leg false positive"; rc=1; }
+  printf 'dunnage-core v0.1.0 (/w/crates/core)\n└── dunnage-core feature "test-support" (command-line)\n' | leg_graph && { echo "SELFTEST BAD: graph leg missed"; rc=1; } || echo "ok: graph leg fails on a test-support edge"
+  printf 'dunnage-core v0.1.0 (/w/crates/core)\n└── dunnage-core feature "default"\n' | leg_graph && echo "ok: graph leg passes on a clean tree" || { echo "SELFTEST BAD: graph leg false positive"; rc=1; }
   local r=0; printf 'nothing here\n' | leg_graph || r=$?; [ "$r" -eq 2 ] && echo "ok: graph leg fails (2) on a tree with no core node" || { echo "SELFTEST BAD: graph leg passed an empty tree"; rc=1; }
-  local art='"reason":"compiler-artifact","target":{"name":"disk_cleanup_core","kind":["lib"]}'
-  r=0; printf '{%s,"package_id":"path+file:///w/crates/core#disk-cleanup-core@0.1.0","features":["test-support"]}\n' "$art" | leg_features || r=$?; [ "$r" -eq 1 ] && echo "ok: feature leg fails (1) on a test-support artifact" || { echo "SELFTEST BAD: feature leg missed (rc $r)"; rc=1; }
-  r=0; printf '{%s,"package_id":"path+file:///w/crates/core#disk-cleanup-core@0.1.0","features":[]}\n' "$art" | leg_features || r=$?; [ "$r" -eq 0 ] && echo "ok: feature leg passes on a clean artifact" || { echo "SELFTEST BAD: feature leg false positive (rc $r)"; rc=1; }
-  r=0; printf '{%s,"package_id":"path+file:///w/disk-cleanup-core#0.1.0","features":["test-support"]}\n' "$art" | leg_features || r=$?; [ "$r" -eq 1 ] && echo "ok: feature leg fails on a package_id without name@version (directory named like the package)" || { echo "SELFTEST BAD: nameless package_id evades the feature leg (rc $r)"; rc=1; }
+  local art='"reason":"compiler-artifact","target":{"name":"dunnage_core","kind":["lib"]}'
+  r=0; printf '{%s,"package_id":"path+file:///w/crates/core#dunnage-core@0.1.0","features":["test-support"]}\n' "$art" | leg_features || r=$?; [ "$r" -eq 1 ] && echo "ok: feature leg fails (1) on a test-support artifact" || { echo "SELFTEST BAD: feature leg missed (rc $r)"; rc=1; }
+  r=0; printf '{%s,"package_id":"path+file:///w/crates/core#dunnage-core@0.1.0","features":[]}\n' "$art" | leg_features || r=$?; [ "$r" -eq 0 ] && echo "ok: feature leg passes on a clean artifact" || { echo "SELFTEST BAD: feature leg false positive (rc $r)"; rc=1; }
+  r=0; printf '{%s,"package_id":"path+file:///w/dunnage-core#0.1.0","features":["test-support"]}\n' "$art" | leg_features || r=$?; [ "$r" -eq 1 ] && echo "ok: feature leg fails on a package_id without name@version (directory named like the package)" || { echo "SELFTEST BAD: nameless package_id evades the feature leg (rc $r)"; rc=1; }
   r=0; printf '' | leg_features || r=$?; [ "$r" -eq 2 ] && echo "ok: feature leg fails (2) on empty input" || { echo "SELFTEST BAD: empty input passed (rc $r)"; rc=1; }
   r=0; printf 'not json\n' | leg_features 2>/dev/null || r=$?; [ "$r" -eq 2 ] && echo "ok: feature leg fails (2) on garbage input" || { echo "SELFTEST BAD: garbage input passed (rc $r)"; rc=1; }
   r=0; printf '{"reason":"compiler-artifact","target":{"name":"other","kind":["lib"]},"features":[]}\n' | leg_features || r=$?; [ "$r" -eq 2 ] && echo "ok: feature leg fails (2) when no core artifact is present" || { echo "SELFTEST BAD: missing core artifact passed (rc $r)"; rc=1; }

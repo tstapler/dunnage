@@ -7,8 +7,8 @@ mod common;
 use std::path::{Path, PathBuf};
 
 use common::Fixture;
-use disk_cleanup_adapters::audit_verify::{verify_audit, AllowedTable, VerifyInputs};
-use disk_cleanup_core::cache_targets::{CacheSource, CACHE_ROWS};
+use dunnage_adapters::audit_verify::{verify_audit, AllowedTable, VerifyInputs};
+use dunnage_core::cache_targets::{CacheSource, CACHE_ROWS};
 use serde_json::json;
 
 fn hex_of(b: &[u8]) -> String {
@@ -38,7 +38,7 @@ fn end(run: &str) -> String {
 fn verify(
     lines: &[String],
     config: Option<&[PathBuf]>,
-) -> disk_cleanup_adapters::audit_verify::VerifyReport {
+) -> dunnage_adapters::audit_verify::VerifyReport {
     let table = AllowedTable::embedded();
     let text = lines.join("\n");
     verify_audit(
@@ -211,7 +211,7 @@ fn ci_gate_should_pin_the_sha256_of_allowed_roots() {
 }
 
 fn write_log(f: &Fixture, lines: &[String]) -> PathBuf {
-    let dir = f.xdg("state").join("disk-cleanup");
+    let dir = f.xdg("state").join("dunnage");
     std::fs::create_dir_all(&dir).unwrap();
     let p = dir.join("audit.jsonl");
     std::fs::write(&p, lines.join("\n") + "\n").unwrap();

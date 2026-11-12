@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use disk_cleanup_core::{AllocatedBytes, ApparentBytes, FileKind, RootDev, StatInfo};
+use dunnage_core::{AllocatedBytes, ApparentBytes, FileKind, RootDev, StatInfo};
 
 use crate::dirops::DirOps;
 
@@ -283,15 +283,15 @@ impl<D: DirOps> TreestatSizer<D> {
     }
 }
 
-impl<D: DirOps> disk_cleanup_core::explorer_plan::TreeSizer for TreestatSizer<D> {
+impl<D: DirOps> dunnage_core::explorer_plan::TreeSizer for TreestatSizer<D> {
     fn measure(
         &self,
         path: &std::path::Path,
-    ) -> std::io::Result<disk_cleanup_core::explorer_plan::TreeSize> {
+    ) -> std::io::Result<dunnage_core::explorer_plan::TreeSize> {
         let dir = self.ops.open_root(path)?;
         let dev = self.ops.fstat(&dir)?.ident.dev;
         let stats = measure(&self.ops, &dir, RootDev(dev), MeasureOpts::default());
-        Ok(disk_cleanup_core::explorer_plan::TreeSize {
+        Ok(dunnage_core::explorer_plan::TreeSize {
             allocated: stats.allocated,
             newest_mtime: stats.newest_mtime.map(crate::mtime_probe::unix_secs),
             git_repos: stats.git_repos,

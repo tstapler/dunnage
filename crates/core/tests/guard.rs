@@ -3,11 +3,11 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
-use disk_cleanup_core::ports::SystemProbe;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::testing::FakeProbe;
-use disk_cleanup_core::{
+use dunnage_core::guard::{decide_path_common, Facts, GuardDecision};
+use dunnage_core::ports::SystemProbe;
+use dunnage_core::roots::RootSet;
+use dunnage_core::testing::FakeProbe;
+use dunnage_core::{
     Dirs, Identity, Kind, MountEntry, RootDev, SkipReason, WorktreeRemoval, WrongKind,
 };
 

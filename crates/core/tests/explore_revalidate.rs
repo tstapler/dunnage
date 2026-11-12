@@ -8,9 +8,9 @@ use ex::*;
 use std::ffi::OsString;
 use std::time::Instant;
 
-use disk_cleanup_core::explore::msg::{NodeEvent, ScanMode, NO_PARENT, PAINT_ID_BASE};
-use disk_cleanup_core::explore::tree::{ExploreTree, ScanStatus};
-use disk_cleanup_scan::index::DirInfo;
+use dunnage_core::explore::msg::{NodeEvent, ScanMode, NO_PARENT, PAINT_ID_BASE};
+use dunnage_core::explore::tree::{ExploreTree, ScanStatus};
+use dunnage_scan::index::DirInfo;
 
 fn dir(id: u64, parent: u64, name: &str, alloc: u64, subdirs: u32, painted: bool) -> NodeEvent {
     NodeEvent::Dir {
@@ -28,7 +28,7 @@ fn dir(id: u64, parent: u64, name: &str, alloc: u64, subdirs: u32, painted: bool
     }
 }
 
-fn find(t: &ExploreTree, path: &str) -> Option<disk_cleanup_core::explore::tree::NodeId> {
+fn find(t: &ExploreTree, path: &str) -> Option<dunnage_core::explore::tree::NodeId> {
     t.iter()
         .find(|n| t.path_of(*n) == std::path::Path::new(path))
 }

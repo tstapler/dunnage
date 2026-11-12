@@ -1,4 +1,4 @@
-//! Pure, testable eligibility logic for disk-cleanup — kept free of
+//! Pure, testable eligibility logic for dunnage — kept free of
 //! filesystem and git side effects so staleness rules can be exercised
 //! without touching a real machine. The CLI crate does all the I/O and
 //! calls into this crate to decide what's safe to remove.
@@ -88,7 +88,7 @@ pub use targets::worktree_guard::{
     WorktreeGuard, WorktreeOpts, WORKTREE_MIN_AGE,
 };
 
-/// A cache directory disk-cleanup knows how to reclaim, expressed relative
+/// A cache directory dunnage knows how to reclaim, expressed relative
 /// to `$HOME` so the (pure) list can be unit tested without touching disk.
 #[derive(Debug, Clone, Copy)]
 pub struct CacheTarget {

@@ -1,6 +1,6 @@
 # Security policy
 
-disk-cleanup deletes files, so its path guards are the security boundary. These count as security bugs:
+dunnage deletes files, so its path guards are the security boundary. These count as security bugs:
 
 - a deletion outside the per-kind allowed roots (`ci/allowed-roots.txt`),
 - following a symlink or crossing a filesystem during a delete,
@@ -13,8 +13,8 @@ Do not open a public issue. Report privately to **TODO-OWNER: security contact a
 "Report a vulnerability" button under the repository's Security tab once the owner has enabled private
 vulnerability reporting).
 
-Include the version (`disk-cleanup --version`), the command line, and the audit log lines
-(`$XDG_STATE_HOME/disk-cleanup/audit.jsonl`) if a deletion was involved.
+Include the version (`dunnage --version`), the command line, and the audit log lines
+(`$XDG_STATE_HOME/dunnage/audit.jsonl`) if a deletion was involved.
 
 ## Supported versions
 

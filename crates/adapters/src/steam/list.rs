@@ -641,7 +641,7 @@ mod tests {
     fn unmounted_library_should_make_the_cleaning_gate_skip_the_whole_kind_for_prefixes_and_remnants(
     ) {
         use crate::steam::{SteamGate, SteamInstall};
-        use disk_cleanup_core::SkipReason;
+        use dunnage_core::SkipReason;
         // Stories 4.2.1 (Skip) and 4.2.2 (Unavailable) disagree; the shared loader returns Skip, so a
         // remnant kind built on it is Skip(LibraryUnmounted) too. Recorded in phase5-findings.md.
         let f = Fixture::new(&["lib0", "lib1"], &["lib1"]);

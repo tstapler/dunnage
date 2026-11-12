@@ -6,13 +6,13 @@
 mod docker_common;
 use docker_common::*;
 
-use disk_cleanup_adapters::docker_cli::{
+use dunnage_adapters::docker_cli::{
     parse_images, parse_ps, parse_system_df, parse_volume_inspect, parse_volume_ls, DockerCli,
 };
-use disk_cleanup_core::docker::{DockerClient, DockerError};
-use disk_cleanup_core::target::KindGate;
-use disk_cleanup_core::testing::FakeCommandRunner;
-use disk_cleanup_core::{DeleteError, SkipReason};
+use dunnage_core::docker::{DockerClient, DockerError};
+use dunnage_core::target::KindGate;
+use dunnage_core::testing::FakeCommandRunner;
+use dunnage_core::{DeleteError, SkipReason};
 use serde_json::Value;
 
 fn mutants(prefix: &str) -> Vec<String> {
@@ -266,7 +266,7 @@ fn docker_server_version_outside_the_tested_range_should_make_the_kinds_ListOnly
 
 #[test]
 fn only_read_only_allowlisted_commands_should_be_issued_When_listing() {
-    use disk_cleanup_core::testing::CallKind;
+    use dunnage_core::testing::CallKind;
     let r = healthy();
     let cli = DockerCli::new(&r, None);
     let _ = cli.probe();

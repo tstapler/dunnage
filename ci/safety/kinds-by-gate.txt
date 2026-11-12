@@ -6,7 +6,7 @@ active-gate D
 # adds docker, docker-images, docker-volumes, steam, btrfs and btrfs-trim.
 # Owner decision 2026-11-10: a gate's apply path is built before its owner review but its kinds stay unregistered
 # in the shipped binary until the review; the build registers them only with the cargo feature `gate-<letter>`
-# of the `disk-cleanup` package. The test-only `fixture-destructive` is not in this table: only a `test-support`
+# of the `dunnage` package. The test-only `fixture-destructive` is not in this table: only a `test-support`
 # build registers it, and only under DC_TEST_ROOT.
 # `explorer-selection` (Story 6.6.2) is the explorer's hidden kind: registered from Gate D, never listed by `kinds` and
 # never nameable with --kinds; crates/cli/tests/kind_registry.rs checks it apart from the other rows.

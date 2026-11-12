@@ -5,11 +5,11 @@
 mod common;
 
 use common::{build_dir, run, selection, FakeTarget, Rig};
-use disk_cleanup_core::plan::PlanId;
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::selector::Selection;
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::{ApplyToken, Candidate, DeleteFailure, Freed, SelectorId};
+use dunnage_core::plan::PlanId;
+use dunnage_core::ports::Env;
+use dunnage_core::selector::Selection;
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::{ApplyToken, Candidate, DeleteFailure, Freed, SelectorId};
 
 /// A walking target that reports it was cut short.
 struct Cut {

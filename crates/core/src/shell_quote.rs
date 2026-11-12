@@ -67,7 +67,7 @@ pub mod sandbox {
     /// Commands whose stub appends its name to `INJECTED`: none of them may ever run.
     const TRAPS: [&str; 8] = ["sudo", "chown", "rm", "touch", "cat", "echo", "curl", "sh"];
     /// Commands whose stub records its argv, NUL-separated, to `argv.<name>`.
-    const RECORDERS: [&str; 2] = ["ls", "disk-cleanup"];
+    const RECORDERS: [&str; 2] = ["ls", "dunnage"];
 
     /// What one run of a printed line did.
     #[derive(Debug)]

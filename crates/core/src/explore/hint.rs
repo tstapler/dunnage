@@ -9,8 +9,8 @@ use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
-use disk_cleanup_scan::classify::{classify_dir, ParentFacts};
-use disk_cleanup_scan::scan::BuildKind;
+use dunnage_scan::classify::{classify_dir, ParentFacts};
+use dunnage_scan::scan::BuildKind;
 
 use super::msg::{ClassifyFacts, Hint, NoReason, Tier};
 use super::rows::Badge;

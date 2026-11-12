@@ -15,7 +15,7 @@ dc_library(
         exclude = ["src/bin/**"],
     ),
     compile_data = ["//ci:allowed-roots.txt"],
-    crate_name = "disk_cleanup_adapters",
+    crate_name = "dunnage_adapters",
     # Cargo feature test-support (= core/test-support): behind the explicit taint flag only (see //build).
     crate_features = select({
         "//build:test_support_on": ["test-support"],

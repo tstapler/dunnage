@@ -59,8 +59,8 @@ jobs:
         run: bazel test --config=ci --config=gate-d --test_env=GATE=D //...
       - name: dist binary carries no test-support
         run: |
-          bazel build --config=ci --config=dist //crates/cli:disk-cleanup
-          scripts/check-release-features.sh --artifact bazel-bin/crates/cli/disk-cleanup
+          bazel build --config=ci --config=dist //crates/cli:dunnage
+          scripts/check-release-features.sh --artifact bazel-bin/crates/cli/dunnage
       - name: test logs
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -142,5 +142,5 @@ jobs:
       - name: Cargo still builds and tests (the tests Bazel skips, and a release build)
         run: |
           cargo fmt --all --check
-          cargo test -p disk-cleanup --test kind_registry --test e2e_apply_caches
+          cargo test -p dunnage --test kind_registry --test e2e_apply_caches
           cargo build --release --locked --workspace

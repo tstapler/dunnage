@@ -8,10 +8,10 @@ use std::fs;
 use std::path::Path;
 
 use common::discovery::{fixture, roots_for, Fixture};
-use disk_cleanup_adapters::{delete_tree, open_parent, open_verified_root, DirOps, RealDirOps};
-use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
-use disk_cleanup_core::plan::ItemIdentity;
-use disk_cleanup_core::{
+use dunnage_adapters::{delete_tree, open_parent, open_verified_root, DirOps, RealDirOps};
+use dunnage_core::guard::{decide_path_common, Facts, GuardDecision};
+use dunnage_core::plan::ItemIdentity;
+use dunnage_core::{
     AbortFlag, Allowed, ApplyToken, DeleteError, DeletePolicy, FileKind, Identity, Kind, RootDev,
 };
 

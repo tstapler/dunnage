@@ -8,9 +8,9 @@ use std::ffi::OsString;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::par::{default_workers, par_map};
-use disk_cleanup_core::ports::{Cmd, CommandRunner};
-use disk_cleanup_core::Identity;
+use dunnage_core::par::{default_workers, par_map};
+use dunnage_core::ports::{Cmd, CommandRunner};
+use dunnage_core::Identity;
 
 /// Directory below a main repo that holds Claude Code agent worktrees.
 const AGENT_DIR: [&str; 2] = [".claude", "worktrees"];
@@ -256,11 +256,11 @@ pub fn git_dir_parents_until(
 }
 
 /// Seeds from scan groups (`Group.repo`), falling back to `.git` directories when the scan has none.
-pub fn repo_seeds(report: &disk_cleanup_scan::scan::ScanReport, roots: &[PathBuf]) -> Vec<PathBuf> {
+pub fn repo_seeds(report: &dunnage_scan::scan::ScanReport, roots: &[PathBuf]) -> Vec<PathBuf> {
     let mut seeds: Vec<PathBuf> = report
         .groups
         .iter()
-        .filter(|g| g.kind != disk_cleanup_scan::scan::GroupKind::Loose)
+        .filter(|g| g.kind != dunnage_scan::scan::GroupKind::Loose)
         .map(|g| g.repo.clone())
         .collect();
     seeds.sort();

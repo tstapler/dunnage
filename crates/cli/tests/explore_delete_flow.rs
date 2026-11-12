@@ -22,25 +22,25 @@ use std::sync::mpsc::sync_channel;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use disk_cleanup_core::explore::confirm::{ConfirmedPlan, ReviewedPlan};
-use disk_cleanup_core::explore::keymap::Key;
-use disk_cleanup_core::explore::msg::{
+use dunnage_core::explore::confirm::{ConfirmedPlan, ReviewedPlan};
+use dunnage_core::explore::keymap::Key;
+use dunnage_core::explore::msg::{
     NodeEvent, PlanPreview, ScanMode, ScanMsg, ScanSummary, NO_PARENT,
 };
 #[cfg(not(feature = "gate-d"))]
-use disk_cleanup_core::explore::ports::DELETE_NOT_IN_BUILD;
-use disk_cleanup_core::explore::ports::{DeleteHandle, ExplorerActions, Handoff, PreviewHandle};
-use disk_cleanup_core::explore::testing::{
+use dunnage_core::explore::ports::DELETE_NOT_IN_BUILD;
+use dunnage_core::explore::ports::{DeleteHandle, ExplorerActions, Handoff, PreviewHandle};
+use dunnage_core::explore::testing::{
     DirInfo, FakeDirLister, FakeScanSource, FakeTermSignals, FakeTypedCount, Stats,
 };
-use disk_cleanup_core::AuditRecord;
-use disk_cleanup_tui::app::{ExplorerConfig, Ports};
-use disk_cleanup_tui::event_loop::{
+use dunnage_core::AuditRecord;
+use dunnage_tui::app::{ExplorerConfig, Ports};
+use dunnage_tui::event_loop::{
     run_explorer, EventSource, ExplorerExit, Input, Restore, Runtime, SizeSource, SystemClock,
     Tuning,
 };
-use disk_cleanup_tui::terminal::{fixed_terminal, DiagQueue};
-use disk_cleanup_tui::testing::{Buffer, TestBackend};
+use dunnage_tui::terminal::{fixed_terminal, DiagQueue};
+use dunnage_tui::testing::{Buffer, TestBackend};
 use explore_rig::{manifest, Ex, Knobs};
 
 // ----- the loop's harness -----
@@ -347,19 +347,19 @@ fn safety_a_wrong_count_at_the_prompt_deletes_nothing_in_the_fixture() {
     assert_eq!(out.exit.code, 130);
 }
 
-fn real_actions(ex: &Ex) -> disk_cleanup_cli::explore::actions::RealExplorerActions {
-    use disk_cleanup_cli::explore::actions::{ExplorerPorts, RealExplorerActions};
-    use disk_cleanup_cli::explore::handle::DeleteWiring;
-    use disk_cleanup_core::testing::{
+fn real_actions(ex: &Ex) -> dunnage_cli::explore::actions::RealExplorerActions {
+    use dunnage_cli::explore::actions::{ExplorerPorts, RealExplorerActions};
+    use dunnage_cli::explore::handle::DeleteWiring;
+    use dunnage_core::testing::{
         FakeAuditSink, FakeClock, FakeCommandRunner, FakePlanStore, FakeRunGuard, FakeSpaceMeter,
     };
-    use disk_cleanup_core::{BuildInfo, RunRoots};
+    use dunnage_core::{BuildInfo, RunRoots};
 
     let ports = ExplorerPorts {
-        fs: Arc::new(disk_cleanup_cli::wiring::env::RealFs),
+        fs: Arc::new(dunnage_cli::wiring::env::RealFs),
         runner: Arc::new(FakeCommandRunner::new()),
         clock: Arc::new(FakeClock::at(explore_rig::NOW)),
-        probe: Arc::new(disk_cleanup_adapters::RealProbe),
+        probe: Arc::new(dunnage_adapters::RealProbe),
         space: Arc::new(FakeSpaceMeter::new(
             vec![FakeSpaceMeter::plain_snapshot("/x", 500, 1000)],
             FakeSpaceMeter::stable(),
@@ -384,13 +384,13 @@ fn real_actions(ex: &Ex) -> disk_cleanup_cli::explore::actions::RealExplorerActi
     RealExplorerActions::new(Arc::new(ports)).with_delete_wiring(Arc::new(DeleteWiring {
         base: ex.base_dirs.clone(),
         roots: ex.roots(),
-        exe: PathBuf::from("/usr/bin/disk-cleanup"),
+        exe: PathBuf::from("/usr/bin/dunnage"),
     }))
 }
 
 /// The real `review` and `delete` of the build under test, with the preview answered by the rig: the
 /// preview needs the cleaner's kinds, which a fixture without a registry does not have.
-struct Hybrid(disk_cleanup_cli::explore::actions::RealExplorerActions);
+struct Hybrid(dunnage_cli::explore::actions::RealExplorerActions);
 
 impl ExplorerActions for Hybrid {
     fn preview(&self, marks: &[PathBuf], cancel: Arc<AtomicBool>) -> PreviewHandle {
@@ -493,8 +493,8 @@ fn safety_in_a_gate_d_build_the_prompt_shows_the_real_count_and_total() {
 
 #[test]
 fn safety_text_and_json_have_no_path_to_the_delete_and_leave_the_fixture_untouched() {
-    use disk_cleanup_cli::explore::json::run_json;
-    use disk_cleanup_cli::explore::text::{run_text, ExploreEnv};
+    use dunnage_cli::explore::json::run_json;
+    use dunnage_cli::explore::text::{run_text, ExploreEnv};
 
     let (ex, dist) = fixture();
     let before = manifest(&ex.code);
@@ -504,9 +504,9 @@ fn safety_text_and_json_have_no_path_to_the_delete_and_leave_the_fixture_untouch
     // nothing in it that could delete; this builds one and runs both views over the fixture.
     let env = || {
         ExploreEnv::new(
-            Arc::new(disk_cleanup_core::explore::testing::FakeScanSource::new(
-                vec![ScanMsg::Finished(ScanSummary::default())],
-            )),
+            Arc::new(dunnage_core::explore::testing::FakeScanSource::new(vec![
+                ScanMsg::Finished(ScanSummary::default()),
+            ])),
             Arc::new(FakeTermSignals::never()),
             vec![app.clone()],
             ex.roots(),

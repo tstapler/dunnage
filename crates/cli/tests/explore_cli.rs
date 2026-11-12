@@ -9,7 +9,7 @@ use std::path::PathBuf;
 #[cfg(feature = "explore")]
 use common::tree_manifest;
 use common::Fixture;
-use disk_cleanup_cli::args::{self, Command, ExploreSortArg, Parsed, EXPLORE_NO_APPLY};
+use dunnage_cli::args::{self, Command, ExploreSortArg, Parsed, EXPLORE_NO_APPLY};
 
 fn explore_args(argv: &[&str]) -> args::ExploreArgs {
     match args::parse(argv.iter().map(|s| (*s).to_string())) {
@@ -180,17 +180,14 @@ fn json_and_color_should_reach_explore_through_the_global_flags() {
     assert!(cli.json);
     assert_eq!(
         cli.color_choice(),
-        disk_cleanup_cli::terminal::ColorChoice::Never
+        dunnage_cli::terminal::ColorChoice::Never
     );
 }
 
 #[test]
 fn the_default_jobs_should_be_the_cpu_count_capped_at_16() {
     let cpus = std::thread::available_parallelism().unwrap().get();
-    assert_eq!(
-        disk_cleanup_cli::wiring::explore::default_jobs(),
-        cpus.min(16)
-    );
+    assert_eq!(dunnage_cli::wiring::explore::default_jobs(), cpus.min(16));
 }
 
 #[cfg(feature = "explore")]
@@ -207,7 +204,7 @@ fn the_binary_should_refuse_a_deleting_flag_and_leave_the_fixture_untouched() {
         assert!(err.contains("Nothing was deleted."), "{flag}: {err}");
     }
     assert_eq!(tree_manifest(f.root()), before, "the fixture changed");
-    assert!(!f.xdg("state").join("disk-cleanup").exists());
+    assert!(!f.xdg("state").join("dunnage").exists());
 }
 
 #[cfg(feature = "explore")]

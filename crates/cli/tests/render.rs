@@ -3,9 +3,9 @@
 
 mod support;
 
-use disk_cleanup_cli::render::{render_kinds, render_plan, render_status};
-use disk_cleanup_cli::render_json::kind_rows;
-use disk_cleanup_cli::view::PlanView;
+use dunnage_cli::render::{render_kinds, render_plan, render_status};
+use dunnage_cli::render_json::kind_rows;
+use dunnage_cli::view::PlanView;
 use support::*;
 
 #[test]
@@ -28,7 +28,7 @@ fn report_should_print_df_and_btrfs_allocation_block_When_any_run_plan_or_apply_
         status.contains("  unallocated    9.8 GiB\n")
             && status.ends_with("lists what could be freed.\n")
     );
-    let apply = disk_cleanup_cli::apply::render_apply(&RunFx::s3().input(0), &pipe(80));
+    let apply = dunnage_cli::apply::render_apply(&RunFx::s3().input(0), &pipe(80));
     assert!(apply.contains("BEFORE") && apply.contains("AFTER") && apply.contains("CHANGE"));
     assert!(apply.contains("-75.4 GiB") && apply.contains("+75.4 GiB"));
 }

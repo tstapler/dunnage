@@ -5,10 +5,10 @@ use std::os::unix::fs::{symlink, MetadataExt};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use disk_cleanup_adapters::testing::{At, FaultDirOps, Op};
-use disk_cleanup_adapters::treestat::{measure, MeasureOpts, SkipWhy};
-use disk_cleanup_adapters::{open_verified_root, RealDirOps};
-use disk_cleanup_core::{AllocatedBytes, ApparentBytes, Identity, RootDev};
+use dunnage_adapters::testing::{At, FaultDirOps, Op};
+use dunnage_adapters::treestat::{measure, MeasureOpts, SkipWhy};
+use dunnage_adapters::{open_verified_root, RealDirOps};
+use dunnage_core::{AllocatedBytes, ApparentBytes, Identity, RootDev};
 
 fn tmp() -> (tempfile::TempDir, PathBuf) {
     let t = tempfile::tempdir().unwrap();
@@ -203,8 +203,8 @@ fn treestat_should_use_memory_independent_of_entry_count_When_measuring_500_000_
 
 #[test]
 fn measure_should_count_every_dot_git_entry_below_the_directory() {
-    use disk_cleanup_adapters::treestat::{measure, MeasureOpts};
-    use disk_cleanup_adapters::{DirOps, RealDirOps};
+    use dunnage_adapters::treestat::{measure, MeasureOpts};
+    use dunnage_adapters::{DirOps, RealDirOps};
     let tmp = tempfile::tempdir().unwrap();
     let base = tmp.path().canonicalize().unwrap();
     for d in ["a/.git/objects", "b/c/.git", "plain"] {
@@ -214,7 +214,7 @@ fn measure_should_count_every_dot_git_entry_below_the_directory() {
     std::fs::write(base.join("wt/.git"), b"gitdir: x").unwrap();
     let ops = RealDirOps::confined_to(&base);
     let dir = ops.open_root(&base).unwrap();
-    let dev = disk_cleanup_core::RootDev(ops.fstat(&dir).unwrap().ident.dev);
+    let dev = dunnage_core::RootDev(ops.fstat(&dir).unwrap().ident.dev);
     let stats = measure(&ops, &dir, dev, MeasureOpts::default());
     assert_eq!(
         stats.git_repos, 3,

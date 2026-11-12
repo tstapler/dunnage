@@ -7,16 +7,16 @@ use std::ffi::{OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::candidate::{BtrfsFacts, Candidate, DockerFacts, KindFacts, Locator};
-use disk_cleanup_core::ids::CandidateId;
-use disk_cleanup_core::kind::{Kind, Risk, SelectorId};
-use disk_cleanup_core::outcome::SkipReason;
-use disk_cleanup_core::plan::{Plan, PlanId, Planned, BIN};
-use disk_cleanup_core::plan_state::{SaveOutcome, SavedSelection};
-use disk_cleanup_core::selector::{DockerVolumes, KindSelector, Selection};
-use disk_cleanup_core::snapshot_types::FsSnapshot;
-use disk_cleanup_core::summary::DiskVerdict;
-use disk_cleanup_core::target::kind_order;
+use dunnage_core::candidate::{BtrfsFacts, Candidate, DockerFacts, KindFacts, Locator};
+use dunnage_core::ids::CandidateId;
+use dunnage_core::kind::{Kind, Risk, SelectorId};
+use dunnage_core::outcome::SkipReason;
+use dunnage_core::plan::{Plan, PlanId, Planned, BIN};
+use dunnage_core::plan_state::{SaveOutcome, SavedSelection};
+use dunnage_core::selector::{DockerVolumes, KindSelector, Selection};
+use dunnage_core::snapshot_types::FsSnapshot;
+use dunnage_core::summary::DiskVerdict;
+use dunnage_core::target::kind_order;
 
 use crate::escape::{escape, shell_quote};
 use crate::reasontext::{self, ReasonFacts, TextCtx};
@@ -299,7 +299,7 @@ pub struct PlanView {
     pub not_usable: Option<NotUsable>,
 }
 
-fn status_of(item: &disk_cleanup_core::plan::PlanItem) -> (RowStatus, Option<SkipReason>) {
+fn status_of(item: &dunnage_core::plan::PlanItem) -> (RowStatus, Option<SkipReason>) {
     match item.planned {
         Planned::Will => (RowStatus::Free, None),
         Planned::WillNot(SkipReason::KindNotSelected) => {

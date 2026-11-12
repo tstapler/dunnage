@@ -1,7 +1,7 @@
 #![cfg(feature = "gate-d")]
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 //! Story 4.2.2: Gate D, `--apply --kinds steam` end to end through the spawned binary under `fixture_cmd()`.
-//! Run with `GATE=D cargo test --workspace --features disk-cleanup/gate-d`; a build without the feature has no
+//! Run with `GATE=D cargo test --workspace --features dunnage/gate-d`; a build without the feature has no
 //! `steam` kind, so this file is compiled only with it.
 //!
 //! Every library, prefix and game directory is a generated fixture below the fixture root, and the fixture's
@@ -216,7 +216,7 @@ fn apply_should_remove_the_orphans_and_log_steam_kinds_When_the_pasted_line_is_r
     ] {
         assert!(kept.exists(), "{} was removed", kept.display());
     }
-    let audit = fs::read_to_string(w.f.xdg("state").join("disk-cleanup/audit.jsonl")).unwrap();
+    let audit = fs::read_to_string(w.f.xdg("state").join("dunnage/audit.jsonl")).unwrap();
     for kind in ["steam-prefix", "steam-shader-cache", "steam-remnant"] {
         assert!(
             audit.contains(&format!("\"kind\":\"{kind}\"")),

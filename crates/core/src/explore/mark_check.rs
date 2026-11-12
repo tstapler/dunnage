@@ -66,8 +66,9 @@ pub struct OwnState {
     binaries: Vec<PathBuf>,
 }
 
-/// The name of the directory each XDG base gets.
-const APP_DIR: &str = "disk-cleanup";
+/// The names of the directory each XDG base gets: the current one and the pre-rename one, which may still
+/// hold the audit log and stays protected until the owner moves it.
+const APP_DIRS: [&str; 2] = ["dunnage", "disk-cleanup"];
 
 impl OwnState {
     /// `dirs` comes from the same resolution as the run (so `XDG_STATE_HOME` and `sudo` are honoured);
@@ -76,7 +77,7 @@ impl OwnState {
         OwnState {
             dirs: [&dirs.state, &dirs.cache, &dirs.config]
                 .into_iter()
-                .map(|d| d.join(APP_DIR))
+                .flat_map(|d| APP_DIRS.map(|a| d.join(a)))
                 .collect(),
             binaries: vec![binary],
         }
@@ -84,12 +85,12 @@ impl OwnState {
 
     /// As [`OwnState::new`], plus the spelling `canon` gives each directory and the binary (symlinked XDG
     /// directories, a binary reached through a link). `canon` must resolve links and tolerate a path that
-    /// does not exist yet (it is given `<base>/disk-cleanup` before the state directory is created).
+    /// does not exist yet (it is given `<base>/dunnage` before the state directory is created).
     #[must_use]
     pub fn canonical(dirs: &Dirs, binary: PathBuf, canon: &dyn Fn(&Path) -> PathBuf) -> OwnState {
         let mut own = OwnState::new(dirs, binary);
         for d in [&dirs.state, &dirs.cache, &dirs.config] {
-            own.dirs.push(canon(d).join(APP_DIR));
+            own.dirs.extend(APP_DIRS.map(|a| canon(d).join(a)));
         }
         let canon_binary = canon(&own.binaries[0]);
         own.binaries.push(canon_binary);

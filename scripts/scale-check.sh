@@ -2,7 +2,7 @@
 # scale-check.sh [--smoke] [--bin PATH] | --selftest
 # Story 1.3.3 (validation T-320): builds a tree of 1,000,000 inodes with 5,000 build dirs under a DC_TEST_ROOT
 # (a mktemp directory on tmpfs when /dev/shm exists, so the owner's disk is not filled with inodes), runs the dry
-# run (HOME = the tree) and `disk-cleanup scan` over it under /usr/bin/time -v, and requires exit 0 and a peak
+# run (HOME = the tree) and `dunnage scan` over it under /usr/bin/time -v, and requires exit 0 and a peak
 # resident set under 512 MiB for each. Local and nightly; --smoke builds 20,000 inodes with 100 build dirs.
 # Without /usr/bin/time it falls back to python3 resource.getrusage and prints the same line.
 # Overrides: DC_SCALE_INODES, DC_SCALE_BUILD_DIRS, DC_SCALE_RSS_MIB, DC_SCALE_PARENT, DC_BENCH_BIN.
@@ -112,7 +112,7 @@ selftest() {
   echo "scale-check selftest: $n ok"
 }
 
-bin=${DC_BENCH_BIN:-${CARGO_TARGET_DIR:-target}/release/disk-cleanup}
+bin=${DC_BENCH_BIN:-${CARGO_TARGET_DIR:-target}/release/dunnage}
 while [ $# -gt 0 ]; do
   case $1 in
     --selftest) selftest; exit $? ;;
@@ -123,8 +123,8 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-if [ "${DC_BENCH_BAZEL:-0}" = 1 ] && [ -z "${DC_BENCH_BIN:-}" ] && [ "$bin" = "${CARGO_TARGET_DIR:-target}/release/disk-cleanup" ]; then
+if [ "${DC_BENCH_BAZEL:-0}" = 1 ] && [ -z "${DC_BENCH_BIN:-}" ] && [ "$bin" = "${CARGO_TARGET_DIR:-target}/release/dunnage" ]; then
   bin=$(cd "$(dirname "$0")/.." && scripts/gate-binary.sh none) || fail "bazel build failed"   # set by scripts/gate.sh
 fi
-[ -n "${DC_BENCH_BIN:-}" ] || [ "$bin" != "${CARGO_TARGET_DIR:-target}/release/disk-cleanup" ] || [ "${DC_BENCH_BAZEL:-0}" = 1 ] || cargo build --release --locked -q || fail "cargo build --release failed"
+[ -n "${DC_BENCH_BIN:-}" ] || [ "$bin" != "${CARGO_TARGET_DIR:-target}/release/dunnage" ] || [ "${DC_BENCH_BAZEL:-0}" = 1 ] || cargo build --release --locked -q || fail "cargo build --release failed"
 run "$bin"

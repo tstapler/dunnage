@@ -2,15 +2,15 @@
 //! Behaviour of the port doubles. Tests that need a `WorktreeRemoval` wait for Story 1.1.3: its only
 //! constructor chain starts at `Allowed::new`, which has a single permitted call site (`guard.rs`).
 
-use disk_cleanup_core::ports::{
+use dunnage_core::ports::{
     Clock, Cmd, CmdOutput, CommandRunner, DryRunRunner, Fs, PlanStore, RunGuard, RunState,
     SpaceMeter, SystemProbe,
 };
-use disk_cleanup_core::testing::{
+use dunnage_core::testing::{
     AuditCall, CallKind, EventLog, FakeAuditSink, FakeClock, FakeCommandRunner, FakeFs,
     FakePlanStore, FakeProbe, FakeRunGuard, FakeSpaceMeter, MeterCall,
 };
-use disk_cleanup_core::{
+use dunnage_core::{
     ApplyToken, DeleteError, FatalError, MountEntry, Platform, SaveOutcome, SavedSelection, Tri,
 };
 use std::path::Path;
@@ -144,8 +144,8 @@ fn fake_plan_store_should_report_not_saved_When_failing_with_enospc() {
 
 #[test]
 fn fake_audit_sink_should_fail_the_second_intent_and_not_record_it() {
-    use disk_cleanup_core::ports::AuditSink;
-    use disk_cleanup_core::{CandidateId, Intent, Kind, Locator, SelectorId};
+    use dunnage_core::ports::AuditSink;
+    use dunnage_core::{CandidateId, Intent, Kind, Locator, SelectorId};
     let sink = FakeAuditSink::new().fail_nth(AuditCall::Intent, 2);
     let locator = Locator::Path("/h/.npm/_cacache".into());
     let intent = Intent {

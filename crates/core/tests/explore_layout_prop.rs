@@ -2,8 +2,8 @@
 //! Story 6.2.3 (Task 6.2.3c): no drawn row, header or title line is wider than the terminal for any width
 //! from 60 to 200, with hostile and wide names (UX-T13, UX-34), and a name is never cut inside an escape.
 
-use disk_cleanup_core::escape::escape;
-use disk_cleanup_core::explore::layout::{
+use dunnage_core::escape::escape;
+use dunnage_core::explore::layout::{
     cells, cut_name, draw_row, footer_path_line, header_line, layout_for_width, split_atoms,
     title_left, title_line, ColumnKind, Layout, RowCells, SortMark,
 };

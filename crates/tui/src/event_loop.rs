@@ -11,8 +11,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use disk_cleanup_core::explore::keymap::Key;
-use disk_cleanup_core::explore::ports::TermSignals;
+use dunnage_core::explore::keymap::Key;
+use dunnage_core::explore::ports::TermSignals;
 use ratatui::backend::Backend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;

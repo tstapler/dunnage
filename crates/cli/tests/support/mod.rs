@@ -4,27 +4,27 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use disk_cleanup_cli::terminal::Terminal;
-use disk_cleanup_cli::view::{FsBlock, Options, PlanInput, ScanFacts};
-use disk_cleanup_core::candidate::{
+use dunnage_cli::terminal::Terminal;
+use dunnage_cli::view::{FsBlock, Options, PlanInput, ScanFacts};
+use dunnage_core::candidate::{
     BuildDirFacts, BuildDirFlavor, CacheFacts, Candidate, DockerFacts, KindFacts, Locator,
     SteamFacts, WorktreeFacts,
 };
-use disk_cleanup_core::ids::{AllocatedBytes, AppId, DockerId, Identity};
-use disk_cleanup_core::kind::SelectorId;
-use disk_cleanup_core::outcome::SkipReason;
-use disk_cleanup_core::plan::Plan;
-use disk_cleanup_core::plan_state::SaveOutcome;
-use disk_cleanup_core::selector::{KindSelector, Selection};
-use disk_cleanup_core::snapshot_types::{AllocSnapshot, FsSnapshot, SpaceUse};
-use disk_cleanup_core::summary::DiskVerdict;
-use disk_cleanup_core::target::Guarded;
+use dunnage_core::ids::{AllocatedBytes, AppId, DockerId, Identity};
+use dunnage_core::kind::SelectorId;
+use dunnage_core::outcome::SkipReason;
+use dunnage_core::plan::Plan;
+use dunnage_core::plan_state::SaveOutcome;
+use dunnage_core::selector::{KindSelector, Selection};
+use dunnage_core::snapshot_types::{AllocSnapshot, FsSnapshot, SpaceUse};
+use dunnage_core::summary::DiskVerdict;
+use dunnage_core::target::Guarded;
 
 pub const GIB: u64 = 1 << 30;
 pub const TIB: u64 = 1 << 40;
 pub const NOW: i64 = 1_800_000_000;
 pub const HOME: &str = "/home/tstapler";
-pub const EXE: &str = "/home/tstapler/.cargo/bin/disk-cleanup";
+pub const EXE: &str = "/home/tstapler/.cargo/bin/dunnage";
 const DAY: i64 = 86_400;
 
 pub fn gib(x: f64) -> u64 {
@@ -134,7 +134,7 @@ pub fn selection_of(ids: &[SelectorId]) -> Selection {
 
 pub fn plan_of(sel: &Selection, candidates: Vec<Candidate>) -> Plan {
     Plan::build(sel, NOW, candidates, &|c| {
-        if c.kind() == disk_cleanup_core::kind::Kind::BtrfsBalance {
+        if c.kind() == dunnage_core::kind::Kind::BtrfsBalance {
             return Guarded::Skip(SkipReason::NeedsRoot);
         }
         if c.locator()
@@ -188,7 +188,7 @@ pub fn s1_candidates() -> Vec<Candidate> {
 pub fn btrfs_balance() -> Candidate {
     Candidate::new(
         Locator::Path("/".into()),
-        KindFacts::Btrfs(disk_cleanup_core::candidate::BtrfsFacts::Balance { usage_pct: 50 }),
+        KindFacts::Btrfs(dunnage_core::candidate::BtrfsFacts::Balance { usage_pct: 50 }),
         AllocatedBytes(0),
         None,
         ident(7),
@@ -268,7 +268,7 @@ impl Fixture {
             wrapper_note: None,
             exe: EXE.into(),
             euid: 1000,
-            state_dir: "/home/tstapler/.local/state/disk-cleanup".into(),
+            state_dir: "/home/tstapler/.local/state/dunnage".into(),
             home: Some(HOME.into()),
             facts: HashMap::new(),
             opts: Options::default(),
@@ -302,15 +302,15 @@ pub fn path(s: &str) -> PathBuf {
 
 use std::ffi::OsString;
 
-use disk_cleanup_cli::apply::ApplyInput;
-use disk_cleanup_core::delete_types::Freed;
-use disk_cleanup_core::ids::CandidateId;
-use disk_cleanup_core::kind::Kind;
-use disk_cleanup_core::outcome::{Outcome, Status};
-use disk_cleanup_core::plan::PlanId;
-use disk_cleanup_core::ports::ExtentAttribution;
-use disk_cleanup_core::snapshot_types::Settled;
-use disk_cleanup_core::summary::{FinishInput, RunSummary, StageTimings, WalkerCounters};
+use dunnage_cli::apply::ApplyInput;
+use dunnage_core::delete_types::Freed;
+use dunnage_core::ids::CandidateId;
+use dunnage_core::kind::Kind;
+use dunnage_core::outcome::{Outcome, Status};
+use dunnage_core::plan::PlanId;
+use dunnage_core::ports::ExtentAttribution;
+use dunnage_core::snapshot_types::Settled;
+use dunnage_core::summary::{FinishInput, RunSummary, StageTimings, WalkerCounters};
 
 pub fn outcome(
     kind: Kind,
@@ -487,10 +487,10 @@ impl RunFx {
             plan_id: PlanId::from_hex("91be04d7").unwrap(),
             selection: &self.selection,
             gate_bypass: None,
-            audit_path: Some("/home/tstapler/.local/state/disk-cleanup/audit.jsonl".into()),
+            audit_path: Some("/home/tstapler/.local/state/dunnage/audit.jsonl".into()),
             selected_items: 7,
             selected_est: gib(96.4),
-            last_dry_run: Some(disk_cleanup_cli::apply::LastDryRun::Matches),
+            last_dry_run: Some(dunnage_cli::apply::LastDryRun::Matches),
             summary: &self.summary,
             exit_code: exit,
             not_attempted: None,

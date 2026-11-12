@@ -7,10 +7,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use crate::command::{spawn_with_deadline, RealCommandRunner};
-use disk_cleanup_core::ports::{
-    classify, worktree_remove_argv, Class, Cmd, CmdOutput, CommandRunner,
-};
-use disk_cleanup_core::{ApplyToken, DeleteError, WorktreeRemoval};
+use dunnage_core::ports::{classify, worktree_remove_argv, Class, Cmd, CmdOutput, CommandRunner};
+use dunnage_core::{ApplyToken, DeleteError, WorktreeRemoval};
 
 pub struct ConfinedCommandRunner {
     inner: RealCommandRunner,

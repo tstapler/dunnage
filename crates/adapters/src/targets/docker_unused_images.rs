@@ -8,12 +8,12 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use disk_cleanup_core::docker::{parse_docker_time, DockerContainer, DockerImage};
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::selector::{default_min_age_secs, Selection};
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::targets::docker_image_guard::decide_unused_image;
-use disk_cleanup_core::{
+use dunnage_core::docker::{parse_docker_time, DockerContainer, DockerImage};
+use dunnage_core::ports::Env;
+use dunnage_core::selector::{default_min_age_secs, Selection};
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::targets::docker_image_guard::decide_unused_image;
+use dunnage_core::{
     AllocatedBytes, ApplyToken, Candidate, CandidateId, DeleteFailure, DockerFacts, DockerId,
     Freed, KindFacts, Locator, Outcome, SelectorId, SkipReason, Status,
 };
@@ -194,7 +194,7 @@ impl Target for DockerUnusedImagesTarget {
     ) -> Result<Freed, DeleteFailure> {
         let KindFacts::Docker(DockerFacts::UnusedImage { image_id, tags }) = c.facts() else {
             return Err(crate::targets::docker_common::failure(
-                disk_cleanup_core::DeleteError::Refused,
+                dunnage_core::DeleteError::Refused,
             ));
         };
         // Tag by tag when every row has a `repo:tag`; otherwise by id, which Docker refuses when several

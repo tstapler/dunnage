@@ -65,7 +65,7 @@ dc_library(
         exclude = ["src/main.rs"],
     ),
     crate_features = FEATURES,
-    crate_name = "disk_cleanup_cli",
+    crate_name = "dunnage_cli",
     deps = PLAIN_DEPS,
     proc_macro_deps = all_crate_deps(proc_macro = True),
     rustc_env = PROVENANCE,
@@ -76,12 +76,12 @@ dc_library(
 
 # The shipped binary.
 rust_binary(
-    name = "disk-cleanup",
+    name = "dunnage",
     srcs = [
         "src/main.rs",
         "src/version.rs",
     ],
-    crate_name = "disk_cleanup",
+    crate_name = "dunnage",
     edition = "2021",
     lint_config = LINTS,
     proc_macro_deps = all_crate_deps(proc_macro = True),
@@ -93,15 +93,15 @@ rust_binary(
     deps = [":cli"] + PLAIN_DEPS,
 )
 
-# The binary the integration tests run (Cargo: CARGO_BIN_EXE_disk-cleanup, built with the dev-dependency features).
+# The binary the integration tests run (Cargo: CARGO_BIN_EXE_dunnage, built with the dev-dependency features).
 rust_binary(
-    name = "disk-cleanup_ts",
+    name = "dunnage_ts",
     testonly = True,
     srcs = [
         "src/main.rs",
         "src/version.rs",
     ],
-    crate_name = "disk_cleanup",
+    crate_name = "dunnage",
     edition = "2021",
     lint_config = LINTS,
     proc_macro_deps = all_crate_deps(proc_macro = True),
@@ -126,12 +126,12 @@ dc_unit_and_doc_tests(
 
 dc_integration_tests(
     crate = "cli",
-    data = TEST_DATA + [":disk-cleanup_ts"],
+    data = TEST_DATA + [":dunnage_ts"],
     compile_data = glob(["src/**/*.rs"]) + ["build.rs"],
     deps = [":cli_ts"] + TS_DEPS + all_crate_deps(normal_dev = True),
     features = FEATURES,
     proc_macro_deps = all_crate_deps(proc_macro = True) + all_crate_deps(proc_macro_dev = True),
-    rustc_env = {"CARGO_BIN_EXE_disk-cleanup": "$(rootpath :disk-cleanup_ts)"},
+    rustc_env = {"CARGO_BIN_EXE_dunnage": "$(rootpath :dunnage_ts)"},
     per_test = {
         # Run `cargo run --offline` in a scratch git repo: needs cargo and git on PATH (rustup also HOME).
         "build_provenance": {

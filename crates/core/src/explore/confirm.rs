@@ -196,29 +196,29 @@ pub struct ConfirmRecord {
 /// one delete of this plan and nothing else.
 ///
 /// ```compile_fail,E0451
-/// use disk_cleanup_core::explore::confirm::{ConfirmedPlan, ReviewedPlan};
+/// use dunnage_core::explore::confirm::{ConfirmedPlan, ReviewedPlan};
 /// fn forge(reviewed: ReviewedPlan) -> ConfirmedPlan {
 ///     ConfirmedPlan { reviewed, typed: "3".into() }
 /// }
 /// ```
 ///
 /// ```compile_fail,E0599
-/// use disk_cleanup_core::explore::confirm::ConfirmedPlan;
+/// use dunnage_core::explore::confirm::ConfirmedPlan;
 /// let _ = ConfirmedPlan::default();
 /// ```
 ///
 /// ```compile_fail,E0599
-/// use disk_cleanup_core::explore::confirm::ConfirmedPlan;
+/// use dunnage_core::explore::confirm::ConfirmedPlan;
 /// fn twice(c: ConfirmedPlan) -> (ConfirmedPlan, ConfirmedPlan) { (c.clone(), c) }
 /// ```
 ///
 /// ```compile_fail,E0382
-/// use disk_cleanup_core::explore::confirm::ConfirmedPlan;
+/// use dunnage_core::explore::confirm::ConfirmedPlan;
 /// fn use_after_move(c: ConfirmedPlan) { drop(c); let _ = c.count(); }
 /// ```
 ///
 /// ```compile_fail,E0277
-/// use disk_cleanup_core::explore::confirm::ConfirmedPlan;
+/// use dunnage_core::explore::confirm::ConfirmedPlan;
 /// fn copy<T: Copy>() {}
 /// fn f() { copy::<ConfirmedPlan>(); }
 /// ```

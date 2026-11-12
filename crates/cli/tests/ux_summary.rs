@@ -3,11 +3,11 @@
 
 mod support;
 
-use disk_cleanup_cli::apply::{render_apply, render_refused, LastDryRun};
-use disk_cleanup_core::kind::{Kind, SelectorId};
-use disk_cleanup_core::outcome::{SkipReason, Status};
-use disk_cleanup_core::plan::PlanId;
-use disk_cleanup_core::summary::DiskVerdict;
+use dunnage_cli::apply::{render_apply, render_refused, LastDryRun};
+use dunnage_core::kind::{Kind, SelectorId};
+use dunnage_core::outcome::{SkipReason, Status};
+use dunnage_core::plan::PlanId;
+use dunnage_core::summary::DiskVerdict;
 use support::*;
 
 fn apply_text(fx: &RunFx, exit: i32) -> String {
@@ -49,7 +49,7 @@ fn summary_should_open_with_bytes_freed_and_df_avail_and_list_the_three_largest_
     assert!(block[2].contains("5.0 GiB") && block[2].contains("docker"));
     assert!(
         out.contains(
-            "      disk-cleanup --kinds docker,docker-volumes,steam --docker-volumes anonymous"
+            "      dunnage --kinds docker,docker-volumes,steam --docker-volumes anonymous"
         ),
         "{out}"
     );
@@ -66,7 +66,7 @@ fn summary_should_open_with_bytes_freed_and_df_avail_and_list_the_three_largest_
     let flat = none.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
         flat.contains(
-            "No unselected RISK rows remain. Run 'disk-cleanup status' for the filesystem state."
+            "No unselected RISK rows remain. Run 'dunnage status' for the filesystem state."
         ),
         "{none}"
     );
@@ -146,7 +146,7 @@ fn apply_header_should_print_in_order_warning_audit_selected_and_last_dry_run() 
     let out = render_apply(&input, &pipe(80));
     let ls: Vec<&str> = out.lines().collect();
     assert!(ls[1].starts_with("WARNING: gate check bypassed"));
-    assert_eq!(ls[2], "audit log: ~/.local/state/disk-cleanup/audit.jsonl");
+    assert_eq!(ls[2], "audit log: ~/.local/state/dunnage/audit.jsonl");
     assert_eq!(
         ls[3],
         "Selected: caches, worktrees, build-dirs   (7 items, est. 96.4 GiB)"
@@ -235,7 +235,7 @@ fn spent_plan_id_should_be_named_after_a_destructive_apply_that_removed_items_an
         let out = apply_text(&fx, exit);
         let ls: Vec<&str> = out.lines().collect();
         let n = ls.len();
-        assert!(ls[n - 2].starts_with("plan-id 91be04d7 is spent (5 items removed). Dry run again, then use the new plan-id: disk-cleanup --kinds build-dirs,caches,worktrees"), "{}", ls[n - 2]);
+        assert!(ls[n - 2].starts_with("plan-id 91be04d7 is spent (5 items removed). Dry run again, then use the new plan-id: dunnage --kinds build-dirs,caches,worktrees"), "{}", ls[n - 2]);
         assert_eq!(ls[n - 1], format!("APPLY FINISHED - exit {exit}."));
     }
     let mut safe = RunFx::s3();
@@ -259,7 +259,7 @@ fn apply_rows_should_never_exceed_the_width_and_never_print_a_risk_row() {
         let out = render_apply(&RunFx::s3().input(1), &pipe(w));
         for l in out.lines().filter(|l| {
             !l.trim_start().starts_with("sudo")
-                && !l.trim_start().starts_with("disk-cleanup")
+                && !l.trim_start().starts_with("dunnage")
                 && !l.contains("ls -ld")
                 && !l.starts_with("Disk still")
                 && !l.starts_with("plan-id")

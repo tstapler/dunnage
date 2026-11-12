@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use disk_cleanup_core::*;
+use dunnage_core::*;
 
 /// (variant name, reason text, next action)
 const SKIP_ROWS: &[(&str, &str, &str)] = &[
@@ -27,7 +27,7 @@ const SKIP_ROWS: &[(&str, &str, &str)] = &[
     ("DaemonUnavailable", "docker: daemon not reachable (<reason>)", "start Docker yourself; the tool never starts it"),
     ("LibraryUnmounted", "Steam library <path> not mounted", "mount it, re-run"),
     ("SteamRunning", "Steam is running or downloading", "quit Steam, re-run"),
-    ("NeedsRoot", "needs root", "sudo <absolute path>/disk-cleanup --apply --kinds <exact-id> (see C5 and 1.5)"),
+    ("NeedsRoot", "needs root", "sudo <absolute path>/dunnage --apply --kinds <exact-id> (see C5 and 1.5)"),
     ("ToolMissing", "<tool> not installed", "none"),
     ("AlreadyRunning", "btrfs balance already running", "btrfs balance status /"),
     ("Gone", "already gone", "none"),
@@ -37,10 +37,10 @@ const SKIP_ROWS: &[(&str, &str, &str)] = &[
     ("RootRestricted", "running as root: your user caches are skipped", "run as your user; use sudo only for cache-apt (the decision is euid 0, whatever HOME holds: sudoers decides whether sudo sets HOME to /root, and that file is root-only, so the tool does not assume it; section 1.5)"),
     ("NonLocalDockerContext", "non-local docker context '<name>'", "docker context use default"),
     ("UnsupportedOnThisOS", "not supported on <OS>", "none"),
-    ("UnrecognisedOutput", "unrecognised <tool> output; nothing listed", "update disk-cleanup or report the output shape (the tool never guesses)"),
+    ("UnrecognisedOutput", "unrecognised <tool> output; nothing listed", "update dunnage or report the output shape (the tool never guesses)"),
     ("DockerVersionUntested", "docker <version> is outside the tested range; list-only", "none (removal needs a tested Docker version)"),
     ("LooksLikeDatabase", "volume looks like a database (<signature>, or larger than 1 GiB)", "name it with --volume <name> if you are sure"),
-    ("ContentsUnknown", "volume contents not readable, cannot rule out a database", "--volume <name>, or dry run as root: sudo <absolute path>/disk-cleanup --kinds docker-volumes (its plan-id is root's, so apply as root too; section 1.5)"),
+    ("ContentsUnknown", "volume contents not readable, cannot rule out a database", "--volume <name>, or dry run as root: sudo <absolute path>/dunnage --kinds docker-volumes (its plan-id is root's, so apply as root too; section 1.5)"),
     ("MayHoldSaves", "prefix holds files in <dir>, possibly save games", "--steam-saves discard if intended"),
     ("OptInRequired", "list-only: needs its own flag", "add --docker-volumes anonymous or --docker-volumes named"),
     ("InUse", "in use: <process> (pid <N>) has its working directory or an open file under this worktree", "close that session or wait; the tool never stops a process"),
@@ -132,32 +132,32 @@ fn every_skip_reason_and_delete_error_should_have_a_row_in_ux_s3_5_and_render_it
 
 #[test]
 fn every_fatal_error_text_should_end_with_a_next_action_or_an_explicit_none() {
-    let state = PathBuf::from("/home/u/.local/state/disk-cleanup");
+    let state = PathBuf::from("/home/u/.local/state/dunnage");
     let audit = state.join("audit.jsonl");
     let rows: Vec<(FatalError, i32, &str, &str)> = vec![
         (
             FatalError::LockHeld { pid: 4242 },
             2,
-            "error: another disk-cleanup run is active (pid 4242). Nothing was deleted. Wait for it to finish ('pgrep -a disk-cleanup' shows it), then run again.",
-            "Wait for it to finish ('pgrep -a disk-cleanup' shows it), then run again.",
+            "error: another dunnage run is active (pid 4242). Nothing was deleted. Wait for it to finish ('pgrep -a dunnage' shows it), then run again.",
+            "Wait for it to finish ('pgrep -a dunnage' shows it), then run again.",
         ),
         (
             FatalError::AuditUnwritable { path: audit.clone(), errno: 28 },
             2,
-            "error: cannot write the audit log /home/u/.local/state/disk-cleanup/audit.jsonl (no space left on device). Nothing was deleted. The log shares the full filesystem: free about 1 MiB by hand (empty the trash, remove one disposable file), then run again.",
+            "error: cannot write the audit log /home/u/.local/state/dunnage/audit.jsonl (no space left on device). Nothing was deleted. The log shares the full filesystem: free about 1 MiB by hand (empty the trash, remove one disposable file), then run again.",
             "free about 1 MiB by hand (empty the trash, remove one disposable file), then run again.",
         ),
         (
             FatalError::AuditUnwritable { path: audit.clone(), errno: 122 },
             2,
-            "error: cannot write the audit log /home/u/.local/state/disk-cleanup/audit.jsonl (no space left on device). Nothing was deleted. The log shares the full filesystem: free about 1 MiB by hand (empty the trash, remove one disposable file), then run again.",
+            "error: cannot write the audit log /home/u/.local/state/dunnage/audit.jsonl (no space left on device). Nothing was deleted. The log shares the full filesystem: free about 1 MiB by hand (empty the trash, remove one disposable file), then run again.",
             "free about 1 MiB by hand (empty the trash, remove one disposable file), then run again.",
         ),
         (
             FatalError::AuditUnwritable { path: audit.clone(), errno: 13 },
             2,
-            "error: cannot write the audit log /home/u/.local/state/disk-cleanup/audit.jsonl (permission denied). Nothing was deleted. Fix the ownership or mode of /home/u/.local/state/disk-cleanup, or point XDG_STATE_HOME at a writable directory, then run again.",
-            "Fix the ownership or mode of /home/u/.local/state/disk-cleanup, or point XDG_STATE_HOME at a writable directory, then run again.",
+            "error: cannot write the audit log /home/u/.local/state/dunnage/audit.jsonl (permission denied). Nothing was deleted. Fix the ownership or mode of /home/u/.local/state/dunnage, or point XDG_STATE_HOME at a writable directory, then run again.",
+            "Fix the ownership or mode of /home/u/.local/state/dunnage, or point XDG_STATE_HOME at a writable directory, then run again.",
         ),
         (
             FatalError::RootsUnreadable { path: "/nope".into(), errno: 2 },
@@ -207,8 +207,8 @@ fn catalogue_test_should_cover_warning_texts_and_the_four_iteration_3_skip_reaso
     let rows: Vec<(Warning, &str, &str)> = vec![
         (
             Warning::PreviousRunUnfinished { run_id: "r9".into(), audit_path: audit.clone() },
-            "warning: previous run r9 did not finish (killed or power loss); /s/audit.jsonl may show a partly removed item. Check it with 'disk-cleanup audit verify' or jq 'select(.run_id==\"r9\")' /s/audit.jsonl. A partly removed build dir: dry run again; a partly removed worktree: 'git -C <repo> worktree list', then 'git -C <repo> worktree prune' once its directory is gone.",
-            "'disk-cleanup audit verify'",
+            "warning: previous run r9 did not finish (killed or power loss); /s/audit.jsonl may show a partly removed item. Check it with 'dunnage audit verify' or jq 'select(.run_id==\"r9\")' /s/audit.jsonl. A partly removed build dir: dry run again; a partly removed worktree: 'git -C <repo> worktree list', then 'git -C <repo> worktree prune' once its directory is gone.",
+            "'dunnage audit verify'",
         ),
         (
             Warning::PlanNotSaved { errno: 28, path: "/s/last_plan.json".into() },
@@ -222,7 +222,7 @@ fn catalogue_test_should_cover_warning_texts_and_the_four_iteration_3_skip_reaso
         ),
         (
             Warning::PlanDuringApply { pid: 4242 },
-            "note: another disk-cleanup apply is running (pid 4242); sizes and items below are in flux and a plan-id from this report may be refused as changed once it finishes.",
+            "note: another dunnage apply is running (pid 4242); sizes and items below are in flux and a plan-id from this report may be refused as changed once it finishes.",
             "",
         ),
         (

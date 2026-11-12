@@ -15,25 +15,25 @@ use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 
-use disk_cleanup_adapters::explore::signals::RealTermSignals;
-use disk_cleanup_core::dirs::Dirs;
-use disk_cleanup_core::explore::confirm::{ConfirmedPlan, ReviewedPlan};
-use disk_cleanup_core::explore::msg::{
+use dunnage_adapters::explore::signals::RealTermSignals;
+use dunnage_core::dirs::Dirs;
+use dunnage_core::explore::confirm::{ConfirmedPlan, ReviewedPlan};
+use dunnage_core::explore::msg::{
     DeleteMsg, DeleteSummary, NodeEvent, PlanPreview, ScanMode, ScanMsg, NO_PARENT,
 };
-use disk_cleanup_core::explore::ports::{
+use dunnage_core::explore::ports::{
     DeleteHandle, ExplorerActions, Handoff, PreviewHandle, ScanHandle, ScanOpts, ScanSource,
 };
-use disk_cleanup_core::explore::testing::{
+use dunnage_core::explore::testing::{
     reviewed_of, DirInfo, FakeDirLister, FakeExplorerActions, FakeTypedCount, Stats,
 };
-use disk_cleanup_core::ids::Identity;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_tui::app::{ExplorerConfig, Ports};
-use disk_cleanup_tui::event_loop::{
+use dunnage_core::ids::Identity;
+use dunnage_core::roots::RootSet;
+use dunnage_tui::app::{ExplorerConfig, Ports};
+use dunnage_tui::event_loop::{
     run_explorer, CrosstermEvents, IoctlSize, Runtime, SystemClock, Tuning,
 };
-use disk_cleanup_tui::terminal::{
+use dunnage_tui::terminal::{
     fixed_terminal, install_panic_hook, query_size, write_stderr_lines, CrosstermRaw, DiagQueue,
     TerminalGuard,
 };

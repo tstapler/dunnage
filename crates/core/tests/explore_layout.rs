@@ -4,14 +4,14 @@
 
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::explore::fmt::{fmt_items_cell, ITEMS_CELL_MAX};
-use disk_cleanup_core::explore::headroom::headroom_line;
-use disk_cleanup_core::explore::layout::{
+use dunnage_core::explore::fmt::{fmt_items_cell, ITEMS_CELL_MAX};
+use dunnage_core::explore::headroom::headroom_line;
+use dunnage_core::explore::layout::{
     cells, cut_name, draw_row, footer_path_line, header_line, layout_for_width, path_line,
     split_atoms, title_left, title_line, too_small_lines, vertical_budget, ColumnKind, Layout,
     RowCells, SortMark, Tier, TierLayout,
 };
-use disk_cleanup_core::{AllocSnapshot, FsSnapshot, SpaceUse};
+use dunnage_core::{AllocSnapshot, FsSnapshot, SpaceUse};
 
 const GIB: u64 = 1 << 30;
 

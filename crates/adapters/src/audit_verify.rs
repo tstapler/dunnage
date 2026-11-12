@@ -1,4 +1,4 @@
-//! `disk-cleanup audit verify` (Story 1.2.4, Task 1.2.4d): re-validates every logged deletion. Read-only: no
+//! `dunnage audit verify` (Story 1.2.4, Task 1.2.4d): re-validates every logged deletion. Read-only: no
 //! lock, no audit write, no state write.
 //!
 //! The comparison is with the owner-reviewed table `ci/allowed-roots.txt` (embedded) plus the roots of the

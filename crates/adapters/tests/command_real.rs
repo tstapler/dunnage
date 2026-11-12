@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 
-use disk_cleanup_adapters::command::RealCommandRunner;
-use disk_cleanup_core::ports::{Cmd, CommandRunner};
-use disk_cleanup_core::{ApplyToken, DeleteError};
+use dunnage_adapters::command::RealCommandRunner;
+use dunnage_core::ports::{Cmd, CommandRunner};
+use dunnage_core::{ApplyToken, DeleteError};
 
 #[test]
 fn run_should_refuse_a_mislabelled_or_non_allowlisted_cmd_without_spawning() {

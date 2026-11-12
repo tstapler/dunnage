@@ -6,12 +6,12 @@
 mod scene;
 use scene::*;
 
-use disk_cleanup_adapters::targets::docker_images::{DockerImagesTarget, DAEMON_SIDE_NOTE};
-use disk_cleanup_adapters::targets::docker_unused_images::DockerUnusedImagesTarget;
-use disk_cleanup_core::executor::ExitClass;
-use disk_cleanup_core::target::{Guarded, KindGate, Target};
-use disk_cleanup_core::testing::{CallKind, FakeCommandRunner};
-use disk_cleanup_core::{ApplyToken, SelectorId, SkipReason, Status};
+use dunnage_adapters::targets::docker_images::{DockerImagesTarget, DAEMON_SIDE_NOTE};
+use dunnage_adapters::targets::docker_unused_images::DockerUnusedImagesTarget;
+use dunnage_core::executor::ExitClass;
+use dunnage_core::target::{Guarded, KindGate, Target};
+use dunnage_core::testing::{CallKind, FakeCommandRunner};
+use dunnage_core::{ApplyToken, SelectorId, SkipReason, Status};
 
 fn dangling_scene(n: usize) -> Scene {
     let mut s = Scene::default();
@@ -25,7 +25,7 @@ fn dangling_scene(n: usize) -> Scene {
 fn mutating(r: &FakeCommandRunner) -> Vec<String> {
     r.calls_of(CallKind::RunMutating)
         .iter()
-        .map(disk_cleanup_core::testing::RecordedCall::rendered)
+        .map(dunnage_core::testing::RecordedCall::rendered)
         .collect()
 }
 
@@ -117,7 +117,7 @@ fn docker_item_should_use_system_df_delta_and_daemon_side_note_When_18_2_to_0_1_
 
     assert_eq!(freed.attributed_bytes.0, 18_100_000_000);
     let notes = t.finish(
-        &[disk_cleanup_core::Outcome {
+        &[dunnage_core::Outcome {
             ts: 0,
             run_id: "r".into(),
             kind: cands[0].kind(),

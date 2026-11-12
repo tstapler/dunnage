@@ -1,6 +1,6 @@
 //! The one production mint site of the `--apply` capability (`scripts/check-token-sites.sh`).
 
-use disk_cleanup_core::ApplyToken;
+use dunnage_core::ApplyToken;
 
 /// Called once per `--apply` run, only after the arguments and `confine_mode` accepted the run.
 pub fn grant_apply() -> ApplyToken {

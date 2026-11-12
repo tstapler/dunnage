@@ -14,15 +14,15 @@ use std::fs;
 use std::os::unix::fs::symlink;
 use std::time::Duration;
 
-use disk_cleanup_adapters::discover_build::{
+use dunnage_adapters::discover_build::{
     decide_build_dirs, discover_build_dirs, scan_options, BuildEnv, BuildKinds, BuildOpts,
     BuildVerdict, RawBuildDir,
 };
-use disk_cleanup_adapters::mtime_probe::{probe_newest_mtime, NewestStore, ProbeTarget, Recency};
-use disk_cleanup_adapters::testing::{FaultDirOps, Op};
-use disk_cleanup_adapters::RealDirOps;
-use disk_cleanup_core::testing::{FakeClock, FakeProbe};
-use disk_cleanup_core::{BuildDirFlavor, Identity, RootDev, SkipReason};
+use dunnage_adapters::mtime_probe::{probe_newest_mtime, NewestStore, ProbeTarget, Recency};
+use dunnage_adapters::testing::{FaultDirOps, Op};
+use dunnage_adapters::RealDirOps;
+use dunnage_core::testing::{FakeClock, FakeProbe};
+use dunnage_core::{BuildDirFlavor, Identity, RootDev, SkipReason};
 
 fn opts() -> BuildOpts {
     BuildOpts {

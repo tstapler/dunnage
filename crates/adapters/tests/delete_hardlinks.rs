@@ -7,8 +7,8 @@ use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
-use disk_cleanup_adapters::{delete_tree, open_parent, open_verified_root, RealDirOps};
-use disk_cleanup_core::{
+use dunnage_adapters::{delete_tree, open_parent, open_verified_root, RealDirOps};
+use dunnage_core::{
     AbortFlag, AllowedTarget, ApplyToken, DeletePolicy, Identity, NamePattern, RootDev,
 };
 

@@ -3,9 +3,9 @@
 
 mod support;
 
-use disk_cleanup_cli::apply::render_apply;
-use disk_cleanup_cli::render::render_plan;
-use disk_cleanup_cli::view::PlanView;
+use dunnage_cli::apply::render_apply;
+use dunnage_cli::render::render_plan;
+use dunnage_cli::view::PlanView;
 use support::*;
 
 #[test]

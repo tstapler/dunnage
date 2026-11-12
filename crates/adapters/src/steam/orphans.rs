@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use disk_cleanup_core::{AppId, Kind};
+use dunnage_core::{AppId, Kind};
 
 use super::SteamInstall;
 

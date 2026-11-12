@@ -1,4 +1,4 @@
-//! The dispatch of `disk-cleanup` (Story 1.2.4, Task 1.2.4a): a parsed command line and a set of ports in, an
+//! The dispatch of `dunnage` (Story 1.2.4, Task 1.2.4a): a parsed command line and a set of ports in, an
 //! exit code and two streams out. Everything outside the process (the filesystem, the targets, the state
 //! store, the stamp step, the apply capability) arrives through [`Ports`], so every acceptance criterion runs
 //! against fakes and `main` only wires the real ones.
@@ -12,18 +12,18 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use disk_cleanup_adapters::state::OutcomeMode;
-use disk_cleanup_adapters::status::assess;
-use disk_cleanup_adapters::targets::btrfs_report::report_notes;
-use disk_cleanup_adapters::targets::symlink_note::symlinked_root_notes_real;
-use disk_cleanup_core::executor::{
+use dunnage_adapters::state::OutcomeMode;
+use dunnage_adapters::status::assess;
+use dunnage_adapters::targets::btrfs_report::report_notes;
+use dunnage_adapters::targets::symlink_note::symlinked_root_notes_real;
+use dunnage_core::executor::{
     availability_refusal, Mode, Refused, RunHooks, RunMeta, RunOptions, RunReport,
 };
-use disk_cleanup_core::plan::{GateRenderCtx, PlanId, Planned};
-use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::selector::{KindSelector, Selection};
-use disk_cleanup_core::target::{KindGate, Target, NOT_IN_BUILD};
-use disk_cleanup_core::{
+use dunnage_core::plan::{GateRenderCtx, PlanId, Planned};
+use dunnage_core::ports::Env;
+use dunnage_core::selector::{KindSelector, Selection};
+use dunnage_core::target::{KindGate, Target, NOT_IN_BUILD};
+use dunnage_core::{
     ApplyToken, BuildInfo, DiskVerdict, RunRoots, SaveOutcome, SelectorId, Warning,
 };
 
@@ -42,10 +42,10 @@ use crate::view::{
 };
 use crate::wiring::audit::{GateExit, StampOutcome};
 use crate::{audit_cmd, kinds, status};
-use disk_cleanup_adapters::steam::default_steam_roots;
+use dunnage_adapters::steam::default_steam_roots;
 
 /// The refusal of a build that ships no apply path (Gate A; the token is minted by Story 2.1.6).
-pub const APPLY_NOT_ENABLED: &str = "error: apply is not enabled in this build (kinds register per gate; see 'disk-cleanup kinds'). Nothing was deleted.";
+pub const APPLY_NOT_ENABLED: &str = "error: apply is not enabled in this build (kinds register per gate; see 'dunnage kinds'). Nothing was deleted.";
 
 /// Whether this binary can delete at all.
 pub enum ApplyMode<'a> {
@@ -74,7 +74,7 @@ pub struct Ports<'a> {
     pub term: Terminal,
     pub stdout_tty: bool,
     pub run_id: String,
-    /// `DISK_CLEANUP_VIA`.
+    /// `DUNNAGE_VIA`.
     pub via: Option<String>,
     pub outcome: &'a OutcomeFn<'a>,
     /// `note: created 2 reserve files ...`, printed on stderr before the run.
@@ -191,7 +191,7 @@ pub fn run(cli: &Cli, p: &Ports, io: &mut Io) -> i32 {
 
 /// `steam list`: read-only; exit 0 (a partial listing still exits 0), 1 when no library is readable.
 fn steam_list(json: bool, sort: SteamSortArg, min_gib: Option<f64>, p: &Ports, io: &mut Io) -> i32 {
-    use disk_cleanup_adapters::steam::list::{self, SortKey};
+    use dunnage_adapters::steam::list::{self, SortKey};
     let now = u64::try_from(p.env.clock.now_epoch()).unwrap_or(0);
     let platform = p.env.probe.platform();
     let loaded = default_steam_roots(&p.env.dirs.home, platform)
@@ -292,7 +292,7 @@ pub(crate) fn fs_block(report: &RunReport) -> FsBlock {
 
 fn plan_mode(cli: &Cli, sel: &Selection, registered: &[SelectorId], p: &Ports, io: &mut Io) -> i32 {
     let started = std::time::Instant::now();
-    let executor = disk_cleanup_core::executor::Executor::new(
+    let executor = dunnage_core::executor::Executor::new(
         p.env,
         p.targets.clone(),
         options(cli, p, &StampOutcome::Confined),
@@ -411,7 +411,7 @@ fn not_apply_capable(sel: &Selection, p: &Ports) -> Option<String> {
     }
     chosen.find(|s| !capable.contains(s)).map(|s| {
         format!(
-            "error: '{}' is not available in this build (see 'disk-cleanup kinds'). Nothing was deleted.",
+            "error: '{}' is not available in this build (see 'dunnage kinds'). Nothing was deleted.",
             s.id()
         )
     })
@@ -434,18 +434,18 @@ pub fn apply_flow(
         io.stderr_line(&msg);
         return 64;
     }
-    let supplied = cli.plan_id.map(disk_cleanup_core::plan::PlanIdArg::plan_id);
+    let supplied = cli.plan_id.map(dunnage_core::plan::PlanIdArg::plan_id);
     hooks.step("kind_availability");
     if let Some(r) = availability_refusal(p.env, &p.targets, sel) {
         return refused(cli, &r, sel, p, io, hooks, None);
     }
-    let kinds: Vec<disk_cleanup_core::Kind> = sel
+    let kinds: Vec<dunnage_core::Kind> = sel
         .kinds()
         .ids()
         .flat_map(|s| s.kinds().iter().copied())
         .collect();
     hooks.step("check_stamp");
-    let stamp = match (p.stamp)(disk_cleanup_core::required_gate(&kinds)) {
+    let stamp = match (p.stamp)(dunnage_core::required_gate(&kinds)) {
         Ok(s) => s,
         Err(e) => return stamp_refusal(cli, &e, supplied, io),
     };
@@ -455,11 +455,8 @@ pub fn apply_flow(
     };
     hooks.stamped(warning.as_deref());
     let saved_before = p.env.plans.load_last();
-    let executor = disk_cleanup_core::executor::Executor::new(
-        p.env,
-        p.targets.clone(),
-        options(cli, p, &stamp),
-    );
+    let executor =
+        dunnage_core::executor::Executor::new(p.env, p.targets.clone(), options(cli, p, &stamp));
     let mut report = match executor.run_hooked(sel, &Mode::Apply(mint()), supplied, hooks) {
         Ok(r) => r,
         Err(r) => return refused(cli, &r, sel, p, io, hooks, warning.as_deref()),
@@ -496,7 +493,7 @@ pub fn apply_flow(
             .filter(|o| {
                 matches!(
                     o.status,
-                    disk_cleanup_core::Status::Skipped(disk_cleanup_core::SkipReason::Aborted)
+                    dunnage_core::Status::Skipped(dunnage_core::SkipReason::Aborted)
                 )
             })
             .count()
@@ -561,10 +558,10 @@ pub(crate) fn floor_notes_for(targets: &[&dyn Target], sel: &Selection) -> Vec<S
         .iter()
         .any(|t| t.selectors().contains(&SelectorId::Worktrees));
     let raised = sel.min_age_secs.is_some_and(|s| {
-        disk_cleanup_core::targets::worktree_guard::floor_raised(std::time::Duration::from_secs(s))
+        dunnage_core::targets::worktree_guard::floor_raised(std::time::Duration::from_secs(s))
     });
     if served && raised && sel.selects(SelectorId::Worktrees) {
-        vec![disk_cleanup_core::targets::worktree_guard::FLOOR_RAISED_NOTE.to_string()]
+        vec![dunnage_core::targets::worktree_guard::FLOOR_RAISED_NOTE.to_string()]
     } else {
         Vec::new()
     }
@@ -573,15 +570,15 @@ pub(crate) fn floor_notes_for(targets: &[&dyn Target], sel: &Selection) -> Vec<S
 /// The probe facts and the detail slot of each skip text a target knows (`pip3` for a missing tool).
 fn reason_facts(
     p: &Ports,
-    plan: &disk_cleanup_core::plan::Plan,
-) -> HashMap<disk_cleanup_core::CandidateId, ReasonFacts> {
+    plan: &dunnage_core::plan::Plan,
+) -> HashMap<dunnage_core::CandidateId, ReasonFacts> {
     reason_facts_for(&p.targets, plan)
 }
 
 pub(crate) fn reason_facts_for(
     targets: &[&dyn Target],
-    plan: &disk_cleanup_core::plan::Plan,
-) -> HashMap<disk_cleanup_core::CandidateId, ReasonFacts> {
+    plan: &dunnage_core::plan::Plan,
+) -> HashMap<dunnage_core::CandidateId, ReasonFacts> {
     let mut out = HashMap::new();
     for item in &plan.items {
         let Some(t) = targets
@@ -597,7 +594,7 @@ pub(crate) fn reason_facts_for(
             .and_then(|n| u32::try_from(n).ok());
         if detail.is_some()
             || duplicates.is_some()
-            || f != disk_cleanup_core::target::ItemFacts::default()
+            || f != dunnage_core::target::ItemFacts::default()
         {
             out.insert(
                 item.candidate.id(),
