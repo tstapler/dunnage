@@ -41,15 +41,19 @@ fn sleeper(cwd: &Path, stdin: Stdio) -> Reaped {
     )
 }
 
-/// Asks `cwd_in_use(path)` until it names `pid` (for up to 5 s). The scan reports the first holder it meets, and a
-/// sibling test thread that forks while this test holds a descriptor below `path` leaves a child that holds a copy
-/// of it, named after the test binary, until its `exec`; that holder is gone a moment later, the one under test
-/// stays.
+/// Asks `cwd_in_use(path)` until it names `pid` as `sleep` (for up to 5 s). `Command::spawn` returns once the child
+/// has replaced its memory in `exec`, which wakes the parent before the kernel sets the child's name, so for a few
+/// microseconds the new `sleep` still carries the name of the thread that forked it (`cwd_in_use_shou...`, seen in
+/// `/proc/<pid>/comm` under load). The holder is right from the first scan; its name is right a moment later.
 #[cfg(target_os = "linux")]
 fn names_holder(path: &Path, pid: u32) -> (Tri, Option<(String, u32)>) {
     let mut last = RealProbe.cwd_in_use(path);
     for _ in 0..500 {
-        if last.1.as_ref().is_some_and(|h| h.1 == pid) {
+        if last
+            .1
+            .as_ref()
+            .is_some_and(|h| h.1 == pid && h.0 == "sleep")
+        {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
