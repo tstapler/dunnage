@@ -35,7 +35,7 @@ fn rehearse(f: &Fixture, root: &Path, env: &[(&str, &str)]) -> Pty {
     let left = f.root().join("leftovers");
     let inner = format!(
         "'{bin}' explore '{root}'; rc=$?; \
-         find \"$XDG_STATE_HOME\" \"$XDG_CACHE_HOME\" -mindepth 1 > '{left}' 2>&1; exit $rc",
+         find \"$XDG_STATE_HOME\" \"$XDG_CACHE_HOME\" -mindepth 1 -printf '%p %s\\n' > '{left}' 2>&1; exit $rc",
         bin = bin_path().display(),
         root = root.display(),
         left = left.display()
@@ -62,15 +62,23 @@ fn leftovers(f: &Fixture) -> String {
     fs::read_to_string(f.root().join("leftovers")).unwrap_or_default()
 }
 
+/// No `*.tmp` file that holds data remains. A save of `last_plan` that fails on a full disk empties its
+/// `last_plan.tmp` and keeps the name (`RealPlanStore::write_once`: it holds no space and the next save truncates
+/// it), so a zero-length `last_plan.tmp` is the designed leftover and the only one allowed.
 fn no_temp_file(f: &Fixture) {
     let left = leftovers(f);
     assert!(
-        left.contains("fill"),
+        left.contains("/fill "),
         "the listing of the two filesystems is missing: {left:?}"
     );
+    let kept: Vec<&str> = left
+        .lines()
+        .filter(|l| l.contains(".tmp"))
+        .filter(|l| !(l.contains("/last_plan.tmp ") && l.ends_with(" 0")))
+        .collect();
     assert!(
-        !left.lines().any(|l| l.contains(".tmp")),
-        "a temp file remains on the full filesystems: {left}"
+        kept.is_empty(),
+        "a temp file with data remains: {kept:?}\nall: {left}"
     );
 }
 

@@ -26,11 +26,6 @@ dc_unit_and_doc_tests(
 
 dc_integration_tests(
     crate = "scan",
-    per_test = {
-        # Clears the save gate from a second thread while the write runs; on a saturated machine the write is done
-        # first and the test sees no abort (failed once in 6 full runs at load 20 to 35, not reproduced alone).
-        "stream_cancel": {"flaky": True},
-    },
     deps = [":scan"] + all_crate_deps(normal = True) + all_crate_deps(normal_dev = True),
     proc_macro_deps = all_crate_deps(proc_macro = True) + all_crate_deps(proc_macro_dev = True),
     rustc_env = {},

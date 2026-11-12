@@ -215,6 +215,8 @@ pub struct Spy {
     pub inner: TestBackend,
     pub size_calls: Arc<AtomicUsize>,
     pub flushes: Arc<AtomicUsize>,
+    /// The text of the last frame flushed, for scripts that wait for a screen (`Run::gates`).
+    pub frame: Arc<Mutex<String>>,
 }
 
 impl Spy {
@@ -223,6 +225,7 @@ impl Spy {
             inner: TestBackend::new(w, h),
             size_calls: Arc::new(AtomicUsize::new(0)),
             flushes: Arc::new(AtomicUsize::new(0)),
+            frame: Arc::new(Mutex::new(String::new())),
         }
     }
 }
@@ -272,6 +275,7 @@ impl Backend for Spy {
 
     fn flush(&mut self) -> Result<(), Self::Error> {
         self.flushes.fetch_add(1, Ordering::SeqCst);
+        *self.frame.lock().unwrap() = buffer_text(self.inner.buffer());
         self.inner.flush()
     }
 }
@@ -377,6 +381,11 @@ pub struct FakeEvents {
     pub polls: Arc<Mutex<Vec<(Duration, u64, usize)>>>,
     flushes: Arc<std::sync::atomic::AtomicUsize>,
     safety: u64,
+    /// `(index in the script, text)`: that input is delivered only once the last frame shows the text (or, with a
+    /// leading `!`, no longer shows it).
+    gates: Vec<(usize, &'static str)>,
+    frame: Arc<Mutex<String>>,
+    taken: usize,
 }
 
 impl FakeEvents {
@@ -391,7 +400,41 @@ impl FakeEvents {
             polls: Arc::new(Mutex::new(Vec::new())),
             flushes,
             safety: 0,
+            gates: Vec::new(),
+            frame: Arc::new(Mutex::new(String::new())),
+            taken: 0,
         }
+    }
+
+    /// Delivers script entry `index` only after its time and once a frame shows `needle`. A wall-clock script
+    /// cannot tell when a worker thread has answered; this can. Real time only.
+    #[must_use]
+    pub fn gated(
+        mut self,
+        gates: Vec<(usize, &'static str)>,
+        frame: Arc<Mutex<String>>,
+    ) -> FakeEvents {
+        assert!(
+            gates.is_empty() || matches!(self.time, Time::Real(_)),
+            "gates wait on other threads, so they need the real clock"
+        );
+        self.gates = gates;
+        self.frame = frame;
+        self
+    }
+
+    fn open(&self) -> bool {
+        self.gates
+            .iter()
+            .find(|g| g.0 == self.taken)
+            .is_none_or(|g| {
+                let frame = self.frame.lock().unwrap();
+                match g.1.strip_prefix('!') {
+                    // "!text": a frame has been drawn and it no longer shows the text
+                    Some(text) => !frame.is_empty() && !frame.contains(text),
+                    None => frame.contains(g.1),
+                }
+            })
     }
 }
 
@@ -404,22 +447,29 @@ impl EventSource for FakeEvents {
             .lock()
             .unwrap()
             .push((timeout, now, self.flushes.load(Ordering::SeqCst)));
-        let ready =
-            |q: &VecDeque<(u64, Input)>, now: u64| q.front().is_some_and(|(at, _)| *at <= now);
-        if ready(&self.queue, now) {
+        let ready = |this: &FakeEvents, now: u64| {
+            this.queue.front().is_some_and(|(at, _)| *at <= now) && this.open()
+        };
+        if ready(self, now) {
             return Ok(true);
         }
-        let to_next = self.queue.front().map(|(at, _)| at - now);
+        let to_next = self.queue.front().map(|(at, _)| at.saturating_sub(now));
         let ms = u64::try_from(timeout.as_millis()).unwrap();
-        let wait = to_next.map_or(ms, |n| n.min(ms));
+        // A key that is due but gated is looked at again in a few milliseconds.
+        let wait = match to_next {
+            Some(0) if !self.open() => ms.min(5),
+            Some(n) => n.min(ms),
+            None => ms,
+        };
         if wait == 0 {
             return Ok(false);
         }
         self.time.wait(wait);
-        Ok(ready(&self.queue, self.time.now()))
+        Ok(ready(self, self.time.now()))
     }
 
     fn read(&mut self) -> io::Result<Input> {
+        self.taken += 1;
         Ok(self.queue.pop_front().unwrap().1)
     }
 }
@@ -625,6 +675,8 @@ pub struct Run {
     pub resize_to: Option<(u16, u16)>,
     /// Whether stdin is a terminal for the typed count.
     pub terminal: bool,
+    /// `(script index, text)`: that key waits for a frame showing the text (real clock only).
+    pub gates: Vec<(usize, &'static str)>,
 }
 
 impl Run {
@@ -648,6 +700,7 @@ impl Run {
             tweak: Box::new(|_| {}),
             resize_to: None,
             terminal: true,
+            gates: Vec::new(),
         }
     }
 
@@ -672,8 +725,10 @@ pub struct Outcome {
 pub fn run(r: Run) -> Outcome {
     let spy = Spy::new(r.size.0, r.size.1);
     let flushes = Arc::clone(&spy.flushes);
+    let frame = Arc::clone(&spy.frame);
     let mut term = fixed_terminal(spy, r.size.0, r.size.1).unwrap();
-    let mut events = FakeEvents::new(r.time.clone(), r.script, Arc::clone(&flushes));
+    let mut events =
+        FakeEvents::new(r.time.clone(), r.script, Arc::clone(&flushes)).gated(r.gates, frame);
     let polls = Arc::clone(&events.polls);
     let queries = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let mut sizer = FakeSize(Arc::new(Mutex::new(r.resize_to)), Arc::clone(&queries));

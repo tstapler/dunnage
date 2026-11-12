@@ -42,7 +42,9 @@ fn the_first_frame_with_scanning_is_drawn_before_the_first_wait_for_input() {
 
 #[test]
 fn scan_driven_redraws_are_at_most_four_a_second_and_keys_are_handled_while_batches_flow() {
-    let r = Run::real_time(vec![(1_000, ch('j')), (1_500, ch('j')), (3_800, ch('q'))]);
+    let mut r = Run::real_time(vec![(1_000, ch('j')), (1_500, ch('j')), (3_800, ch('q'))]);
+    // the feeder's 3,000 sends can take longer than 3.8 s on a busy host: `q` waits for the end of the scan
+    r.gates = vec![(2, "!SCANNING")];
     let source = Arc::clone(&r.source);
     let feeder = std::thread::spawn(move || {
         // wait for the loop to start the scan
@@ -214,8 +216,11 @@ fn a_prefilled_backlog_drains_with_a_zero_poll_timeout_at_a_quarter_million_even
         }
         source.send(0, finished(0, false, StopCause::None));
     });
-    // the key script must arrive after the drain: poll the stats through the clock
-    r.script = vec![(4_000, ch('q'))];
+    // `q` waits for the frame that follows the end of the scan: `finished` is queued behind the backlog, so a
+    // screen that no longer says SCANNING has applied every event, however long a preempted thread took to get
+    // there
+    r.script = vec![(100, ch('q'))];
+    r.gates = vec![(0, "!SCANNING")];
     let cpu_before = thread_cpu_ns();
     let out = run(r);
     let cpu = thread_cpu_ns().zip(cpu_before).map(|(a, b)| a - b);
