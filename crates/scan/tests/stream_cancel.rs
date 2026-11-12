@@ -122,7 +122,9 @@ fn walk_should_return_at_once_with_no_events_When_the_token_is_set_before_the_st
 
 #[test]
 fn walk_should_write_no_cache_or_temp_file_When_the_save_gate_is_clear() {
-    let fake = FakeFs::new(100_000, 10);
+    let mut fake = FakeFs::new(100_000, 10);
+    // each listing takes 1 ms, so the walk cannot finish before the 30 ms cancel however fast the machine is
+    fake.delay = Box::new(|_| Duration::from_millis(1));
     let dir = tmp("gate");
     let roots = vec![PathBuf::from(ROOT)];
     let cancel = Arc::new(AtomicBool::new(false));

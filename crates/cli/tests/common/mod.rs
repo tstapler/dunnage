@@ -46,6 +46,13 @@ pub fn startup_check() {
     }
 }
 
+/// A temp directory below the canonical temp root: on macOS `$TMPDIR` is `/var/folders/..`, and `/var` is a
+/// symlink the tool (rightly) refuses to traverse, so a fixture below it would be "outside the roots".
+pub fn tempdir() -> tempfile::TempDir {
+    let base = std::fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+    tempfile::Builder::new().tempdir_in(base).expect("tempdir")
+}
+
 /// A fixture root: `<root>/home`, `<root>/xdg/{state,cache,config}` and the sentinel. Removed on drop.
 pub struct Fixture {
     dir: tempfile::TempDir,
@@ -54,7 +61,7 @@ pub struct Fixture {
 impl Fixture {
     pub fn new() -> Fixture {
         startup_check();
-        let dir = tempfile::tempdir().expect("fixture root");
+        let dir = tempdir();
         for sub in ["home", "xdg/state", "xdg/cache", "xdg/config"] {
             std::fs::create_dir_all(dir.path().join(sub)).expect("fixture dir");
         }

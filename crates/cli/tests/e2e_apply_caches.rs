@@ -478,7 +478,7 @@ fn strace_network(f: &Fixture, log: &Path, args: &[&str]) -> std::process::Outpu
         .find(|p| p.is_file())
         .unwrap_or_else(|| PathBuf::from("strace"));
     f.command_for(strace)
-        .args(["-f", "-e", "trace=network", "-o"])
+        .args(["-f", "-e", "trace=network,execve", "-o"])
         .arg(log)
         .arg(common::bin_path())
         .args(args)

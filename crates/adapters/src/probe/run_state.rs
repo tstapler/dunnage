@@ -193,6 +193,7 @@ mod tests {
 
     use super::*;
 
+    #[cfg(target_os = "linux")]
     fn me() -> u32 {
         rustix::process::geteuid().as_raw()
     }
@@ -230,6 +231,7 @@ mod tests {
         false
     }
 
+    #[cfg(target_os = "linux")] // reads /proc
     #[test]
     fn idle_should_be_reported_When_no_process_uses_the_directory() {
         let t = tempfile::tempdir().unwrap();
@@ -238,6 +240,7 @@ mod tests {
         assert_eq!(scan_proc(Path::new("/proc"), &d, me()), RunState::Idle);
     }
 
+    #[cfg(target_os = "linux")] // reads /proc
     #[test]
     fn running_should_be_reported_When_a_child_has_its_cwd_inside() {
         let t = tempfile::tempdir().unwrap();
@@ -250,6 +253,7 @@ mod tests {
         assert_eq!(run_state(&d), RunState::Running);
     }
 
+    #[cfg(target_os = "linux")] // reads /proc
     #[test]
     fn running_should_be_reported_When_a_child_holds_a_file_open_inside() {
         let t = tempfile::tempdir().unwrap();
@@ -296,6 +300,7 @@ mod tests {
             "the exclusive lock could not be taken"
         );
         assert_eq!(cargo_lock_held(&d), RunState::Running);
+        #[cfg(target_os = "linux")]
         assert_eq!(scan_proc(Path::new("/proc"), &d, me()), RunState::Running);
         drop(lock);
         assert!(

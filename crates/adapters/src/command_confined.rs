@@ -135,10 +135,12 @@ mod tests {
     fn git_should_be_allowed_only_when_its_repo_and_every_path_argument_are_inside_the_root() {
         let tmp = tempfile::tempdir().unwrap();
         let outside = tempfile::tempdir().unwrap();
-        let (root, out) = (
-            tmp.path().to_str().unwrap(),
-            outside.path().to_str().unwrap(),
+        // canonical, as `runner` canonicalizes its root (on macOS the temp dir is below the /var symlink)
+        let (tmp_dir, outside_dir) = (
+            tmp.path().canonicalize().unwrap(),
+            outside.path().canonicalize().unwrap(),
         );
+        let (root, out) = (tmp_dir.to_str().unwrap(), outside_dir.to_str().unwrap());
         let r = runner(tmp.path());
         let git = OsString::from("git");
         let inside_repo = format!("{root}/repo");
