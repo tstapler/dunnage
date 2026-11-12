@@ -14,33 +14,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: 1.98.1
-      - name: lsof against a process with a cwd inside
+      - name: repo scripts on macOS
         shell: bash {0}
+        timeout-minutes: 20
         run: |
-          d=$(mktemp -d); mkdir -p "$d/app/target/debug"; real=$(cd "$d/app/target" && pwd -P)
-          (cd "$d/app/target/debug" && exec sleep 60) & sleep 1
-          for dir in "$d/app/target" "$real"; do
-            echo "--- +D $dir"; lsof -F n +D "$dir" 2>err.txt; echo "exit=$? stderr-lines=$(wc -l < err.txt)"; head -3 err.txt
-            echo "--- -w +D $dir"; lsof -w -F n +D "$dir" 2>/dev/null; echo "exit=$?"
-            echo "--- +d $dir (one level)"; lsof -F n +d "$dir/debug" 2>/dev/null; echo "exit=$?"
-            echo "--- none: +D on an unused dir"; mkdir -p "$d/idle"; lsof -F n +D "$d/idle" 2>/dev/null; echo "exit=$?"
+          for c in "check-token-sites.sh --selftest" "check-token-sites.sh --expect-sites 1" "check-release-features.sh --selftest" "check-no-stray-unlink.sh --selftest" "check-no-stray-unlink.sh" "check-tui-deps.sh"; do
+            echo "=== $c"; scripts/$c 2>&1 | tail -12; echo "exit=${PIPESTATUS[0]}"
           done
-      - name: deep chain, 10 000 levels
-        timeout-minutes: 20
-        continue-on-error: true
+      - name: tui pty tests
         shell: bash {0}
+        timeout-minutes: 20
         run: |
           export RUST_BACKTRACE=1 CARGO_PROFILE_DEV_DEBUG=0
-          ulimit -n
-          cargo test -p dunnage-adapters --test delete_adversarial -- --test-threads=1 --nocapture ten_thousand 2>&1 | tail -40
-          cargo test -p dunnage-adapters --test delete_fdlimit -- --nocapture 2>&1 | tail -40
-          cargo test -p dunnage --test explore_apply_matrix -- --test-threads=1 --nocapture a12 2>&1 | tail -30
-      - name: pty close and thread count
-        shell: bash {0}
-        run: |
-          export RUST_BACKTRACE=1 CARGO_PROFILE_DEV_DEBUG=0
-          cargo test -p dunnage-tui --test pty_restore -- --nocapture a_closed_pty_master 2>&1 | tail -30 || true
-          cargo test -p dunnage-scan --test stream_threads 2>&1 | tail -20 || true
-          cargo test -p dunnage-adapters --test worktree_probe --test worktree_git 2>&1 | tail -40 || true
-        timeout-minutes: 20
-        continue-on-error: true
+          cargo build -p dunnage-tui --examples 2>&1 | tail -3
+          cargo test -p dunnage-tui --test pty_restore --test loop_fake -- --test-threads=1 2>&1 | grep -a "^test \|panicked\|assertion\|left\|right\|no frame\|test result" | head -60

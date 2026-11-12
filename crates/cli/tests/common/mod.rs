@@ -46,16 +46,22 @@ pub fn startup_check() {
     }
 }
 
-/// A temp directory below the canonical temp root: on macOS `$TMPDIR` is `/var/folders/..`, and `/var` is a
-/// symlink the tool (rightly) refuses to traverse, so a fixture below it would be "outside the roots".
+/// A temp directory below a canonical, short root. On macOS `$TMPDIR` is `/var/folders/..`: `/var` is a symlink
+/// the tool (rightly) refuses to traverse, and the path is long enough to change how text reports wrap. So the
+/// root there is `/private/tmp`; elsewhere the canonical temp dir.
 pub fn tempdir() -> tempfile::TempDir {
-    let base = std::fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+    let base = if cfg!(target_os = "macos") {
+        PathBuf::from("/private/tmp")
+    } else {
+        std::fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir())
+    };
     tempfile::Builder::new().tempdir_in(base).expect("tempdir")
 }
 
 /// True once process `pid` catches every signal in `bits` (signal n is bit n-1). Linux reads `SigCgt` of
 /// `/proc/<pid>/status`. macOS has neither /proc nor a `ps` keyword for caught signals, so the answer there is
-/// "the process has run for 2 s", long enough for the start-up that installs the handlers.
+/// "the process is past its start-up": 30 ms of CPU time (the handlers are installed first thing, long before a
+/// scan has used that much) or 2 s of wall time (a process blocked at once on a FIFO has used almost no CPU).
 pub fn handlers_installed(pid: u32, bits: u64) -> bool {
     if cfg!(target_os = "linux") {
         let status = std::fs::read_to_string(format!("/proc/{pid}/status")).unwrap_or_default();
@@ -66,21 +72,26 @@ pub fn handlers_installed(pid: u32, bits: u64) -> bool {
             .unwrap_or(0);
         return mask & bits == bits;
     }
-    Command::new("ps")
-        .args(["-o", "etime=", "-p", &pid.to_string()])
-        .output()
-        .is_ok_and(|o| elapsed_secs(String::from_utf8_lossy(&o.stdout).trim()) >= 2)
+    let ps = |keyword: &str| {
+        let out = Command::new("ps")
+            .args(["-o", keyword, "-p", &pid.to_string()])
+            .output()
+            .ok()?;
+        Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    };
+    let cpu = ps("time=").map_or(0.0, |t| clock_secs(&t));
+    cpu >= 0.03 || ps("etime=").map_or(0.0, |t| clock_secs(&t)) >= 2.0
 }
 
-/// Seconds in `ps` elapsed time `[[dd-]hh:]mm:ss`; 0 when it cannot be read.
-fn elapsed_secs(etime: &str) -> u64 {
-    let (days, rest) = etime
+/// Seconds in a `ps` time `[[dd-]hh:]mm:ss[.cc]`; 0 when it cannot be read.
+fn clock_secs(t: &str) -> f64 {
+    let (days, rest) = t
         .split_once('-')
-        .map_or((0, etime), |(d, r)| (d.parse().unwrap_or(0), r));
-    let secs = rest
-        .split(':')
-        .try_fold(0_u64, |acc, p| p.parse::<u64>().ok().map(|n| acc * 60 + n));
-    secs.map_or(0, |s| s + days * 86_400)
+        .map_or((0.0, t), |(d, r)| (d.parse().unwrap_or(0.0), r));
+    let secs = rest.split(':').try_fold(0.0_f64, |acc, p| {
+        p.parse::<f64>().ok().map(|n| acc * 60.0 + n)
+    });
+    secs.map_or(0.0, |s| s + days * 86_400.0)
 }
 
 /// The bit of signal `n` in a `handlers_installed` mask.
@@ -468,6 +479,25 @@ pub fn tree_hash(dir: &Path) -> BTreeMap<PathBuf, String> {
 /// A `docker` in `bin` whose daemon is down. A test PATH that ends in `/usr/bin` would otherwise reach the
 /// machine's real daemon as soon as a build registers the Docker kinds (gate-d).
 #[allow(dead_code)]
+/// `go` and `pip` that answer the read-only questions the planner asks without running the machine's own tools:
+/// a real Go walks up from the working directory looking for go.mod, a real pip is a Python (both are on hosted
+/// runners). `go env GOCACHE` names `$HOME/.cache/go-build`; `pip cache dir` fails, so there is no pip item.
+pub fn tool_shims(bin: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(bin).unwrap();
+    for (name, body) in [
+        (
+            "go",
+            "#!/bin/sh\nif [ \"$1 $2\" = 'env GOCACHE' ]; then echo \"$HOME/.cache/go-build\"; fi\n",
+        ),
+        ("pip", "#!/bin/sh\nexit 1\n"),
+    ] {
+        let shim = bin.join(name);
+        std::fs::write(&shim, body).unwrap();
+        std::fs::set_permissions(&shim, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+}
+
 pub fn docker_down_shim(bin: &std::path::Path) {
     use std::os::unix::fs::PermissionsExt;
     std::fs::create_dir_all(bin).unwrap();
