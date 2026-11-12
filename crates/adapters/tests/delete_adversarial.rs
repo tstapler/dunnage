@@ -1016,10 +1016,6 @@ fn subdir_reported_on_other_dev_or_other_mnt_id_should_be_skipped_CrossDevice_an
 }
 
 #[test]
-#[cfg_attr(
-    not(target_os = "linux"),
-    ignore = "10 000 nested levels take about 16 minutes on APFS (965 s measured on a macos-15 runner): Linux only"
-)]
 fn ten_thousand_level_nesting_should_complete_without_stack_overflow_When_deleting() {
     if !cfg!(target_os = "linux") {
         eprintln!("SKIP: 10 000 nested levels take about 16 minutes on APFS (965 s measured on a macos-15 runner): Linux only");
