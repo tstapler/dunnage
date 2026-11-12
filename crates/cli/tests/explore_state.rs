@@ -271,6 +271,10 @@ fn signalled(sig: &str) -> (Option<i32>, String, String) {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "needs /proc SigCgt to know the handlers are installed; on macOS the scan ends before a CPU-time guess can stop it"
+)]
 fn sigint_mid_scan_should_print_the_interrupted_line_and_exit_130() {
     let (code, stdout, stderr) = signalled("INT");
     assert_eq!(code, Some(130), "{stderr}");
@@ -282,6 +286,10 @@ fn sigint_mid_scan_should_print_the_interrupted_line_and_exit_130() {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "needs /proc SigCgt to know the handlers are installed; on macOS the scan ends before a CPU-time guess can stop it"
+)]
 fn sigterm_sighup_and_sigquit_mid_scan_should_all_exit_143() {
     for sig in ["TERM", "HUP", "QUIT"] {
         let (code, stdout, stderr) = signalled(sig);
