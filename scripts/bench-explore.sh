@@ -82,10 +82,11 @@ BENCH cold_scan_done_s=21.5'
   expect "161 bytes per directory fresh fails" 1 "${good/heap_bytes_per_dir_fresh=150.0/heap_bytes_per_dir_fresh=161.0}"
   expect "a missing number is not a pass" 2 "$(printf '%s\n' "$good" | grep -v warm_painted_ms)"
   expect "empty input is not a pass" 2 ""
-  local old=$LOADAVG_FILE t; t=$(mktemp); echo "40.00 20.00 10.00 1/100 1" > "$t"
+  local old=$LOADAVG_FILE oldmax=$MAX_LOAD t; t=$(mktemp); echo "40.00 20.00 10.00 1/100 1" > "$t"
+  MAX_LOAD=8   # the guard under test, whatever DC_BENCH_MAX_LOAD the caller (the gate) exported
   LOADAVG_FILE=$t; load_ok && { say "SELFTEST BAD: a load of 40 passed"; bad=1; } || say "ok: a load above the limit is INCONCLUSIVE"
   echo "0.50 0.50 0.50 1/100 1" > "$t"; load_ok && say "ok: a quiet machine passes" || { say "SELFTEST BAD: a load of 0.5 failed"; bad=1; }
-  LOADAVG_FILE=$old; rm -f "$t"
+  LOADAVG_FILE=$old; MAX_LOAD=$oldmax; rm -f "$t"
   [ "$bad" = 0 ] && { say "selftest: all ok"; return 0; } || return 1
 }
 
