@@ -1,9 +1,12 @@
 #![allow(clippy::expect_used)]
 //! The explorer loop over fakes, run under a real terminal by `tests/pty_restore.rs` (Task 6.5.2c).
 //!
-//! Usage: `guard_probe <state-dir> [panic]`. It writes its pid to `<state-dir>/pid` before it takes the
+//! Usage: `guard_probe <state-dir> [panic|delete]`. It writes its pid to `<state-dir>/pid` before it takes the
 //! terminal and its exit code to `<state-dir>/exit` after the loop returns. With `panic`, marking an item
-//! panics on the UI thread, which exercises the panic hook. Not part of the shipped binary.
+//! panics on the UI thread, which exercises the panic hook. With `delete`, `d` leads to a prompt (each review writes
+//! `review-<n>`) and a typed count starts a fake delete that writes `delete-started`, waits for the abort, writes `abort-seen`, takes
+//! half a second, writes `worker-done` and reports; the signal tests check that the terminal is restored only
+//! after that. Not part of the shipped binary.
 
 use std::ffi::OsString;
 use std::io::{self, stdout, Write};
@@ -14,9 +17,16 @@ use std::sync::Arc;
 
 use disk_cleanup_adapters::explore::signals::RealTermSignals;
 use disk_cleanup_core::dirs::Dirs;
-use disk_cleanup_core::explore::msg::{NodeEvent, PlanPreview, ScanMode, ScanMsg, NO_PARENT};
-use disk_cleanup_core::explore::ports::{ScanHandle, ScanOpts, ScanSource};
-use disk_cleanup_core::explore::testing::{DirInfo, FakeDirLister, FakeExplorerActions, Stats};
+use disk_cleanup_core::explore::confirm::{ConfirmedPlan, ReviewedPlan};
+use disk_cleanup_core::explore::msg::{
+    DeleteMsg, DeleteSummary, NodeEvent, PlanPreview, ScanMode, ScanMsg, NO_PARENT,
+};
+use disk_cleanup_core::explore::ports::{
+    DeleteHandle, ExplorerActions, Handoff, PreviewHandle, ScanHandle, ScanOpts, ScanSource,
+};
+use disk_cleanup_core::explore::testing::{
+    reviewed_of, DirInfo, FakeDirLister, FakeExplorerActions, FakeTypedCount, Stats,
+};
 use disk_cleanup_core::ids::Identity;
 use disk_cleanup_core::roots::RootSet;
 use disk_cleanup_tui::app::{ExplorerConfig, Ports};
@@ -72,6 +82,62 @@ impl ScanSource for HoldSource {
     }
 }
 
+/// Reviews anything, answers a preview at once and runs a delete that waits for the abort (see the header).
+struct DeleteProbe {
+    state: PathBuf,
+    reviews: std::sync::atomic::AtomicUsize,
+}
+
+impl ExplorerActions for DeleteProbe {
+    fn preview(&self, _marks: &[PathBuf], cancel: Arc<AtomicBool>) -> PreviewHandle {
+        let (tx, rx) = channel();
+        let _ = tx.send(ScanMsg::Preview(PlanPreview {
+            plan_id: "00000000".into(),
+            saved: true,
+            rows: vec![],
+            est_bytes: 0,
+            scope_line: String::new(),
+            guards_line: String::new(),
+        }));
+        PreviewHandle::new(rx, cancel)
+    }
+
+    fn finish(&self, _marks: &[PathBuf]) -> Handoff {
+        Handoff::default()
+    }
+
+    fn review(&self, marks: &[PathBuf]) -> Result<ReviewedPlan, String> {
+        let n = self
+            .reviews
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
+        std::fs::write(self.state.join(format!("review-{n}")), "1").expect("marker");
+        Ok(reviewed_of(marks, 1 << 30))
+    }
+
+    fn delete(&self, confirmed: ConfirmedPlan) -> DeleteHandle {
+        let (tx, rx) = std::sync::mpsc::sync_channel(8);
+        let abort = Arc::new(AtomicBool::new(false));
+        let (flag, dir, total) = (Arc::clone(&abort), self.state.clone(), confirmed.count());
+        std::thread::spawn(move || {
+            let _ = tx.send(DeleteMsg::Progress { index: 1, total });
+            std::fs::write(dir.join("delete-started"), "1").expect("marker");
+            while !flag.load(std::sync::atomic::Ordering::SeqCst) {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            std::fs::write(dir.join("abort-seen"), "1").expect("marker");
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            std::fs::write(dir.join("worker-done"), "1").expect("marker");
+            let _ = tx.send(DeleteMsg::Done(DeleteSummary {
+                removed: 0,
+                bytes: 0,
+                interrupted: true,
+            }));
+        });
+        DeleteHandle::new(rx, abort)
+    }
+}
+
 fn roots() -> RootSet {
     let dirs = Dirs {
         home: "/h".into(),
@@ -101,7 +167,9 @@ fn roots() -> RootSet {
 fn main() {
     let mut args = std::env::args_os().skip(1);
     let state = PathBuf::from(args.next().expect("state dir"));
-    let panic_on_mark = args.next().is_some_and(|a| a == "panic");
+    let mode = args.next();
+    let panic_on_mark = mode.as_ref().is_some_and(|a| a == "panic");
+    let delete_mode = mode.as_ref().is_some_and(|a| a == "delete");
     std::fs::write(state.join("pid"), std::process::id().to_string()).expect("pid file");
 
     let (cols, rows) = query_size().unwrap_or((100, 30));
@@ -119,14 +187,22 @@ fn main() {
         scan: Arc::new(HoldSource),
         lister: Arc::new(FakeDirLister::default()),
         signals: Arc::new(signals),
-        actions: Arc::new(FakeExplorerActions::new(PlanPreview {
-            plan_id: "00000000".into(),
-            saved: true,
-            rows: vec![],
-            est_bytes: 0,
-            scope_line: String::new(),
-            guards_line: String::new(),
-        })),
+        actions: if delete_mode {
+            Arc::new(DeleteProbe {
+                state: state.clone(),
+                reviews: std::sync::atomic::AtomicUsize::new(0),
+            })
+        } else {
+            Arc::new(FakeExplorerActions::new(PlanPreview {
+                plan_id: "00000000".into(),
+                saved: true,
+                rows: vec![],
+                est_bytes: 0,
+                scope_line: String::new(),
+                guards_line: String::new(),
+            }))
+        },
+        typed: Arc::new(FakeTypedCount::new(true)),
     };
     let (mut events, mut sizer, clock) = (CrosstermEvents, IoctlSize, SystemClock::default());
     let exit = {

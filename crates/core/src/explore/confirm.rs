@@ -134,6 +134,17 @@ impl Confirm {
         self.reviewed.bytes()
     }
 
+    /// The plan this prompt is for, to show its items.
+    pub fn reviewed(&self) -> &ReviewedPlan {
+        &self.reviewed
+    }
+
+    /// Esc: closes the prompt and hands the plan back, so a cancelled prompt keeps the review. The plan can
+    /// only become deletable again through [`Confirm::new`] and [`Confirm::accepts`].
+    pub fn into_reviewed(self) -> ReviewedPlan {
+        self.reviewed
+    }
+
     /// `Type 3 and press Enter to delete, Esc to cancel:`
     pub fn prompt_line(&self) -> String {
         format!(

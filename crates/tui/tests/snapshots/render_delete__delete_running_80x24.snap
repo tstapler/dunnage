@@ -1,0 +1,7 @@
+---
+source: crates/tui/tests/render_delete.rs
+expression: text
+---
+DELETING 2 of 2                                    Ctrl-C stops at the next item
+
+removed   21.0 GiB  ~/code/app/node_modules

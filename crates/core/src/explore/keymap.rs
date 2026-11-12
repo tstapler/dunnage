@@ -322,7 +322,7 @@ pub const KEYMAP: &[KeyDef] = &[
         "d",
         Cmd::Delete,
         Group::Plan,
-        "delete the marked items",
+        "delete the marked items after a plan and a typed count",
     ),
     def(
         &[c('q')],

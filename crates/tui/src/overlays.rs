@@ -6,10 +6,12 @@
 use std::path::{Path, PathBuf};
 
 use disk_cleanup_core::escape::{escape_os, needs_escape};
+use disk_cleanup_core::explore::delete_flow::{DeleteRun, Prompt, RunEnd};
 use disk_cleanup_core::explore::fmt::fmt_size_cell;
-use disk_cleanup_core::explore::layout::{cells, cut_name, cut_name_left, split_atoms};
-use disk_cleanup_core::explore::msg::PlanPreview;
+use disk_cleanup_core::explore::layout::{cells, cut_name, cut_name_left, split_atoms, title_left};
+use disk_cleanup_core::explore::msg::{DeleteItemOutcome, PlanPreview};
 use disk_cleanup_core::shell_quote::shell_quote;
+use disk_cleanup_core::snapshot_types::FsSnapshot;
 
 /// Replaces every control or format character with `\u{HEX}`, so no raw ESC, C1 or bidi character reaches
 /// a buffer cell whatever text a caller built.
@@ -268,6 +270,18 @@ const NOT_USABLE: &str = "plan-id NOT usable: the plan could not be saved, so d 
 
 /// The plan preview overlay (E6). It carries no `Next:` line: a command wrapped by a screen would not paste.
 pub fn plan_lines(p: &PlanPreview, width: usize, height: usize, tty: bool) -> Vec<String> {
+    plan_lines_noted(p, None, width, height, tty)
+}
+
+/// [`plan_lines`] with a line above the keys: `Review the plan, then press d again.` after a `d` that had no
+/// plan to go on, or the reason this build or this plan cannot be deleted from.
+pub fn plan_lines_noted(
+    p: &PlanPreview,
+    note: Option<&str>,
+    width: usize,
+    height: usize,
+    tty: bool,
+) -> Vec<String> {
     let id = if p.saved {
         format!("plan-id {} (saved)", clean(&p.plan_id))
     } else {
@@ -304,14 +318,17 @@ pub fn plan_lines(p: &PlanPreview, width: usize, height: usize, tty: bool) -> Ve
         &format!("{:<6} {:<kind_w$} {:>9}  ITEM", "STATUS", "KIND", "SIZE"),
         width,
     ));
-    let tail = [
-        String::new(),
-        clean(&p.guards_line),
+    let mut tail = vec![String::new(), clean(&p.guards_line)];
+    if let Some(n) = note {
+        tail.push(String::new());
+        tail.push(clean(n));
+    }
+    tail.extend([
         String::new(),
         "d      delete these items (asks you to type the count)".to_string(),
         "Enter  leave the explorer; cleaner items are printed as the cleaner's dry run".to_string(),
         "Esc    back to the list (marks are kept)".to_string(),
-    ];
+    ]);
     let tail: Vec<String> = tail
         .iter()
         .flat_map(|l| {
@@ -353,4 +370,216 @@ pub fn tilde(path: &Path, home: Option<&Path>) -> String {
         }
     }
     escape_os(path.as_os_str(), true)
+}
+
+// ----- the delete screens (Task 6.6.4b; UX-T8, UX-T35, UX-T38) -----
+
+pub const PROMPT_TITLE: &str = "DELETE - this cannot be undone; nothing goes to a trash.";
+
+/// `5d2e77a1` from a plan-id.
+fn id_text(id: impl std::fmt::Display) -> String {
+    id.to_string()
+}
+
+/// What the prompt states besides the plan: the filesystem the space is freed on and where the audit goes.
+#[derive(Debug, Clone, Copy)]
+pub struct PromptFacts<'a> {
+    pub headroom: Result<&'a FsSnapshot, &'a str>,
+    pub headroom_path: &'a Path,
+    pub audit_log: Option<&'a Path>,
+    pub home: Option<&'a Path>,
+}
+
+fn fs_words(f: &PromptFacts<'_>, tty: bool) -> String {
+    match f.headroom {
+        Ok(s) => format!(
+            "{} ({})",
+            escape_os(s.path.as_os_str(), tty),
+            clean(&s.fs_type)
+        ),
+        Err(_) => escape_os(f.headroom_path.as_os_str(), tty),
+    }
+}
+
+/// The confirmation (E6): the count, the items, the total, the filesystem, the audit log and the typed entry.
+/// The entry and its cursor are on the last line; a wrong entry's message is above it.
+pub fn prompt_lines(
+    p: &Prompt,
+    f: &PromptFacts<'_>,
+    width: usize,
+    height: usize,
+    tty: bool,
+) -> Vec<String> {
+    let n = p.count();
+    let mut out = vec![cut_name(PROMPT_TITLE, width)];
+    out.extend(wrap_plain(
+        &format!(
+            "Plan {} covers exactly {} marked item{}:",
+            id_text(p.plan().plan_id()),
+            n,
+            if n == 1 { "" } else { "s" }
+        ),
+        width,
+    ));
+    let mut tail: Vec<String> = wrap_plain(
+        &format!(
+            "Total {} (attributed) on {}.",
+            fmt_size_cell(p.bytes()),
+            fs_words(f, tty)
+        ),
+        width,
+    );
+    let audit = f
+        .audit_log
+        .map_or_else(|| "not known".to_string(), |a| tilde(a, f.home));
+    tail.extend(wrap_plain(&format!("Audit log: {audit}"), width));
+    if let Some(m) = p.message() {
+        tail.extend(wrap_plain(m, width));
+    }
+    tail.push(cut_name(
+        &format!("{} {}_", p.prompt_line(), p.entry()),
+        width,
+    ));
+    let room = height.saturating_sub(out.len() + tail.len()).max(1);
+    let items = p.plan().items();
+    // The "... and N more" line takes a row of its own, and the question is never the line that is cut.
+    let shown = if items.len() <= room {
+        items.len()
+    } else {
+        room.saturating_sub(1)
+    };
+    for i in items.iter().take(shown) {
+        let path = tilde(&i.path, f.home);
+        out.push(format!(
+            "  {}",
+            cut_name_left(&path, width.saturating_sub(2).max(4))
+        ));
+    }
+    if shown < items.len() {
+        out.push(format!("  ... and {} more items", items.len() - shown));
+    }
+    out.extend(tail);
+    out
+}
+
+fn item_lines(run: &DeleteRun, home: Option<&Path>, width: usize) -> Vec<String> {
+    let mut out = Vec::new();
+    for i in run.items() {
+        let path = tilde(&i.path, home);
+        match &i.outcome {
+            DeleteItemOutcome::Removed { bytes } => {
+                let head = format!("removed  {:>9}  ", fmt_size_cell(*bytes));
+                let room = width.saturating_sub(cells(&head)).max(4);
+                out.push(format!("{head}{}", cut_name_left(&path, room)));
+            }
+            DeleteItemOutcome::Skipped { reason } => {
+                out.extend(wrap_plain(&format!("skipped: {}", clean(reason)), width));
+                out.push(format!(
+                    "    {}",
+                    cut_name_left(&path, width.saturating_sub(4).max(4))
+                ));
+            }
+            DeleteItemOutcome::Failed { reason } => {
+                out.extend(wrap_plain(&format!("error: {}", clean(reason)), width));
+                out.push(format!(
+                    "    {}",
+                    cut_name_left(&path, width.saturating_sub(4).max(4))
+                ));
+            }
+        }
+    }
+    out
+}
+
+/// A line with `left` flush left and `right` flush right when both fit.
+fn spread(left: &str, right: &str, width: usize) -> String {
+    let (l, r) = (cells(left), cells(right));
+    if l + r + 2 <= width {
+        format!("{left}{}{right}", " ".repeat(width - l - r))
+    } else {
+        cut_name(left, width)
+    }
+}
+
+/// Keeps the last `height` lines of `lines`, saying how many earlier ones were left out.
+fn last_lines(mut lines: Vec<String>, height: usize) -> Vec<String> {
+    if lines.len() <= height {
+        return lines;
+    }
+    let cut = lines.len() - height + 1;
+    let mut out = vec![format!("... {cut} earlier lines")];
+    out.extend(lines.drain(cut..));
+    out
+}
+
+/// While the delete runs: `DELETING 1 of 2` and what is done so far. Never `APPLYING` or `DRY RUN`.
+pub fn deleting_lines(
+    run: &DeleteRun,
+    stopping: bool,
+    home: Option<&Path>,
+    width: usize,
+    height: usize,
+) -> Vec<String> {
+    let title = title_left(width, Some(run.progress()));
+    let hint = if stopping {
+        "stopping at the next item boundary"
+    } else {
+        "Ctrl-C stops at the next item"
+    };
+    let mut out = vec![spread(&title, hint, width), String::new()];
+    let body = item_lines(run, home, width);
+    out.extend(last_lines(body, height.saturating_sub(out.len())));
+    out
+}
+
+/// After the delete: the result list, the freed figure and how to go on. A refused run shows its text.
+pub fn result_lines(
+    run: &DeleteRun,
+    home: Option<&Path>,
+    width: usize,
+    height: usize,
+) -> Vec<String> {
+    const CLOSE: &str = "Esc returns to the list";
+    if let Some(text) = run.refused() {
+        let mut out = vec![
+            spread("DELETE REFUSED - nothing was deleted.", CLOSE, width),
+            String::new(),
+        ];
+        out.extend(wrap_plain(&clean(text), width));
+        return out;
+    }
+    let (r, e) = (run.removed(), run.failed());
+    let skipped = run.items().len() - r - e;
+    let head = format!(
+        "DELETE RESULT - {r} removed, {skipped} skipped, {e} error{}",
+        if e == 1 { "" } else { "s" }
+    );
+    let mut out = vec![spread(&head, CLOSE, width), String::new()];
+    let mut tail = vec![String::new()];
+    tail.extend(wrap_plain(
+        &format!(
+            "Freed {} (measured per item). The headroom line moves as the filesystem settles.",
+            fmt_size_cell(run.freed())
+        ),
+        width,
+    ));
+    if run.interrupted() {
+        tail.extend(wrap_plain(
+            "Stopped at an item boundary: items not reached stay marked.",
+            width,
+        ));
+    }
+    if matches!(run.end(), RunEnd::Done(_)) && e > 0 {
+        tail.extend(wrap_plain(
+            "Marks of items with an error stay; the others are dropped.",
+            width,
+        ));
+    }
+    let body = item_lines(run, home, width);
+    out.extend(last_lines(
+        body,
+        height.saturating_sub(out.len() + tail.len()),
+    ));
+    out.extend(tail);
+    out
 }

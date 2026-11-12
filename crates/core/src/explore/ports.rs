@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 
-use super::confirm::ConfirmedPlan;
+use super::confirm::{ConfirmedPlan, ReviewedPlan};
 use super::msg::{DeleteMsg, FileRows, PlanPreview, ScanMsg};
 
 /// What a scan is asked to do.
@@ -134,17 +134,24 @@ impl DeleteHandle {
     }
 }
 
-/// Where the typed count comes from. The real reader opens the controlling terminal through `/dev/tty`
-/// (Story 6.6.4c) and is the loop's single tty reader: the count is never read by a second one (review 2, N8).
-/// It is a speed bump against a reflex, not a defence against another program of the same uid, which can
-/// write the same bytes to the same terminal (ADR-006 A6, review C11).
-pub trait TypedCountSource: Send {
+/// Whether the typed count can be collected at all. The entry itself is read by the loop's single tty
+/// reader (the tui's `EventSource`: crossterm's reader, which uses stdin when it is a terminal and the
+/// controlling terminal `/dev/tty`, opened `O_RDWR`, otherwise), never by a second one: a second reader
+/// would race the first for bytes and could not keep the screen live (review 2, N8). The count is a speed
+/// bump against a reflex, not a defence against another program of the same uid, which can write the same
+/// bytes to the same terminal (ADR-006 A6, review C11).
+pub trait TypedCountSource: Send + Sync {
     /// False when stdin is not a terminal: the delete is refused with `Deleting needs a terminal. Nothing was
     /// deleted.`
     fn is_terminal(&self) -> bool;
-    /// The next entry the owner submitted, `None` when the owner cancelled (Esc) or the terminal closed.
-    fn next_entry(&mut self) -> Option<String>;
 }
+
+/// The refusal for [`TypedCountSource::is_terminal`] being false.
+pub const NEEDS_TERMINAL: &str = "Deleting needs a terminal. Nothing was deleted.";
+
+/// The refusal of a build whose `explorer-selection` kind is not registered (every build but `gate-d`).
+pub const DELETE_NOT_IN_BUILD: &str =
+    "Deleting is not available in this build. Nothing was deleted.";
 
 /// What the TUI calls to leave the screen. The `tui` crate holds no planner, store or renderer, so it
 /// cannot delete by itself: `delete` takes only a [`ConfirmedPlan`], which exists only as the result of
@@ -155,6 +162,14 @@ pub trait ExplorerActions: Send + Sync {
     fn finish(&self, marks: &[PathBuf]) -> Handoff;
     /// Starts the delete of the confirmed plan on a worker; consumes the plan.
     fn delete(&self, confirmed: ConfirmedPlan) -> DeleteHandle;
+    /// Plans and saves the explorer-selection plan of `marks` and returns it as the in-session reviewed
+    /// plan (`p` and `d` call this on a worker; it measures, so it may take seconds). `Err` is the footer
+    /// line. Only a build that registers the kind can answer; the default refuses, so an implementor with
+    /// no delete (a fake, the `--text` view) gives no way to a prompt.
+    fn review(&self, marks: &[PathBuf]) -> Result<ReviewedPlan, String> {
+        let _ = marks;
+        Err(DELETE_NOT_IN_BUILD.to_string())
+    }
 }
 
 /// Kept so a fake can answer a preview without a channel of its own.

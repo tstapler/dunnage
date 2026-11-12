@@ -417,7 +417,12 @@ fn esc_cancels_the_plan_and_q_leaves_while_it_runs() {
 
 #[test]
 fn a_finished_plan_shows_the_preview_with_no_next_line_and_esc_returns_to_the_list() {
+    // The planner and the review answer from worker threads, so the clock is the real one: with virtual
+    // time the eight loop iterations between `p` and `q` can pass before a thread has run.
     let mut r = with_kids();
+    r.time = Time::Real(Arc::new(
+        disk_cleanup_tui::event_loop::SystemClock::default(),
+    ));
     r.script = vec![(100, ch(' ')), (200, ch('p')), (600, ch('q'))];
     let open = run(r);
     assert!(
@@ -429,6 +434,9 @@ fn a_finished_plan_shows_the_preview_with_no_next_line_and_esc_returns_to_the_li
     assert!(!open.screen.contains("Next:"));
 
     let mut r = with_kids();
+    r.time = Time::Real(Arc::new(
+        disk_cleanup_tui::event_loop::SystemClock::default(),
+    ));
     r.script = vec![
         (100, ch(' ')),
         (200, ch('p')),

@@ -214,11 +214,13 @@ mod interactive {
         cfg.initial_headroom.clone_from(&env.initial_headroom);
         cfg.headroom_path.clone_from(&env.headroom_path);
         cfg.start_note.clone_from(&env.start_note);
+        cfg.audit_log = Some(env.audit_log.clone());
         let ports = Ports {
             scan: env.scan.clone(),
             lister: env.lister.clone(),
             signals,
             actions: env.actions.clone(),
+            typed: Arc::new(crate::explore::tty::StdinTerminal),
         };
         match run_on_stdout(ports, cfg, size) {
             Err(e) => {

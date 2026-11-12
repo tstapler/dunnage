@@ -1,0 +1,43 @@
+# Tasks 6.6.4a and 6.6.4c. No survivor is accepted.
+#
+# 1. The pure delete flow, the file listed in 6.6.4.files (cargo-mutants 27.1.0):
+#   env -u CARGO_TARGET_DIR cargo mutants --no-shuffle -j 3 --timeout 120 \
+#     -f crates/core/src/explore/delete_flow.rs --test-package disk-cleanup-core \
+#     --cargo-test-arg=--test=explore_delete_flow --cargo-test-arg=--test=explore_confirm
+#
+# Run 1 (stopped by hand after the first mutants): ReviewedSet::clear -> () and ReviewedSet::is_empty -> true were
+# missed; a test was added (clear_should_drop_the_held_plan_and_is_empty_should_say_whether_one_is_held).
+# Run 2 (96 mutants): 1 missed, 86 caught, 9 unviable. The survivor got a test:
+#   DeleteRun::interrupted -> false         : a_run_should_call_itself_interrupted_only_when_done_says_an_item_was_stopped
+# Run 3 (clear, is_empty and interrupted again, 5 mutants): 5 caught.
+#
+# 2. The loop's state machine in crates/tui/src/app.rs (not listed in 6.6.4.files: the file is mostly drawing
+#    and the workspace run would report the drawing mutants; these are the delete-flow functions only), with
+#    the loop tests that drive them:
+#   env -u CARGO_TARGET_DIR cargo mutants --no-shuffle -j 3 --timeout 90 -f crates/tui/src/app.rs \
+#     --re 'App::(press_d|advance_planning|prompt_key|result_key|begin_abort|poll_delete|finish_delete|find_node|rescan_dir|leave_with|closing_line|signal_lines|start_plan|preview_arrived|delete_running|take_dirty)' \
+#     --test-package disk-cleanup-tui --cargo-test-arg=--test=loop_delete --cargo-test-arg=--test=loop_fake
+#
+# Runs 1 and 2 (the first stopped by hand at 12 mutants, the second complete with 46: 6 missed, 32 caught, 1 unviable,
+# 7 timeouts). Each survivor of either got a test or a change:
+#   start_plan guard || -> &&               : the guard was redundant (press_d and the busy branch of on_key check
+#                                             first); replaced by a debug_assert, so the mutant no longer exists
+#   start_plan ticket += -> *=              : a_review_that_answers_after_its_plan_was_cancelled_is_dropped_not_taken_for_the_next_plan
+#   advance_planning guard same_marks       : a_plan_made_for_marks_that_changed_while_it_ran_is_not_the_review_of_the_new_marks
+#   leave_with != -> ==                     : the_quit_prompt_hand_off_after_a_delete_ends_with_the_closing_line_not_the_old_one
+#                                             (now keeps the hand-off's own line and replaces only the old closing line)
+#   press_d || -> &&                        : d_while_a_plan_is_in_flight_does_nothing
+#   signal_lines -> vec![]                  : a_signal_after_a_finished_delete_still_prints_the_closing_line
+#   is_aborting -> false                    : the method was redundant (the abort's end sets the exit in the same loop
+#                                             iteration, before the signals are asked again); removed
+#   find_node == -> !=                      : the_rescan_after_a_delete_starts_at_the_parent_of_what_was_removed_and_the_view_stays_inside_it
+#   rescan_dir == -> != and delete !        : the_view_moves_to_the_rescanned_directory_when_it_was_somewhere_else
+#   take_dirty -> false                     : the_result_is_drawn_when_the_delete_ends_without_any_key
+#                                             (take_dirty -> true is caught by loop_fake's frame-rate test)
+# Run 3 (44 mutants, after the tests and changes above): 1 missed (take_dirty -> false), 35 caught, 1 unviable,
+# 7 timeouts; a test was added and take_dirty re-run: 2 caught.
+#
+# The 7 timeouts are mutants that break the loop's way out of itself, so the run cannot end and the hang is the
+# detection (the harness cannot add a watchdog that does not itself leave through these functions):
+#   leave_with -> (), prompt_key -> (), result_key -> (), delete match arm Key::Ctrl('c') in result_key,
+#   begin_abort -> (), poll_delete -> (), finish_delete -> ()

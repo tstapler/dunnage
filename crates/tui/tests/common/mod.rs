@@ -194,6 +194,9 @@ impl Fixture {
             planning: false,
             banner: None,
             plan: None,
+            plan_note: None,
+            delete: None,
+            audit_log: None,
             scroll_top: 0,
             kind_line: None,
             shared: None,
@@ -620,6 +623,8 @@ pub struct Run {
     pub log: Log,
     pub tweak: Box<dyn FnOnce(&mut ExplorerConfig)>,
     pub resize_to: Option<(u16, u16)>,
+    /// Whether stdin is a terminal for the typed count.
+    pub terminal: bool,
 }
 
 impl Run {
@@ -642,6 +647,7 @@ impl Run {
             log,
             tweak: Box::new(|_| {}),
             resize_to: None,
+            terminal: true,
         }
     }
 
@@ -686,6 +692,9 @@ pub fn run(r: Run) -> Outcome {
         lister: r.lister,
         signals: r.signals,
         actions: r.actions,
+        typed: Arc::new(disk_cleanup_core::explore::testing::FakeTypedCount::new(
+            r.terminal,
+        )),
     };
     let started = r.time.now();
     let exit = {
@@ -826,3 +835,123 @@ pub fn assert_fits(text: &str, w: usize) {
         );
     }
 }
+
+// ----- a scripted delete (Story 6.6.4) -----
+
+use disk_cleanup_core::explore::confirm::{ConfirmRecord, ReviewedPlan};
+use disk_cleanup_core::explore::msg::{
+    DeleteItemOutcome, DeleteItemResult, DeleteMsg, DeleteSummary,
+};
+use std::sync::mpsc::SyncSender;
+
+/// What a scripted delete does on its worker: the item paths, the sender and the abort flag.
+pub type OnDelete = Box<dyn Fn(Vec<PathBuf>, SyncSender<DeleteMsg>, Arc<AtomicBool>) + Send + Sync>;
+type ReviewFn = Box<dyn Fn(usize, &[PathBuf]) -> Result<ReviewedPlan, String> + Send + Sync>;
+
+/// Actions over fakes with every call recorded: `preview` answers at once, `review` is scripted per call
+/// and `delete` runs `on_delete` on a thread of its own.
+pub struct ControlActions {
+    pub plan: PlanPreview,
+    pub calls: Log,
+    pub review_fn: ReviewFn,
+    pub on_delete: OnDelete,
+    pub reviews: Mutex<Vec<Vec<PathBuf>>>,
+    pub confirmed: Mutex<Vec<ConfirmRecord>>,
+    pub aborts: Mutex<Vec<Arc<AtomicBool>>>,
+}
+
+pub fn removed_item(path: &Path, bytes: u64) -> DeleteMsg {
+    DeleteMsg::Item(DeleteItemResult {
+        path: path.to_path_buf(),
+        outcome: DeleteItemOutcome::Removed { bytes },
+    })
+}
+
+/// Every item reported removed with 1 GiB, then `Done`.
+pub fn remove_all() -> OnDelete {
+    Box::new(|paths, tx, _abort| {
+        std::thread::spawn(move || {
+            let n = paths.len();
+            for (i, p) in paths.iter().enumerate() {
+                let _ = tx.send(DeleteMsg::Progress {
+                    index: i + 1,
+                    total: n,
+                });
+                let _ = tx.send(removed_item(p, GIB));
+            }
+            let _ = tx.send(DeleteMsg::Done(DeleteSummary {
+                removed: n,
+                bytes: GIB * n as u64,
+                interrupted: false,
+            }));
+        });
+    })
+}
+
+impl ControlActions {
+    pub fn new() -> ControlActions {
+        ControlActions {
+            plan: plan_fixture(),
+            calls: Log::default(),
+            review_fn: Box::new(|_, marks| {
+                Ok(disk_cleanup_core::explore::testing::reviewed_of(marks, GIB))
+            }),
+            on_delete: remove_all(),
+            reviews: Mutex::new(Vec::new()),
+            confirmed: Mutex::new(Vec::new()),
+            aborts: Mutex::new(Vec::new()),
+        }
+    }
+
+    pub fn count(&self, call: &str) -> usize {
+        self.calls.get().iter().filter(|c| **c == call).count()
+    }
+}
+
+impl ExplorerActions for ControlActions {
+    fn preview(&self, _marks: &[PathBuf], cancel: Arc<AtomicBool>) -> PreviewHandle {
+        self.calls.push("preview");
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        let _ = tx.send(ScanMsg::Preview(self.plan.clone()));
+        PreviewHandle::new(rx, cancel)
+    }
+
+    fn finish(&self, _marks: &[PathBuf]) -> Handoff {
+        self.calls.push("finish");
+        Handoff {
+            lines: vec!["DRY RUN - nothing was deleted.".into(), CLOSED.into()],
+            exit_code: 0,
+        }
+    }
+
+    fn delete(
+        &self,
+        confirmed: disk_cleanup_core::explore::confirm::ConfirmedPlan,
+    ) -> DeleteHandle {
+        self.calls.push("delete");
+        self.confirmed.lock().unwrap().push(confirmed.record());
+        let paths: Vec<PathBuf> = confirmed
+            .reviewed()
+            .items()
+            .iter()
+            .map(|i| i.path.clone())
+            .collect();
+        let (tx, rx) = std::sync::mpsc::sync_channel(64);
+        let abort = Arc::new(AtomicBool::new(false));
+        self.aborts.lock().unwrap().push(Arc::clone(&abort));
+        (self.on_delete)(paths, tx, Arc::clone(&abort));
+        DeleteHandle::new(rx, abort)
+    }
+
+    fn review(&self, marks: &[PathBuf]) -> Result<ReviewedPlan, String> {
+        self.calls.push("review");
+        let n = {
+            let mut r = self.reviews.lock().unwrap();
+            r.push(marks.to_vec());
+            r.len()
+        };
+        (self.review_fn)(n, marks)
+    }
+}
+
+pub const CLOSED: &str = "EXPLORE CLOSED - nothing was deleted.";

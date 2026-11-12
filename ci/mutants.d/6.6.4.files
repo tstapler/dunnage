@@ -1,0 +1,2 @@
+# Task 6.6.4a: the pure delete flow (reviewed set, prompt, run, tally, rescan target)
+crates/core/src/explore/delete_flow.rs

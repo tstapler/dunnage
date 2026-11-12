@@ -237,10 +237,7 @@ fn delete_should_take_only_a_confirmed_plan_and_the_fake_should_record_its_recor
 }
 
 #[test]
-fn the_typed_count_source_should_report_a_missing_terminal_and_cancel_when_it_runs_out() {
-    let mut s = FakeTypedCount::new(true, &["3"]);
-    assert!(s.is_terminal());
-    assert_eq!(s.next_entry().as_deref(), Some("3"));
-    assert_eq!(s.next_entry(), None);
-    assert!(!FakeTypedCount::new(false, &[]).is_terminal());
+fn the_typed_count_source_should_report_a_missing_terminal() {
+    assert!(FakeTypedCount::new(true).is_terminal());
+    assert!(!FakeTypedCount::new(false).is_terminal());
 }

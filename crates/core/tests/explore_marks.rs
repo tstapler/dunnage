@@ -503,7 +503,8 @@ Scan      Esc close, clear filter, stop the scan (keeps what was found)
           e list unreadable paths
 Info      i details of the selected item
 Plan      Space mark/unmark an item (max 20)   x clear marks
-          p preview the plan (deletes nothing)   d delete the marked items
+          p preview the plan (deletes nothing)
+          d delete the marked items after a plan and a typed count
 Quit      q quit (asks what to do with marks)   Ctrl-C quit now, exit 130
 Screen    Ctrl-L redraw   ? this help
 
