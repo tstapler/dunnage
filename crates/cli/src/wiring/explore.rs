@@ -291,7 +291,9 @@ pub fn mark_check_fn(base: &Dirs, roots: &RootSet, exe: PathBuf, tty: bool) -> A
     let home = std::fs::canonicalize(&base.home).unwrap_or_else(|_| base.home.clone());
     let mounts = mount_table();
     let own_state = OwnState::canonical(base, exe, &canonical_lenient);
+    let forced_panic = disk_cleanup_core::explore_panic_at().is_some_and(|at| at == "mark_check");
     Arc::new(move |q: &MarkQuery<'_>| {
+        assert!(!forced_panic, "forced panic in mark_check");
         let facts = RealMarkFacts {
             row_path: q.path,
             scanning: q.row.is_directory() && !q.row.complete,

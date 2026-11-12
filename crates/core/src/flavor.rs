@@ -9,3 +9,18 @@ pub fn build_flavor() -> &'static str {
 pub fn build_flavor() -> &'static str {
     "dc-flavor=release"
 }
+
+/// The point named by `DC_EXPLORE_PANIC_AT` (Gate F's forced-panic journey), or `None`. Only a `test-support`
+/// build reads the variable; the shipped and dist builds do not even contain its name, which
+/// `check-release-features.sh` greps for.
+#[cfg(feature = "test-support")]
+pub fn explore_panic_at() -> Option<String> {
+    std::env::var("DC_EXPLORE_PANIC_AT")
+        .ok()
+        .filter(|v| !v.is_empty())
+}
+
+#[cfg(not(feature = "test-support"))]
+pub fn explore_panic_at() -> Option<String> {
+    None
+}
