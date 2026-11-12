@@ -1,0 +1,19 @@
+---
+source: crates/tui/tests/render_delete.rs
+expression: text
+---
+PLAN PREVIEW - nothing is deleted.   plan-id 5d2e77a1 (saved)
+Scope: 2 marked items
+
+Would free 0 B in 0 items. Estimates are file-size sums; reflinks or snapshots
+can make the disk free less.
+
+STATUS KIND      SIZE  ITEM
+
+Guards run now.
+
+Review the plan, then press d again.
+
+d      delete these items (asks you to type the count)
+Enter  leave the explorer; cleaner items are printed as the cleaner's dry run
+Esc    back to the list (marks are kept)

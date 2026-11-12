@@ -1,0 +1,8 @@
+---
+source: crates/tui/tests/render_delete.rs
+expression: text
+---
+DELETE REFUSED - nothing was deleted.                    Esc returns to the list
+
+Changed since you confirmed: 40.1 GiB then, 55.0 GiB now. Nothing was deleted.
+Press d to review again.

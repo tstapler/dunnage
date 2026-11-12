@@ -150,7 +150,8 @@ pub trait TypedCountSource: Send + Sync {
 pub const NEEDS_TERMINAL: &str = "Deleting needs a terminal. Nothing was deleted.";
 
 /// The refusal of a build whose `explorer-selection` kind is not registered (every build but `gate-d`).
-pub const DELETE_NOT_IN_BUILD: &str = "Deleting is not available in this build. Nothing was deleted.";
+pub const DELETE_NOT_IN_BUILD: &str =
+    "Deleting is not available in this build. Nothing was deleted.";
 
 /// What the TUI calls to leave the screen. The `tui` crate holds no planner, store or renderer, so it
 /// cannot delete by itself: `delete` takes only a [`ConfirmedPlan`], which exists only as the result of

@@ -24,8 +24,11 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
+use disk_cleanup_core::explore::delete_flow::{DeleteRun, Prompt};
+
 use crate::overlays::{
-    clean, errors_lines, info_lines, plan_lines, tilde, InfoFacts, ItemCounts, UnreadableEntry,
+    clean, deleting_lines, errors_lines, info_lines, plan_lines_noted, prompt_lines, result_lines,
+    tilde, InfoFacts, ItemCounts, PromptFacts, UnreadableEntry,
 };
 use crate::theme::Theme;
 
@@ -38,6 +41,17 @@ pub struct ScanFacts<'a> {
     pub summary: Option<&'a ScanSummary>,
     /// `12 min ago` while a painted cache has not been revalidated (N-1).
     pub cache_age: Option<&'a str>,
+}
+
+/// The delete screens (Story 6.6.4): they replace the main view while they last.
+#[derive(Debug, Clone, Copy)]
+pub enum DeleteScreen<'a> {
+    /// The confirmation with the typed entry.
+    Prompt(&'a Prompt),
+    /// `DELETING 1 of 2`; `stopping` once Ctrl-C or a signal asked it to stop.
+    Running { run: &'a DeleteRun, stopping: bool },
+    /// The result list (or the refusal text); Esc returns to the list.
+    Result(&'a DeleteRun),
 }
 
 /// Everything one frame is drawn from. Built by the loop for each frame.
@@ -53,6 +67,11 @@ pub struct Screen<'a> {
     pub planning: bool,
     pub banner: Option<&'a str>,
     pub plan: Option<&'a PlanPreview>,
+    /// The line above the preview's keys (`Review the plan, then press d again.`).
+    pub plan_note: Option<&'a str>,
+    pub delete: Option<DeleteScreen<'a>>,
+    /// The audit log the prompt names.
+    pub audit_log: Option<&'a Path>,
     pub scroll_top: usize,
     pub kind_line: Option<String>,
     pub shared: Option<String>,
@@ -586,8 +605,29 @@ pub fn compose(s: &Screen<'_>, w: usize, h: usize) -> Vec<Line<'static>> {
     let Layout::Tiered(l) = layout else {
         return centred_too_small(w, h);
     };
+    if let Some(d) = s.delete {
+        let lines = match d {
+            DeleteScreen::Prompt(p) => {
+                let facts = PromptFacts {
+                    headroom: s.headroom,
+                    headroom_path: s.headroom_path,
+                    audit_log: s.audit_log,
+                    home: s.home,
+                };
+                prompt_lines(p, &facts, w, h, s.tty)
+            }
+            DeleteScreen::Running { run, stopping } => deleting_lines(run, stopping, s.home, w, h),
+            DeleteScreen::Result(run) => result_lines(run, s.home, w, h),
+        };
+        return overlay_lines(lines, w, h, s.theme);
+    }
     if let Some(plan) = s.plan {
-        return overlay_lines(plan_lines(plan, w, h, s.tty), w, h, s.theme);
+        return overlay_lines(
+            plan_lines_noted(plan, s.plan_note, w, h, s.tty),
+            w,
+            h,
+            s.theme,
+        );
     }
     match s.state.input.mode {
         Mode::Help => overlay_lines(help_lines(w), w, h, s.theme),

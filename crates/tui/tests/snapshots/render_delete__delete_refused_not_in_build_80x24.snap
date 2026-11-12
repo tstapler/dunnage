@@ -1,0 +1,7 @@
+---
+source: crates/tui/tests/render_delete.rs
+expression: text
+---
+DELETE REFUSED - nothing was deleted.                    Esc returns to the list
+
+Deleting is not available in this build. Nothing was deleted.

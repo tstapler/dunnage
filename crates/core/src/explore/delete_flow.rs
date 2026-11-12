@@ -71,7 +71,9 @@ impl ReviewedSet {
 
     /// Whether the held plan was made for exactly these marks.
     pub fn covers(&self, marks: &Marks) -> bool {
-        self.held.as_ref().is_some_and(|(id, _)| *id == marks.identity())
+        self.held
+            .as_ref()
+            .is_some_and(|(id, _)| *id == marks.identity())
     }
 
     pub fn press_d(&self, marks: &Marks) -> DPress {
@@ -88,7 +90,12 @@ impl ReviewedSet {
     /// the marks are still `asked`, the held plan covers them and the fresh plan-id equals the held one (the
     /// same items, identities and roots); the prompt then shows the fresh figures. Anything else drops the
     /// held plan.
-    pub fn remeasured(&mut self, asked: &MarkSetId, marks: &Marks, fresh: ReviewedPlan) -> Remeasured {
+    pub fn remeasured(
+        &mut self,
+        asked: &MarkSetId,
+        marks: &Marks,
+        fresh: ReviewedPlan,
+    ) -> Remeasured {
         let same = self.covers(marks)
             && marks.identity() == *asked
             && self

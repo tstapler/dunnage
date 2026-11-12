@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 
 use disk_cleanup_core::explore::confirm::Confirm;
 use disk_cleanup_core::explore::delete_flow::{
-    rescan_target, DPress, DeleteRun, Prompt, PromptKey, Remeasured, ReviewedSet, RunEnd, Submitted,
-    Tally, ENTRY_MAX, MSG_WORKER_LOST,
+    rescan_target, DPress, DeleteRun, Prompt, PromptKey, Remeasured, ReviewedSet, RunEnd,
+    Submitted, Tally, ENTRY_MAX, MSG_WORKER_LOST,
 };
 use disk_cleanup_core::explore::keymap::Key;
 use disk_cleanup_core::explore::marks::{Mark, Marks};
@@ -89,7 +89,12 @@ fn safety_press_d_should_plan_again_When_one_mark_is_added_or_removed_or_replace
         marks_of(&["/h/code/a", "/h/code/b", "/h/code/c"]),
         marks_of(&["/h/code/a", "/h/code/c"]),
     ] {
-        assert_eq!(set.press_d(&other), DPress::ReviewFirst, "{:?}", paths(&other));
+        assert_eq!(
+            set.press_d(&other),
+            DPress::ReviewFirst,
+            "{:?}",
+            paths(&other)
+        );
     }
 }
 
@@ -99,7 +104,10 @@ fn safety_a_plan_should_authorise_nothing_When_a_fresh_review_has_other_items() 
     let mut set = ReviewedSet::new();
     set.hold(&marks, reviewed_of(&paths(&marks), 10));
     // a fresh review whose identities differ (a marked directory replaced by another with the same name)
-    let other = reviewed_of(&[PathBuf::from("/h/code/a"), PathBuf::from("/h/code/zz")], 10);
+    let other = reviewed_of(
+        &[PathBuf::from("/h/code/a"), PathBuf::from("/h/code/zz")],
+        10,
+    );
     let got = set.remeasured(&marks.identity(), &marks, other);
     assert!(matches!(got, Remeasured::Changed));
     assert!(set.is_empty(), "the old plan must be gone");
@@ -144,11 +152,9 @@ fn cancel_should_keep_the_review_of_the_set_it_was_made_for() {
     let marks = marks_of(&["/h/code/a"]);
     let mut set = ReviewedSet::new();
     set.hold(&marks, reviewed_of(&paths(&marks), 10));
-    let Remeasured::Prompt(p) = set.remeasured(
-        &marks.identity(),
-        &marks,
-        reviewed_of(&paths(&marks), 10),
-    ) else {
+    let Remeasured::Prompt(p) =
+        set.remeasured(&marks.identity(), &marks, reviewed_of(&paths(&marks), 10))
+    else {
         panic!("prompt");
     };
     let (id, plan) = p.cancel();
@@ -233,7 +239,11 @@ fn the_prompt_should_ignore_every_key_but_digits_backspace_enter_esc_and_ctrl_c(
         assert_eq!(p.key(k), PromptKey::Ignored, "{k:?}");
     }
     assert_eq!(p.entry(), "");
-    assert_eq!(p.key(Key::Backspace), PromptKey::Ignored, "nothing to erase");
+    assert_eq!(
+        p.key(Key::Backspace),
+        PromptKey::Ignored,
+        "nothing to erase"
+    );
 }
 
 #[test]
@@ -325,7 +335,9 @@ fn a_run_should_list_each_item_and_add_up_the_measured_bytes() {
 #[test]
 fn nothing_should_change_a_run_after_it_ended() {
     let mut r = DeleteRun::new(1);
-    r.apply(DeleteMsg::Refused("another disk-cleanup apply is running (pid 4). Nothing was deleted.".into()));
+    r.apply(DeleteMsg::Refused(
+        "another disk-cleanup apply is running (pid 4). Nothing was deleted.".into(),
+    ));
     r.apply(removed("/h/a", 5));
     r.apply(done(1, 5, false));
     assert_eq!(r.items().len(), 0);
@@ -346,7 +358,10 @@ fn a_run_whose_channel_closed_should_be_lost_and_say_so() {
     let mut ended = DeleteRun::new(1);
     ended.apply(done(0, 0, false));
     ended.lose();
-    assert!(matches!(ended.end(), RunEnd::Done(_)), "lose() must not overwrite an end");
+    assert!(
+        matches!(ended.end(), RunEnd::Done(_)),
+        "lose() must not overwrite an end"
+    );
 }
 
 #[test]
@@ -378,7 +393,11 @@ fn rescan_target_should_be_the_common_parent_of_everything_removed() {
         Some(p("/h/code"))
     );
     assert_eq!(
-        rescan_target(&[p("/h/code/a/dist"), p("/h/code/a/dist2"), p("/h/code/a/x/y")]),
+        rescan_target(&[
+            p("/h/code/a/dist"),
+            p("/h/code/a/dist2"),
+            p("/h/code/a/x/y")
+        ]),
         Some(p("/h/code/a"))
     );
     // a sibling that only shares a name prefix is not below the parent
@@ -439,7 +458,9 @@ fn the_closing_line_should_add_up_every_delete_of_the_session() {
 #[test]
 fn there_should_be_no_closing_line_When_no_delete_began() {
     let refused = tally_of(
-        &[vec![DeleteMsg::Refused("Deleting is not available in this build. Nothing was deleted.".into())]],
+        &[vec![DeleteMsg::Refused(
+            "Deleting is not available in this build. Nothing was deleted.".into(),
+        )]],
         1,
     );
     assert!(!refused.attempted());
@@ -469,7 +490,11 @@ fn the_exit_code_should_be_1_for_an_err_item_and_3_for_a_starved_refusal() {
     }
     .text();
     let starved = tally_of(&[vec![DeleteMsg::Refused(text)]], 1);
-    assert_eq!(starved.exit_code(0), 3, "STARVED_MARK must match the real text");
+    assert_eq!(
+        starved.exit_code(0),
+        3,
+        "STARVED_MARK must match the real text"
+    );
     assert!(!starved.attempted());
     let lost = tally_of(&[vec![removed("/h/a", 1)]], 1);
     let mut lost_run = DeleteRun::new(1);

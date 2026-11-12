@@ -1,0 +1,8 @@
+---
+source: crates/tui/tests/render_delete.rs
+expression: text
+---
+DELETE REFUSED - nothing was deleted.                    Esc returns to the list
+
+Deleting is disabled in this build: run 'make gate' and 'make install-gated'.
+Nothing was deleted.
