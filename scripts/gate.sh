@@ -46,7 +46,7 @@ run_gate() {
     step "bazel build //..." scripts/bazel.sh build //... "${cfg[@]}"
     step "bazel lint (rustfmt + clippy -D warnings)" scripts/bazel.sh build --config=lint //... "${cfg[@]}"
     step "bazel test //..." scripts/bazel.sh test //... "${cfg[@]}" --test_env=GATE="$gate"
-    step "cargo-only tests (release profile builds)" env GATE="$gate" cargo test -p disk-cleanup "${feat[@]}" --test kind_registry --test e2e_apply_caches
+    step "cargo-only tests (release profile builds)" env GATE="$gate" cargo test -p disk-cleanup "${feat[@]}" --test kind_registry --test e2e_apply_caches --test explore_hostile
     step "cargo build --release (Cargo/Bazel drift leg)" cargo build --release --locked --workspace "${feat[@]}"
     if [ -z "$bin" ] && [ "$fails" = 0 ]; then
       if bin=$(scripts/gate-binary.sh "$gate" 2>/dev/null); then ok=$((ok+1)); echo "ok:   bazel -c opt gate binary $bin"; else fails=$((fails+1)); echo "FAIL: bazel -c opt gate binary"; fi
