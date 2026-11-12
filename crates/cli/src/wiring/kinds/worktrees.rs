@@ -1,5 +1,5 @@
-//! Registry slot for `worktrees` (Story 3.1.3): listed and apply-capable from Gate C, so the shipped binary
-//! (no `gate-*` feature) does not register it until the owner's Gate C review.
+//! Registry slot for `worktrees` (Story 3.1.3): listed and apply-capable from Gate C, so a build without the
+//! `gate-c` feature does not register it.
 
 use dunnage_adapters::targets::worktree::WorktreeTarget;
 

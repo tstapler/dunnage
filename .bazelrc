@@ -19,7 +19,9 @@ build:dist --compilation_mode=opt
 build:dist --@rules_rust//rust/settings:lto=thin
 build:dist --stamp
 
-# --- feature gates (Story 2.3.4): one --//build:gate value; the default registers no apply-capable kind ------------
+# --- feature gates (Story 2.3.4): one --//build:gate value; the default is d (all apply-capable kinds, like the -----
+# default features of crates/cli); nogate registers none ---------------------------------------------------------
+build:nogate --//build:gate=none
 build:gate-b --//build:gate=b
 build:gate-c --//build:gate=c
 build:gate-d --//build:gate=d

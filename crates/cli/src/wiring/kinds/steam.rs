@@ -1,5 +1,5 @@
-//! Registry slot for `steam`: listed and apply-capable from Gate D (Story 4.2.2), so the shipped binary
-//! (no `gate-*` feature) does not register it until the owner's Gate D review.
+//! Registry slot for `steam`: listed and apply-capable from Gate D (Story 4.2.2), so a build without the
+//! `gate-d` feature does not register it.
 
 use dunnage_adapters::steam::target::SteamTarget;
 

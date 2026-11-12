@@ -3,11 +3,12 @@ load("@rules_rust//rust:defs.bzl", "rust_lint_config")
 
 package(default_visibility = ["//visibility:public"])
 
-# Feature gates of the cli crate (Story 2.3.4): the default registers no apply-capable kind, like `cargo build
-# --release`. `--config=gate-b|gate-c|gate-d` (.bazelrc) sets --//build:gate; gate-c implies gate-b, gate-d gate-c.
+# Feature gates of the cli crate (Story 2.3.4): the default is gate d (every apply-capable kind), like the default
+# features of crates/cli/Cargo.toml. `--config=gate-b|gate-c|gate-d` (.bazelrc) sets --//build:gate; gate-c implies
+# gate-b, gate-d gate-c; `--config=nogate` is `cargo build --no-default-features --features explore`.
 string_flag(
     name = "gate",
-    build_setting_default = "none",
+    build_setting_default = "d",
     values = [
         "none",
         "b",

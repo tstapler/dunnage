@@ -53,10 +53,10 @@ jobs:
         run: echo "DC_REPO_ROOT=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
       - name: build
         run: bazel build --config=ci //...
-      - name: "test (default build, registers no apply-capable kind)"
-        run: bazel test --config=ci //...
-      - name: "test (gate-d registry, every kind and the gated tests)"
-        run: bazel test --config=ci --config=gate-d --test_env=GATE=D //...
+      - name: "test (default build: every apply-capable kind is registered)"
+        run: bazel test --config=ci --test_env=GATE=D //...
+      - name: "test (nogate build, registers no apply-capable kind)"
+        run: bazel test --config=ci --config=nogate //...
       - name: dist binary carries no test-support
         run: |
           bazel build --config=ci --config=dist //crates/cli:dunnage
@@ -78,10 +78,10 @@ jobs:
           disk-cache: lint
           repository-cache: true
           cache-save: ${{ github.event_name != 'pull_request' }}
-      - name: rustfmt and clippy -D warnings, default and gate-d registries
+      - name: rustfmt and clippy -D warnings, default and nogate registries
         run: |
           bazel build --config=ci --config=lint //...
-          bazel build --config=ci --config=lint --config=gate-d //...
+          bazel build --config=ci --config=lint --config=nogate //...
 
   checks:
     name: repo checks and Cargo leg

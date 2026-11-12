@@ -36,8 +36,9 @@ dry run (`workflow_dispatch`), and only then tag.
   x86_64 runner stays `ubuntu-22.04` (it was dist's default) so the glibc floor is at most 2.35.
 - The binary: `bazel build --config=dist //crates/cli:dunnage`. `--config=dist` is `-c opt`, thin LTO and
   `--stamp` (the commit, dirty flag and scan revision `crates/cli/build.rs` bakes under Cargo come from
-  `build/workspace_status.sh`). It registers no apply-capable kind: no `--config=gate-*`, and `explore` is on by
-  default as in `crates/cli/Cargo.toml`.
+  `build/workspace_status.sh`). It registers every apply-capable kind (the default `--//build:gate=d`, equal to the default
+  features `gate-b`, `gate-c`, `gate-d` of `crates/cli/Cargo.toml`), and `explore` is on by default. `--config=nogate` is
+  the build with none.
 - No `test-support` in a shipped binary: `scripts/check-release-features.sh` has a Cargo leg (`cargo tree`,
   `cargo build`) and a Bazel leg (an `aquery` over every rustc action under the target, then the marker and
   reference byte legs on the built binary). Its Bazel selftest builds a deliberately tainted binary
@@ -106,6 +107,22 @@ A gate is not reviewed, and the next wave does not start, until its precondition
       the gate open until the finding is in `spikes.md`. Pass `--cutover YYYY-MM-DD` for O-2.
 - [ ] The UX-41 and UX-42 review checklist (`design/ux.md` section 8) is ticked: UX-41 is automated for the
       catalogue texts, so the checklist covers the section 4 tables; UX-42 covers every flow of section 5.
+
+## Owner waiver of the live reviews (2026-11-12)
+
+On 2026-11-12 the owner decided that the shipped binary has the gated apply paths on by default (`default` of
+`crates/cli/Cargo.toml` is `explore`, `gate-b`, `gate-c`, `gate-d`; Bazel's `--//build:gate` defaults to `d`) and
+waived the live reviews: OWNER WAIT A to D, OWNER WAIT F and the Story 5.1.2 btrfs check were **not performed**. What
+backs the apply path is the fixture-based evidence of the gate reports (`make gate GATE=D`, `make safety`,
+the pty journeys on the real binary), not a live run on the owner's machine. `--apply` is live; the safety rules are
+unchanged: a bare run is a dry run, `--apply` is required to delete, a destructive kind needs `--plan-id` from a dry
+run of the same selection, rule F (the floor) and the allowed roots bound every delete, every delete is audit-logged
+first, and the explorer's delete needs a plan and the typed count. The sections below are kept as the checklists a
+reviewer can still run; read their "not registered in the shipped binary" sentences as the state before this decision.
+
+Still in force: an unconfined `--apply` checks the gate stamp (`gate_stamp`, written by `make install-gated`), so a
+binary from a release archive or Homebrew refuses a real `--apply` ("no valid gate stamp") unless the owner uses
+the audited `DUNNAGE_UNGATED` break-glass. This decision registered the kinds; it did not remove that check.
 
 ## OWNER WAIT B: the first live `--apply --kinds caches`
 

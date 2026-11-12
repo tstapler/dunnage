@@ -18,7 +18,7 @@ On 2026-11-04 the author's bash cleanup script took a btrfs root from 70 GiB to 
 
 ## What it looks like
 
-A bare run is a dry run. This is real output from a build of this repository (`dunnage 0.1.0`, the default features: only the `caches` kind lists), run with `HOME` pointing at a fixture holding a 5 MB fake npm cache and a 3 MB fake Go build cache. The `Filesystem` block describes the machine it ran on, the author's btrfs root. Which kinds can delete is decided per release gate, so `Scanned 0 roots` and the `not available in this build` note are expected here.
+A bare run is a dry run. This is real output from a build of this repository (`dunnage 0.1.0` built with `--no-default-features --features explore`, the build with no apply-capable kind: only the `caches` kind lists; the default build also lists the gated kinds and `--apply` is live), run with `HOME` pointing at a fixture holding a 5 MB fake npm cache and a 3 MB fake Go build cache. The `Filesystem` block describes the machine it ran on, the author's btrfs root. Which kinds can delete is decided per release gate, so `Scanned 0 roots` and the `not available in this build` note are expected here.
 
 ```
 $ dunnage
@@ -48,7 +48,7 @@ Notes:
 DRY RUN - nothing was deleted.
 ```
 
-<!-- TODO-OUTPUT: an `--apply` transcript with the per-item freed bytes and the Attribution block. `--apply` is not registered in the default build yet (it ships with Gate B), so there is no real output to paste. The layout is in design/ux.md S3. Do not invent one. -->
+<!-- TODO-OUTPUT: an `--apply` transcript with the per-item freed bytes and the Attribution block. `--apply` is live in the default build (owner decision 2026-11-12), but no real run has been recorded for this README yet, so there is no real output to paste. The layout is in design/ux.md S3. Do not invent one. -->
 <!-- TODO-OUTPUT: a dry run that shows the RISK rows, `build-dirs` and `docker`, and the `+ would free` lines: needs a build with gate-c. -->
 <!-- TODO-OUTPUT: asciinema cast or GIF of: dry run -> copy a Next: line -> apply -> summary. Embed here. -->
 

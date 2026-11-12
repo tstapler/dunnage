@@ -1,5 +1,5 @@
 {
-  "checksum": "3650da9d6d169d0e5e6ec3069abe26d0372aadffeb1706eddd5ae36b771884b6",
+  "checksum": "024940fe57faf8eced554e3f8cb24be607addadce7573795528f76285e7afc54",
   "conditions": {
     "aarch64-apple-darwin": [
       "aarch64-apple-darwin"
@@ -2214,7 +2214,10 @@
       "common_attrs": {
         "crate_features": [
           "default",
-          "explore"
+          "explore",
+          "gate-b",
+          "gate-c",
+          "gate-d"
         ],
         "deps": [
           {

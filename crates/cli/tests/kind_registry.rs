@@ -379,7 +379,7 @@ fn refuses_apply(bin: &Path, label: &str) {
 }
 
 #[test]
-fn the_default_release_and_dist_builds_should_register_no_apply_kind_and_refuse_apply_and_a_gate_b_build_should_register_caches(
+fn the_nogate_release_and_dist_builds_should_register_no_apply_kind_and_the_default_and_gate_b_builds_should_register_caches(
 ) {
     if std::env::var_os("DC_SKIP_PROFILE_BUILDS").is_some() {
         eprintln!("skipped: DC_SKIP_PROFILE_BUILDS is set");
@@ -387,13 +387,48 @@ fn the_default_release_and_dist_builds_should_register_no_apply_kind_and_refuse_
     }
     // A private target dir: the cargo that runs this test holds a lock on its own.
     let target = repo().join("target/kind-registry-builds");
-    let release = cargo_build(&target, &["--release"]);
+    // `--no-default-features` is the build with no gate feature: the default features include gate-b to gate-d.
+    let nogate = ["--no-default-features", "--features", "explore"];
+    let release = cargo_build(&target, &[&["--release"][..], &nogate].concat());
     refuses_apply(&release, "release");
-    let dist = cargo_build(&target, &["--profile", "dist"]);
+    let dist = cargo_build(&target, &[&["--profile", "dist"][..], &nogate].concat());
     refuses_apply(&dist, "dist");
 
+    // The default release build (the shipped one) registers every kind of the gates; no test-only string in it.
+    let shipped = cargo_build(&target, &["--release"]);
+    let f = Fixture::new();
+    let kinds = run_in(&f, &shipped, &["kinds", "--json"]);
+    let doc: serde_json::Value = serde_json::from_slice(&kinds.stdout).unwrap();
+    for id in [
+        "caches",
+        "worktrees",
+        "build-dirs",
+        "docker",
+        "steam",
+        "btrfs",
+    ] {
+        let k = doc["kinds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|k| k["id"] == id)
+            .unwrap_or_else(|| panic!("{id} is not registered in the default build"));
+        assert!(k.get("available").is_some(), "{id}");
+    }
+    for s in ["fixture-destructive", "DC_FAKE_STARVED"] {
+        assert!(!bytes_contain(&shipped, s), "{s} is in the default build");
+    }
+
     // The Gate B build registers caches and deletes them (inside the fixture).
-    let gate_b = cargo_build(&target, &["--release", "--features", "gate-b"]);
+    let gate_b = cargo_build(
+        &target,
+        &[
+            "--release",
+            "--no-default-features",
+            "--features",
+            "explore,gate-b",
+        ],
+    );
     let f = Fixture::new();
     let cache = f.home().join(".npm/_cacache");
     std::fs::create_dir_all(&cache).unwrap();

@@ -18,11 +18,12 @@ path = "src/main.rs"
 
 [features]
 # `dunnage explore`; off, the subcommand exits 64 with "'explore' is not available in this build".
-default = ["explore"]
+# The shipped binary registers every gated apply path (owner decision 2026-11-12); `cargo build
+# --no-default-features --features explore` is the build without any apply-capable kind.
+default = ["explore", "gate-b", "gate-c", "gate-d"]
 explore = ["dep:dunnage-tui"]
-# Per-gate kind registry (Story 2.3.4, owner decision 2026-11-10): a build registers an apply-capable kind only
-# once the owner has reviewed its gate. No feature is on by default, so the shipped binary refuses `--apply`;
-# `make gate GATE=B` builds with `gate-b`, and the owner adds it to `default` after the Gate B review.
+# Per-gate kind registry (Story 2.3.4): a build registers an apply-capable kind only when its gate feature is on.
+# All three are on by default since 2026-11-12 (RELEASE.md: the live reviews were waived by the owner).
 gate-b = []
 gate-c = ["gate-b"]
 gate-d = ["gate-c"]

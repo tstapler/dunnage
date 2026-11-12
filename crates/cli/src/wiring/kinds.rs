@@ -2,11 +2,10 @@
 //! may delete. `ci/safety/kinds-by-gate.txt` is the table; `tests/kind_registry.rs` compares it with what
 //! [`KindRegistry::build`] registers.
 //!
-//! Owner decision of 2026-11-10: the apply path of a gate is built before its owner review, but the kinds of
-//! that gate stay unregistered in the shipped binary until the review. So the registry is driven by the build
-//! gate, a cargo feature (`gate-b`, `gate-c`, `gate-d`; none is on by default), and a kind whose gate the
-//! build has not reached is absent. Caches are the one kind that is also listed before it can delete: the
-//! Gate A binary plans them, and `--apply` is refused because none of its kinds is apply-capable.
+//! The registry is driven by the build gate, a cargo feature (`gate-b`, `gate-c`, `gate-d`; all three are on by
+//! default since the owner decision of 2026-11-12, `--no-default-features` turns them off), and a kind whose
+//! gate the build has not reached is absent. Caches are the one kind that is also listed before it can delete:
+//! a build with no gate plans them, and `--apply` is refused because none of its kinds is apply-capable.
 
 use std::path::PathBuf;
 
@@ -184,7 +183,7 @@ impl KindRegistry {
         &self.hidden
     }
 
-    /// The selectors that may delete in this build; empty for the shipped binary until Gate B's review.
+    /// The selectors that may delete in this build; empty for a build with no gate feature.
     pub fn apply_capable(&self) -> Vec<SelectorId> {
         let mut v: Vec<SelectorId> = self
             .registered
