@@ -5,7 +5,7 @@
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
-use disk_cleanup_core::{AllowedTarget, DeleteError, DeletePolicy, Identity, NamePattern, RootDev};
+use dunnage_core::{AllowedTarget, DeleteError, DeletePolicy, Identity, NamePattern, RootDev};
 
 fn within(root: &str, pattern: NamePattern, target: &str) -> DeletePolicy {
     DeletePolicy {

@@ -28,11 +28,11 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use disk_cleanup_adapters::dirops::{
+use dunnage_adapters::dirops::{
     is_scope_violation, RealDir, RealReadDir, DELETE_BATCH, MAX_OPEN_LEVELS,
 };
-use disk_cleanup_adapters::{delete_tree, open_parent, open_verified_root, DirOps, RealDirOps};
-use disk_cleanup_core::{
+use dunnage_adapters::{delete_tree, open_parent, open_verified_root, DirOps, RealDirOps};
+use dunnage_core::{
     AbortFlag, AllowedTarget, ApplyToken, DeleteError, DeleteFailure, DeletePolicy, DirEntryInfo,
     FileKind, Freed, Identity, NamePattern, RootDev, StatInfo,
 };

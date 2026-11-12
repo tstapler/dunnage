@@ -22,7 +22,7 @@
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
-use disk_cleanup_core::{AllowedTarget, DeleteError, DeletePolicy, Identity, NamePattern, RootDev};
+use dunnage_core::{AllowedTarget, DeleteError, DeletePolicy, Identity, NamePattern, RootDev};
 
 fn policy(home: &str, scan_roots: &[&str], allowed: AllowedTarget, target: &str) -> DeletePolicy {
     DeletePolicy {

@@ -10,9 +10,9 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::{Allowed, DeleteError, DeletePolicy, Dirs, Identity, Kind, RootDev};
+use dunnage_core::guard::{decide_path_common, Facts, GuardDecision};
+use dunnage_core::roots::RootSet;
+use dunnage_core::{Allowed, DeleteError, DeletePolicy, Dirs, Identity, Kind, RootDev};
 
 fn fake_ino(p: &Path) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;

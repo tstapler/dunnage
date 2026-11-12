@@ -15,13 +15,13 @@ use std::os::unix::fs::{symlink, MetadataExt};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use disk_cleanup_adapters::{delete_tree, open_parent, open_verified_root, DirOps, RealDirOps};
-use disk_cleanup_core::delete_types::FileKind;
-use disk_cleanup_core::floor_rule::ForAllowedError;
-use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
-use disk_cleanup_core::plan::ItemIdentity;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::{
+use dunnage_adapters::{delete_tree, open_parent, open_verified_root, DirOps, RealDirOps};
+use dunnage_core::delete_types::FileKind;
+use dunnage_core::floor_rule::ForAllowedError;
+use dunnage_core::guard::{decide_path_common, Facts, GuardDecision};
+use dunnage_core::plan::ItemIdentity;
+use dunnage_core::roots::RootSet;
+use dunnage_core::{
     AbortFlag, Allowed, ApplyToken, DeleteError, DeleteFailure, DeletePolicy, Dirs, Freed,
     Identity, Kind, RootDev, SkipReason,
 };

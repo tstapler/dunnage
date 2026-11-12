@@ -66,11 +66,11 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use disk_cleanup_adapters::testing::{At, Event, FaultDirOps, HookCtx, Op};
-use disk_cleanup_adapters::{
+use dunnage_adapters::testing::{At, Event, FaultDirOps, HookCtx, Op};
+use dunnage_adapters::{
     delete_tree, open_parent, open_verified_root, DirOps, RealDirOps, VerifiedParent, VerifiedRoot,
 };
-use disk_cleanup_core::{
+use dunnage_core::{
     AbortFlag, AllocatedBytes, AllowedTarget, ApplyToken, DeleteError, DeleteFailure, DeletePolicy,
     Freed, Identity, NamePattern, RootDev,
 };

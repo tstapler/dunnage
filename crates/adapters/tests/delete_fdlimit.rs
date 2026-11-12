@@ -11,10 +11,10 @@ use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use disk_cleanup_adapters::dirops::MAX_OPEN_LEVELS;
-use disk_cleanup_adapters::testing::{Event, FaultDirOps};
-use disk_cleanup_adapters::{delete_tree, open_parent, open_verified_root, RealDirOps};
-use disk_cleanup_core::{
+use dunnage_adapters::dirops::MAX_OPEN_LEVELS;
+use dunnage_adapters::testing::{Event, FaultDirOps};
+use dunnage_adapters::{delete_tree, open_parent, open_verified_root, RealDirOps};
+use dunnage_core::{
     AbortFlag, AllowedTarget, ApplyToken, DeletePolicy, Identity, NamePattern, RootDev,
 };
 use rustix::fs::{mkdirat, openat, Mode, OFlags};

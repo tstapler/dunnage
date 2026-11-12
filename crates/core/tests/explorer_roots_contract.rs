@@ -13,12 +13,12 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use disk_cleanup_core::delete_types::FileKind;
-use disk_cleanup_core::floor_rule::ForAllowedError;
-use disk_cleanup_core::guard::{decide_path_common, Facts, GuardDecision};
-use disk_cleanup_core::plan::ItemIdentity;
-use disk_cleanup_core::roots::RootSet;
-use disk_cleanup_core::{Allowed, DeletePolicy, Dirs, Identity, Kind, RootDev, SkipReason};
+use dunnage_core::delete_types::FileKind;
+use dunnage_core::floor_rule::ForAllowedError;
+use dunnage_core::guard::{decide_path_common, Facts, GuardDecision};
+use dunnage_core::plan::ItemIdentity;
+use dunnage_core::roots::RootSet;
+use dunnage_core::{Allowed, DeletePolicy, Dirs, Identity, Kind, RootDev, SkipReason};
 
 const HOME: &str = "/h/a/b/c";
 const CODE: &str = "/h/a/b/c/code";
