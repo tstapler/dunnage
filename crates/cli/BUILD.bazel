@@ -195,6 +195,22 @@ dc_integration_tests(
                 "requires-repo-checkout",
             ],
         },
+        # Task 6.5.6c: the full-disk journeys run scripts/rehearse-full-disk.sh from the real checkout under
+        # `unshare -rm` (like explore_containment).
+        "explore_fulldisk": {
+            "env_inherit": [
+                "DC_REPO_ROOT",
+                "HOME",
+            ],
+            "tags": [
+                "local",
+                "no-sandbox",
+                "requires-repo-checkout",
+                "requires-unshare",
+            ],
+        },
+        # Task 6.5.6d: the live delete over a nested tmpfs mount, in `unshare -rm`.
+        "explore_delete_pty": {"tags": ["requires-unshare"]},
         # Task 6.6.4c: the TUI loop on a real-time key script over the explorer-apply rig.
         "explore_delete_flow": {"flaky": True},
         "canary_home": {"tags": ["requires-strace"]},

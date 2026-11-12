@@ -42,7 +42,9 @@ fn the_first_frame_with_scanning_is_drawn_before_the_first_wait_for_input() {
 
 #[test]
 fn scan_driven_redraws_are_at_most_four_a_second_and_keys_are_handled_while_batches_flow() {
-    let r = Run::real_time(vec![(1_000, ch('j')), (1_500, ch('j')), (3_800, ch('q'))]);
+    let mut r = Run::real_time(vec![(1_000, ch('j')), (1_500, ch('j')), (3_800, ch('q'))]);
+    // the feeder's 3,000 sends can take longer than 3.8 s on a busy host: `q` waits for the end of the scan
+    r.gates = vec![(2, "!SCANNING")];
     let source = Arc::clone(&r.source);
     let feeder = std::thread::spawn(move || {
         // wait for the loop to start the scan
@@ -144,6 +146,16 @@ fn a_deadline_finish_names_max_seconds() {
     );
 }
 
+/// Nanoseconds this thread has spent running (the first field of `/proc/thread-self/schedstat`).
+fn thread_cpu_ns() -> Option<u64> {
+    std::fs::read_to_string("/proc/thread-self/schedstat")
+        .ok()?
+        .split_whitespace()
+        .next()?
+        .parse()
+        .ok()
+}
+
 fn big_backlog(per_batch: usize) -> (Vec<ScanMsg>, u64) {
     // 1 root + 100 directories + leaves = 676,296 events
     let total: u64 = 676_296;
@@ -204,17 +216,30 @@ fn a_prefilled_backlog_drains_with_a_zero_poll_timeout_at_a_quarter_million_even
         }
         source.send(0, finished(0, false, StopCause::None));
     });
-    // the key script must arrive after the drain: poll the stats through the clock
-    r.script = vec![(4_000, ch('q'))];
+    // `q` waits for the frame that follows the end of the scan: `finished` is queued behind the backlog, so a
+    // screen that no longer says SCANNING has applied every event, however long a preempted thread took to get
+    // there
+    r.script = vec![(100, ch('q'))];
+    r.gates = vec![(0, "!SCANNING")];
+    let cpu_before = thread_cpu_ns();
     let out = run(r);
+    let cpu = thread_cpu_ns().zip(cpu_before).map(|(a, b)| a - b);
     feeder.join().unwrap();
     assert_eq!(out.exit.stats.node_events, total, "every event was applied");
-    let rate = out.exit.stats.node_events as f64 / out.exit.stats.apply_time.as_secs_f64();
+    let wall_rate = out.exit.stats.node_events as f64 / out.exit.stats.apply_time.as_secs_f64();
     eprintln!(
-        "drained {total} events in {:?}: {rate:.0}/s",
+        "drained {total} events in {:?}: {wall_rate:.0}/s (thread cpu {cpu:?} ns)",
         out.exit.stats.apply_time
     );
-    assert!(rate >= 250_000.0, "{rate:.0} events/s");
+    // The bound is a speed of the loop, so it is judged on the CPU time of the loop's thread for the whole run
+    // (apply, redraws and polls included): a machine that preempts the thread, as a saturated CI host does,
+    // stretches the wall-clock `apply_time` without making the loop slower. Without /proc/thread-self/schedstat
+    // the wall-clock rate is used.
+    let rate = cpu.map_or(wall_rate, |ns| total as f64 / (ns.max(1) as f64 / 1e9));
+    assert!(
+        rate >= 250_000.0,
+        "{rate:.0} events/s (wall {wall_rate:.0})"
+    );
     // zero timeouts while data remained, the tick only once the channel was empty
     let timeouts: Vec<Duration> = out.polls.iter().map(|p| p.0).collect();
     let first_nonzero = timeouts

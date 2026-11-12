@@ -185,6 +185,26 @@ impl ExplorerBook {
         }
     }
 
+    /// A skipped `result` for a path whose `intent` has no result yet. The engine writes it when a delete that
+    /// began is stopped by a mount point below the item (`skipped: cross-device`, the Partial of the plan): it
+    /// ends that attempt, it is not a skip that never had one. A second result for a path that is already
+    /// answered stays a skip, so it is still counted twice.
+    pub(crate) fn follows_intent(&self, id: &str, v: &Value) -> bool {
+        let Some(Ok(bytes)) = line_path(v) else {
+            return false;
+        };
+        let Some(run) = self.runs.get(id) else {
+            return false;
+        };
+        let of = |what: &str| {
+            run.paths
+                .iter()
+                .filter(|(w, p)| *w == what && *p == bytes)
+                .count()
+        };
+        of("intent") > of("result")
+    }
+
     pub(crate) fn skipped(&mut self, id: &str, v: &Value) {
         let r = self.run(id);
         r.skips += 1;

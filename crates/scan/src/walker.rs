@@ -80,6 +80,11 @@ pub trait WalkHooks: Sync {
     /// A worker finished directory `id` (its terminal event is already in a batch).
     fn dir_finished(&self, _id: u64) {}
     fn worker_exited(&self) {}
+    /// `Some` replaces the filesystem operations of the cache save, so a test can hold the write open or fail
+    /// any step of it (the gate and abort wiring is then tested without racing the real write).
+    fn save_io(&self) -> Option<&dyn cache::SaveIo> {
+        None
+    }
 }
 
 struct NoHooks;
@@ -874,7 +879,7 @@ impl WalkerBackend {
                 next.retain(|p, _| !roots.iter().any(|r| p.starts_with(r)));
             }
             next.extend(visited);
-            if let Err(e) = save_gated(&c.path, &next, &req.save) {
+            if let Err(e) = save_gated(&c.path, &next, &req.save, hooks.save_io()) {
                 summary
                     .notes
                     .push(format!("cache not saved to {}: {e}", c.path.display()));
@@ -889,6 +894,7 @@ fn save_gated(
     path: &Path,
     map: &HashMap<PathBuf, Rec>,
     gate: &AtomicBool,
+    io: Option<&dyn cache::SaveIo>,
 ) -> std::result::Result<(), cache::SaveError> {
     let abort = AtomicBool::new(false);
     let finished = AtomicBool::new(false);
@@ -902,7 +908,10 @@ fn save_gated(
                 std::thread::park_timeout(Duration::from_millis(2));
             }
         });
-        let result = cache::save_with_abort(path, map, &abort);
+        let result = match io {
+            Some(io) => cache::save_atomic(path, map, io, &abort),
+            None => cache::save_with_abort(path, map, &abort),
+        };
         finished.store(true, Ordering::Relaxed);
         watcher.thread().unpark();
         result

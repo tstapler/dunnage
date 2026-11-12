@@ -7,7 +7,9 @@
 #       the fill (what the binary leaves behind). --prime 'CMD' runs CMD first with XDG_STATE_HOME set (for
 #       example 'disk-cleanup status') so the real binary creates its own reserves. --no-reserve: nothing before
 #       the fill (the first run on an already-full disk).
-#   rehearse-full-disk.sh --selftest   prove the fill, the reserve release and the private mount
+#   --cache-too (Story 6.5.6, Gate F): a second 24 MiB tmpfs, also full, is mounted for XDG_CACHE_HOME, so the
+#       explorer's cache save has no room either (UX-T22). Combine with the flags above, before `--`.
+#   rehearse-full-disk.sh --selftest   prove the fill, the reserve release, the cache mount and the private mount
 # Fixture-only: the one filesystem it fills is a 24 MiB tmpfs mounted over a fresh mktemp directory inside a private
 # mount namespace; nothing else is written, and the real disk and the real state directory are never touched
 # (HOME and every other path are whatever <command> is given).
@@ -16,11 +18,12 @@
 # Needs `unshare -rm` (rootless user and mount namespace; the mount is private to the child and vanishes with it).
 set -euo pipefail
 
-fill_and_run() { # $1 = default|none|prime, $2 = prime command or '', rest = command
+fill_and_run() { # $1 = default|none|prime, $2 = prime command or '', rest = command; CACHE_TOO=1 adds the cache tmpfs
   local mode="$1" prime="$2"; shift 2
-  local state
-  export MODE="$mode" PRIME="$prime"
+  local state cache=""
+  export MODE="$mode" PRIME="$prime" CACHE_TOO="${CACHE_TOO:-0}"
   state="$(mktemp -d -p "${TMPDIR:-/tmp}" dc-rehearse.XXXXXX)"
+  [ "$CACHE_TOO" = 1 ] && cache="$(mktemp -d -p "${TMPDIR:-/tmp}" dc-rehearse-cache.XXXXXX)"
   local rc=0 uid gid
   uid="$(id -u)"; gid="$(id -g)"
   # Outer namespace: root of its own user namespace, only to mount the tmpfs. The rest runs in a nested user
@@ -28,11 +31,12 @@ fill_and_run() { # $1 = default|none|prime, $2 = prime command or '', rest = com
   # real session) and the tool's root rules do not change the flow being rehearsed.
   unshare -rm bash -c '
     set -euo pipefail
-    state="$1"; uid="$2"; gid="$3"; shift 3
+    state="$1"; uid="$2"; gid="$3"; cache="$4"; shift 4
     mount -t tmpfs -o size=24m tmpfs "$state"
+    [ -z "$cache" ] || mount -t tmpfs -o size=24m tmpfs "$cache"
     exec unshare -U --map-user="$uid" --map-group="$gid" bash -c "
       set -euo pipefail
-      mode=\"\$1\"; prime=\"\$2\"; state=\"\$3\"; shift 3
+      mode=\"\$1\"; prime=\"\$2\"; state=\"\$3\"; cache=\"\$4\"; shift 4
       mkdir -p \"\$state/disk-cleanup\"
       export XDG_STATE_HOME=\"\$state\"
       case \"\$mode\" in
@@ -41,13 +45,22 @@ fill_and_run() { # $1 = default|none|prime, $2 = prime command or '', rest = com
         none)    : ;;
       esac
       dd if=/dev/zero of=\"\$state/fill\" bs=4k count=8000 status=none 2>/dev/null || true
+      if [ -n \"\$cache\" ]; then
+        mkdir -p \"\$cache/disk-cleanup\"
+        export XDG_CACHE_HOME=\"\$cache\"
+        dd if=/dev/zero of=\"\$cache/fill\" bs=4k count=8000 status=none 2>/dev/null || true
+        if ( echo x > \"\$cache/disk-cleanup/new-file\" ) 2>/dev/null; then echo \"REHEARSAL BAD: the cache dir is not full\" >&2; exit 3; fi
+        rm -f \"\$cache/disk-cleanup/new-file\"
+        echo \"rehearsal: XDG_CACHE_HOME=\$cache is full\" >&2
+      fi
       if ( echo x > \"\$state/disk-cleanup/new-file\" ) 2>/dev/null; then echo \"REHEARSAL BAD: the state dir is not full\" >&2; exit 3; fi
       rm -f \"\$state/disk-cleanup/new-file\"
       echo \"rehearsal: XDG_STATE_HOME=\$state is full (reserve: \$mode)\" >&2
       \"\$@\"
-    " _ "$MODE" "$PRIME" "$state" "$@"
-  ' _ "$state" "$uid" "$gid" "$@" || rc=$?
-  rmdir "$state" 2>/dev/null || true  # empty mountpoint dir only
+    " _ "$MODE" "$PRIME" "$state" "$cache" "$@"
+  ' _ "$state" "$uid" "$gid" "$cache" "$@" || rc=$?
+  rmdir "$state" 2>/dev/null || true  # empty mountpoint dirs only
+  [ -z "$cache" ] || rmdir "$cache" 2>/dev/null || true
   return $rc
 }
 
@@ -80,16 +93,28 @@ if [ "${1:-}" = --selftest ]; then
   # 3d. the rehearsed command runs as the caller's own uid, not as the namespace's root
   if fill_and_run none '' bash -c 'test "$(id -u)" = "'"$(id -u)"'"' 2>/dev/null; then
     ok "the command runs as the caller's uid (not root)"; else no "the command ran as another uid"; fi
+  # 3e. --cache-too: XDG_CACHE_HOME is a second full tmpfs; without it the variable is the caller's own
+  if CACHE_TOO=1 fill_and_run none '' bash -c '
+      case "$XDG_CACHE_HOME" in *dc-rehearse-cache*) ;; *) exit 5 ;; esac
+      ( echo x > "$XDG_CACHE_HOME/disk-cleanup/f" ) 2>/dev/null && exit 6
+      [ "$(stat -f -c %T "$XDG_CACHE_HOME")" = tmpfs ] && [ "$XDG_CACHE_HOME" != "$XDG_STATE_HOME" ]' 2>/dev/null; then
+    ok "--cache-too: XDG_CACHE_HOME is its own full tmpfs"; else no "--cache-too did not give a full cache tmpfs"; fi
+  if fill_and_run none '' bash -c 'case "${XDG_CACHE_HOME:-}" in *dc-rehearse-cache*) exit 7 ;; esac' 2>/dev/null; then
+    ok "without --cache-too the cache directory is left alone"; else no "the cache tmpfs was mounted without --cache-too"; fi
   # 4. the namespace is private: nothing leaks to the host
   if mount | grep -q dc-rehearse; then no "tmpfs leaked into the host mount table"; else ok "mount is private to the child"; fi
   [ "$bad" = 0 ] && { echo "selftest: all ok"; exit 0; } || exit 1
 fi
 
 mode=default; prime=''
-case "${1:-}" in
-  --no-reserve) mode=none; shift ;;
-  --prime) mode=prime; prime="${2:?--prime needs a command}"; shift 2 ;;
-esac
+while :; do
+  case "${1:-}" in
+    --no-reserve) mode=none; shift ;;
+    --prime) mode=prime; prime="${2:?--prime needs a command}"; shift 2 ;;
+    --cache-too) export CACHE_TOO=1; shift ;;
+    *) break ;;
+  esac
+done
 [ "${1:-}" = -- ] && shift
-[ $# -gt 0 ] || { echo "usage: $0 [--no-reserve | --prime 'CMD'] -- <command...> | --selftest" >&2; exit 64; }
+[ $# -gt 0 ] || { echo "usage: $0 [--no-reserve | --prime 'CMD'] [--cache-too] -- <command...> | --selftest" >&2; exit 64; }
 fill_and_run "$mode" "$prime" "$@"

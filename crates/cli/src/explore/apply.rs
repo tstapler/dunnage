@@ -517,6 +517,7 @@ fn sequence<D: DirOps + 'static>(
         if books.audit_errno.is_some() {
             env.guard.abort_flag().set();
         }
+        pause_unless_aborted(env);
     }
 
     trace.push("settle");
@@ -583,6 +584,18 @@ fn sequence<D: DirOps + 'static>(
 /// The plan-id of the reviewed marks as they are now (`lstat` of each, the scan roots resolved again). `None`
 /// when a mark can no longer be read: it is not what was reviewed. A root set that cannot be resolved keeps the
 /// reviewed roots, so the existing `resolve_roots` refusal (with its `run_end`) reports it.
+/// `DC_EXPLORE_DELETE_DELAY_MS` (test-support builds only): waits after an item so a journey can send a signal
+/// while the delete is running; the abort flag ends the wait.
+fn pause_unless_aborted(env: &Env) {
+    let Some(ms) = disk_cleanup_core::explore_delete_delay_ms() else {
+        return;
+    };
+    let end = Instant::now() + Duration::from_millis(ms);
+    while Instant::now() < end && !env.guard.abort_flag().is_set() {
+        std::thread::sleep(Duration::from_millis(25));
+    }
+}
+
 fn fresh_plan_id<D: DirOps>(
     env: &Env,
     w: &ExplorerApplyPorts<'_, D>,

@@ -52,6 +52,9 @@ run_gate() {
       if bin=$(scripts/gate-binary.sh "$gate" 2>/dev/null); then ok=$((ok+1)); echo "ok:   bazel -c opt gate binary $bin"; else fails=$((fails+1)); echo "FAIL: bazel -c opt gate binary"; fi
     fi
   fi
+  # The binary the gate stamps (and the owner installs) carries no test-support marker and none of the explorer's
+  # test-only switches (Story 6.5.6).
+  if [ -n "$bin" ] && [ -f "$bin" ] && [ -e scripts/check-release-features.sh ]; then step "gated binary: no test-support marker or switch" scripts/check-release-features.sh --artifact "$bin"; fi
   prev=$(ls -t "$(git rev-parse --git-dir)/gate-reports/$gate-"*.txt 2>/dev/null | head -1)
   prev=${prev##*/}; prev=${prev#"$gate"-}; prev=${prev%.txt}
   echo "pin diff since previous gate $gate report (${prev:-none}):"
@@ -66,6 +69,8 @@ run_gate() {
     printf '{"schema":1,"gate":"%s","commit":"%s","binary_sha256":"%s"}\n' "$gate" "$(git rev-parse HEAD)" "$(sha256sum "$bin" | cut -d' ' -f1)" \
       > "$(git rev-parse --git-dir)/gate-reports/stamp-$gate.json"
     echo "stamp: $(git rev-parse --git-dir)/gate-reports/stamp-$gate.json"
+    # The owner cuts the tag after OWNER WAIT F (RELEASE.md); the gate never creates one.
+    [ "$gate" != F ] || echo "gate F is green at $(git rev-parse --short HEAD). After OWNER WAIT F (RELEASE.md) the owner tags it: git tag explore-gate-f $(git rev-parse HEAD)"
   fi
   [ $fails = 0 ]
 }

@@ -203,3 +203,60 @@ it on its own line and never counts it as freed.
 3. A device without discard support ends the item as an error with `fstrim`'s own text and changes nothing.
 4. Check `disk-cleanup status` before and after: `unallocated` and `df avail` must not have moved because of the
    trim. The audit `result` line carries `trimmed_bytes` and `measured_bytes: 0`.
+
+## OWNER WAIT F: the explorer on the real machine, and its first live delete (Story 6.5.6)
+
+Everything below the line "Owner steps" is yours; the repository cannot do it for you. The first live explorer delete
+is the owner's, as the first live `--apply` of Gates B to D was. Explorer deletion exists only in a `gate-d` build
+(`explorer-selection` is registered there and nowhere else), so the steps use the gated binary. Turning it on in the
+shipped binary is a separate edit of `default` in `crates/cli/Cargo.toml` and is not part of this wait.
+
+What the repository has already proved, on fixtures, on the real binary (read the gate report, not this list):
+
+- `crates/cli/tests/explore_pty.rs`: the terminal is restored after `q`, Ctrl-C, SIGTERM, SIGHUP, an external
+  SIGINT, Ctrl-Z then `fg`, a resize and a forced panic (`DC_EXPLORE_PANIC_AT`, test-support builds only); a name
+  with `ESC[2J` never reaches the screen raw; the no-delete script leaves the tree byte-identical.
+- `crates/cli/tests/explore_fulldisk.rs`: state and cache on full tmpfs filesystems (`scripts/rehearse-full-disk.sh
+  --cache-too`), `q` mid-scan, SIGTERM and Ctrl-C during a slow planner.
+- `crates/cli/tests/explore_delete_pty.rs`: `p`, `d`, the typed count and Enter over a fixture HOME, the mount case,
+  SIGTERM mid-delete, `audit verify` exit 0.
+- `scripts/bench-explore.sh`: 676,296 directories, with the numbers in `research/spikes.md`.
+- `scripts/check-release-features.sh`: the shipped and dist binaries contain none of the three test-support
+  switches (`DC_EXPLORE_PANIC_AT`, `DC_EXPLORE_PLAN_DELAY_MS`, `DC_EXPLORE_DELETE_DELAY_MS`).
+
+Owner steps (a real terminal, the real `$HOME`; nothing here runs unattended):
+
+1. Gate and install: `make gate GATE=F` on a clean tree (it prints `gate F is green at <sha>` and the tag command),
+   then at once `make install-gated GATE=F` (the next gate rebuilds the binary and would break the stamp). Attach
+   `.git/gate-reports/F-<sha>.txt`. `make safety` must pass on both profiles.
+2. Cold, then warm, with a stopwatch (or a phone video) from pressing Enter:
+   - Cold: `disk-cleanup explore --rescan ~` (ignores the saved cache and writes a new one). Note the time to the
+     first frame (target 0.5 s), the time until the title says `SCAN DONE`, and whether the rows stayed put under the
+     cursor while it scanned (press `j` and `k` during the scan; a row that moves away under the cursor is a fail).
+     Quit with `q`.
+   - Warm: `disk-cleanup explore ~`. Note the time to the first frame and the time until the whole cached tree is
+     painted (target 3 s; the title reads `cache from <age>` until it is checked, then `cache warm`). Quit with `q`.
+   - Optional, machine-timed: `DC_BENCH_OWNER_MACHINE=1 scripts/bench-explore.sh` (also runs the real `$HOME`
+     cold and warm; read-only) and `DC_BENCH_OWNER_MACHINE=1 scripts/bench-dry-run.sh` for the cleaner's 12.7 s.
+3. `kill -9`, once, in two terminals. Terminal A: `disk-cleanup explore ~`, wait for the first frame. Terminal B:
+   `pkill -9 -f 'disk-cleanup explore'`. Terminal A is left in the alternate screen with a hidden cursor and no echo
+   (the one case no code can handle). Type `reset` and Enter (you may not see what you type) and confirm the shell is
+   usable again. Record that it was.
+4. Delete ONE throwaway directory below a configured root, through `p`, `d` and the typed count:
+   - Make it: `d=~/code/dc-throwaway-$(date +%F); mkdir "$d" && head -c 5M /dev/urandom > "$d/blob"`. It must be
+     below a root in `~/.config/disk-cleanup/config.toml` (or a default root such as `~/code`), strictly below, and
+     not your home, a mount point, a symlink or a git repository.
+   - Run `disk-cleanup explore ~/code`. Move to the directory (`j`/`k`), mark it with Space, press `p` and read the
+     preview (`Scope: 1 marked item`, the size, `Guards run now`). Press `d` and read the prompt: it names the plan id
+     and the item, and says `Type 1 and press Enter to delete`. Type `1` and Enter. Read the result list
+     (`RESULT - 1 removed`), then Esc and `q`. The closing line reads
+     `EXPLORE CLOSED - deleted 1 items, <bytes> measured. Audit log: <path>`. A different number, or `d` before `p`
+     deleting anything, is a fail: record it and stop.
+5. Read the audit line: `tail -n 6 ~/.local/state/disk-cleanup/audit.jsonl | jq -c '{type, typed, count, path, status, interrupted}'`
+   shows `run_start`, `explorer_confirm` (`typed` `"1"`, `count` 1), `intent`, `result` (`removed`) and `run_end`
+   (`interrupted` false). Then `disk-cleanup audit verify`: exit 0 and `0 outside the allowed roots`. A violation
+   keeps the gate closed.
+6. Record in the gate report: the load average at the time (`uptime`); the cold and warm first-frame and
+   cached-paint times; whether rows stayed put; the `kill -9` and `reset` outcome; the closing line; the audit
+   lines; the `audit verify` output; and your accept or reject. On accept, tag the gated commit yourself (the gate
+   never tags): `git tag explore-gate-f <sha>` with the sha from step 1.

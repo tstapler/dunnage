@@ -68,7 +68,15 @@ fn full_table() -> (char, Vec<Row>) {
 /// `GATE` when set (`scripts/gate.sh` exports it), else the table's `active-gate`.
 fn gate_in_force() -> (char, bool) {
     match std::env::var("GATE") {
-        Ok(g) if !g.is_empty() => (g.chars().next().unwrap(), true),
+        // Gates E and F register no kind of their own (the explorer's `explorer-selection` is hidden and unnamed);
+        // `scripts/gate.sh` builds them with gate-d, so the registry in force is Gate D's.
+        Ok(g) if !g.is_empty() => (
+            match g.chars().next().unwrap() {
+                'E' | 'F' => 'D',
+                c => c,
+            },
+            true,
+        ),
         _ => (table().0, false),
     }
 }

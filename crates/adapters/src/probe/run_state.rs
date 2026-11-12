@@ -221,7 +221,7 @@ mod tests {
     }
 
     fn wait_for(mut f: impl FnMut() -> bool) -> bool {
-        for _ in 0..300 {
+        for _ in 0..1500 {
             if f() {
                 return true;
             }
@@ -265,28 +265,43 @@ mod tests {
         ));
     }
 
+    /// Polls `f` for up to 5 s. A `flock` belongs to the open file description, so a sibling test thread that
+    /// forks while a descriptor of this test is open keeps a copy of it until its `exec` and the lock reads as
+    /// held (or, after the release, as still held) for that moment; the state a test asserts is the one after
+    /// the copy is gone.
+    fn eventually(mut f: impl FnMut() -> bool) -> bool {
+        for _ in 0..500 {
+            if f() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        false
+    }
+
     #[test]
     fn running_should_be_reported_When_a_file_inside_is_flocked() {
         let t = tempfile::tempdir().unwrap();
         let d = t.path().join("app/target");
         fs::create_dir_all(&d).unwrap();
         let lock = fs::File::create(d.join(".cargo-lock")).unwrap();
-        assert_eq!(cargo_lock_held(&d), RunState::Idle);
-        // The probe above held a shared lock on its own descriptor; a sibling test that forks at that instant
-        // keeps a copy of it until its exec, so the exclusive lock can say WouldBlock for a moment.
-        let mut taken = flock(&lock, FlockOperation::NonBlockingLockExclusive);
-        for _ in 0..100 {
-            if taken.is_ok() {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(10));
-            taken = flock(&lock, FlockOperation::NonBlockingLockExclusive);
-        }
-        taken.unwrap();
+        assert!(
+            eventually(|| cargo_lock_held(&d) == RunState::Idle),
+            "an unlocked file reads as idle"
+        );
+        // The probe above held a lock on its own descriptor for an instant; a forked sibling may still hold a
+        // copy of that descriptor, so the exclusive lock can say WouldBlock for a moment.
+        assert!(
+            eventually(|| flock(&lock, FlockOperation::NonBlockingLockExclusive).is_ok()),
+            "the exclusive lock could not be taken"
+        );
         assert_eq!(cargo_lock_held(&d), RunState::Running);
         assert_eq!(scan_proc(Path::new("/proc"), &d, me()), RunState::Running);
         drop(lock);
-        assert_eq!(cargo_lock_held(&d), RunState::Idle);
+        assert!(
+            eventually(|| cargo_lock_held(&d) == RunState::Idle),
+            "the lock is released with the descriptor"
+        );
     }
 
     #[test]

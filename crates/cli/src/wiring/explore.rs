@@ -285,13 +285,22 @@ fn mount_table() -> MountTable {
     )
 }
 
+/// `DC_EXPLORE_PANIC_AT=mark_check` (test-support builds only): the Gate F panic journey presses Space.
+fn forced_mark_check_panic() -> ! {
+    panic!("forced panic in mark_check")
+}
+
 /// Rules M1 to M8 over the real facts. The cleaner's roots (never the explore PATH) decide M1.
 pub fn mark_check_fn(base: &Dirs, roots: &RootSet, exe: PathBuf, tty: bool) -> Arc<MarkCheckFn> {
     let scan_roots = roots.scan_roots().to_vec();
     let home = std::fs::canonicalize(&base.home).unwrap_or_else(|_| base.home.clone());
     let mounts = mount_table();
     let own_state = OwnState::canonical(base, exe, &canonical_lenient);
+    let forced_panic = disk_cleanup_core::explore_panic_at().is_some_and(|at| at == "mark_check");
     Arc::new(move |q: &MarkQuery<'_>| {
+        if forced_panic {
+            forced_mark_check_panic();
+        }
         let facts = RealMarkFacts {
             row_path: q.path,
             scanning: q.row.is_directory() && !q.row.complete,

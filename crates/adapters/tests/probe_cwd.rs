@@ -41,6 +41,27 @@ fn sleeper(cwd: &Path, stdin: Stdio) -> Reaped {
     )
 }
 
+/// Asks `cwd_in_use(path)` until it names `pid` as `sleep` (for up to 5 s). `Command::spawn` returns once the child
+/// has replaced its memory in `exec`, which wakes the parent before the kernel sets the child's name, so for a few
+/// microseconds the new `sleep` still carries the name of the thread that forked it (`cwd_in_use_shou...`, seen in
+/// `/proc/<pid>/comm` under load). The holder is right from the first scan; its name is right a moment later.
+#[cfg(target_os = "linux")]
+fn names_holder(path: &Path, pid: u32) -> (Tri, Option<(String, u32)>) {
+    let mut last = RealProbe.cwd_in_use(path);
+    for _ in 0..500 {
+        if last
+            .1
+            .as_ref()
+            .is_some_and(|h| h.1 == pid && h.0 == "sleep")
+        {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        last = RealProbe.cwd_in_use(path);
+    }
+    last
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn cwd_in_use_should_name_a_process_whose_cwd_is_the_worktree_or_below_it() {
@@ -50,7 +71,7 @@ fn cwd_in_use_should_name_a_process_whose_cwd_is_the_worktree_or_below_it() {
     fs::create_dir_all(&sub).unwrap();
     for cwd in [&wt, &sub] {
         let child = sleeper(cwd, Stdio::null());
-        let (tri, holder) = RealProbe.cwd_in_use(&wt);
+        let (tri, holder) = names_holder(&wt, child.0.id());
         assert_eq!(tri, Tri::Running, "cwd {cwd:?}");
         let (name, pid) = holder.unwrap();
         // the scan may meet another holder first only if one exists; none does in a fresh tempdir
@@ -70,7 +91,7 @@ fn cwd_in_use_should_count_an_open_file_below_the_worktree() {
     fs::write(wt.join("data.sqlite"), b"x").unwrap();
     let file = fs::File::open(wt.join("data.sqlite")).unwrap();
     let child = sleeper(&elsewhere, Stdio::from(file));
-    let (tri, holder) = RealProbe.cwd_in_use(&wt);
+    let (tri, holder) = names_holder(&wt, child.0.id());
     assert_eq!(tri, Tri::Running);
     assert_eq!(holder.unwrap().1, child.0.id());
 }
@@ -97,7 +118,7 @@ fn cwd_in_use_should_follow_a_symlinked_argument_to_the_real_directory() {
     fs::create_dir_all(&real).unwrap();
     symlink(&real, p.join("link")).unwrap();
     let child = sleeper(&real, Stdio::null());
-    let (tri, holder) = RealProbe.cwd_in_use(&p.join("link"));
+    let (tri, holder) = names_holder(&p.join("link"), child.0.id());
     assert_eq!(tri, Tri::Running);
     assert_eq!(holder.unwrap().1, child.0.id());
 }
