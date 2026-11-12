@@ -378,7 +378,7 @@ fn a_pasted_next_line_should_apply_exactly_the_reviewed_free_rows_and_refuse_the
     );
     run_case(
         &Case {
-            flags: &["--min-size", "8KiB"],
+            flags: &["--min-size", "16KiB"],
             removed: &["code/proj/stale-old-big", "code/proj/stale-young"],
             drop: Some("--min-size"),
         },
@@ -482,6 +482,9 @@ fn strace_network(f: &Fixture, log: &Path, args: &[&str]) -> std::process::Outpu
         .arg(log)
         .arg(common::bin_path())
         .args(args)
+        // The shimmed PATH keeps the machine's own go and pip out of the trace: Go's runtime probes IPv6
+        // (socket + bind to ::1) at start-up, and that is the tool's doing, not the binary's.
+        .env("PATH", fixture_path(f))
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap()
@@ -500,6 +503,7 @@ fn the_plan_and_the_apply_should_open_no_inet_socket_When_traced_and_the_plan_sh
     }
     let f = Fixture::new();
     cold(&f);
+    go_shim(&f);
     for (name, args) in [
         ("plan", vec!["--kinds", "caches"]),
         ("apply", vec!["--apply", "--kinds", "caches"]),

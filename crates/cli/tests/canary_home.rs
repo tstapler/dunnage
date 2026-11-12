@@ -24,7 +24,8 @@ const SYSTEM_PREFIXES: [&str; 9] = [
     "/dev",
     "/bin",
 ];
-const SYSTEM_EXACT: [&str; 2] = ["/etc/ld.so.cache", "/etc/ld.so.preload"];
+// /etc/localtime: the local-time zone lookup; present on hosted runners, a read of a system file and not of the home.
+const SYSTEM_EXACT: [&str; 3] = ["/etc/ld.so.cache", "/etc/ld.so.preload", "/etc/localtime"];
 
 fn skip_without_strace() -> bool {
     if strace_available() {

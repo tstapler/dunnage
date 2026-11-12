@@ -42,13 +42,17 @@ jobs:
           disk-cache: ${{ matrix.os }}
           repository-cache: true
           cache-save: ${{ github.event_name != 'pull_request' }}
-      - name: tools for the tests that trace and sandbox (named skips otherwise)
+      - name: tools for the tests that trace, sandbox and quote for zsh (named skips otherwise)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends strace jq
+          sudo apt-get install -y --no-install-recommends strace jq zsh
           # Ubuntu 24.04 restricts unprivileged user namespaces; the unshare -rm tests would skip by name.
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: ast-grep (the token-site and unlink checks run inside the safety tests)
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then sudo npm install -g @ast-grep/cli@0.44.0; else npm install -g @ast-grep/cli@0.44.0; fi
+          ast-grep --version
       - name: repo root for the tests that run the repo-level scripts
         run: echo "DC_REPO_ROOT=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
       - name: build

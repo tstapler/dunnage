@@ -289,12 +289,12 @@ fn execute_should_refuse_with_identity_mismatch_When_the_cache_is_replaced_after
     let cands = t.discover(&env, &caches());
     let c = by_label(&cands, "npm _cacache");
 
-    fs::remove_dir_all(&dir).unwrap();
+    // Keep the old directory alive while its replacement is made: a freed inode number is reused at once on ext4.
+    let aside = dir.with_extension("aside");
+    fs::rename(&dir, &aside).unwrap();
     fill(&dir, 1, 1024);
-    // an inode number can be reused; keep the test about a replaced directory only when it differs
-    if fs::metadata(&dir).unwrap().ino() == c.ident().ino {
-        return;
-    }
+    fs::remove_dir_all(&aside).unwrap();
+    assert_ne!(fs::metadata(&dir).unwrap().ino(), c.ident().ino);
 
     assert_eq!(t.guard(c, &env), Guarded::Skip(SkipReason::IdentityChanged));
     let err = t.execute(c, &env, &ApplyToken::for_tests()).unwrap_err();
