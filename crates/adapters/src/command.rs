@@ -128,7 +128,10 @@ fn spawn_inner(
     };
     let stdout = out.join().unwrap_or_default();
     let stderr = err.join().unwrap_or_default();
-    if status.success() {
+    // `lsof +D <dir>` exits 1 on macOS whether or not it found a holder (measured on macos-15: 1 with a process
+    // whose cwd is inside, 1 with none), so for lsof the listing on stdout is the answer, not the status.
+    let is_lsof = Path::new(program).file_name().is_some_and(|n| n == "lsof");
+    if status.success() || (is_lsof && status.code() == Some(1)) {
         return Ok(Some(CmdOutput { stdout, stderr }));
     }
     let text = if stderr.iter().any(|b| !b.is_ascii_whitespace()) {
@@ -214,6 +217,28 @@ mod tests {
 
     fn os(args: &[&str]) -> Vec<OsString> {
         args.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn lsof_exiting_1_should_still_return_its_listing_When_it_found_a_holder() {
+        let d = tempfile::tempdir().unwrap();
+        let lsof = d.path().join("lsof");
+        std::fs::write(&lsof, "#!/bin/sh\necho p42\nexit 1\n").unwrap();
+        std::fs::set_permissions(&lsof, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let out = spawn_with_deadline(&lsof.clone().into_os_string(), &[], Duration::from_secs(10))
+            .unwrap();
+        assert_eq!(out.stdout_lossy().trim(), "p42");
+        // any other program that exits 1 is still a failure
+        let sh = OsString::from("sh");
+        let r = spawn_with_deadline(
+            &sh,
+            &os(&["-c", "echo p42; exit 1"]),
+            Duration::from_secs(10),
+        );
+        assert!(
+            matches!(r, Err(DeleteError::CommandFailed { status: 1, .. })),
+            "{r:?}"
+        );
     }
 
     #[test]

@@ -499,6 +499,10 @@ fn unwind_chain(top: &Path) {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "10 000 nested levels take about 16 minutes on APFS (965 s measured on a macos-15 runner): Linux only"
+)]
 fn a12_ten_thousand_level_nesting_completes_without_a_stack_overflow() {
     let fx = Fx::new();
     deep_chain(&fx.nm, 10_000);
