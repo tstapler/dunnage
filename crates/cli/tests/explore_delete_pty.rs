@@ -20,7 +20,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use common::{bin_path, unshare_works, Fixture};
-use explore_pty_rig::{rfind, Pty, LEAVE_ALT};
+use explore_pty_rig::Pty;
 use serde_json::Value;
 
 const SCAN_DONE: &str = "SCAN D";

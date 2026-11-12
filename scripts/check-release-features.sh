@@ -59,7 +59,9 @@ leg_panic_marker() { [ "$(grep -a -c -F -e "$PANIC_MARKER" -e "$DELAY_MARKER" -e
 leg_reference() { [ "$(grep -a -c -F -- "$FLAVOR_PREFIX" "$1")" -ge 1 ]; }
 # arg: file. Positive control: the scanner must see the marker in a known-tainted build.
 scanner_sees_marker() { [ "$(grep -a -c -F -- "$MARKER" "$1")" -ge 1 ]; }
-scanner_sees_panic_marker() { grep -a -q -F -- "$PANIC_MARKER" "$1" && grep -a -q -F -- "$DELAY_MARKER" "$1" && grep -a -q -F -- "$DELETE_MARKER" "$1"; }
+# The explorer's apply (and so its slow-delete switch) is compiled only into a gate-d build, so its control is separate.
+scanner_sees_panic_marker() { grep -a -q -F -- "$PANIC_MARKER" "$1" && grep -a -q -F -- "$DELAY_MARKER" "$1"; }
+scanner_sees_delete_marker() { grep -a -q -F -- "$DELETE_MARKER" "$1"; }
 
 bin_from_json() { jq -r 'select(.reason=="compiler-artifact" and .executable != null
         and (.target.kind|index("bin")) and (.profile.test|not)) | .executable'; }
@@ -151,7 +153,11 @@ bazel_selftest() {
   if bin=$(bazel_dist_binary --//build:test_support=true); then
     scanner_sees_marker "$bin" && echo "ok: tainted bazel build, marker found (scanner is not blind)" || { echo "SELFTEST BAD: marker absent from a tainted bazel binary"; rc=1; }
     leg_marker "$bin" && { echo "SELFTEST BAD: tainted bazel build, marker leg passed"; rc=1; } || echo "ok: tainted bazel build, marker leg fails"
-    scanner_sees_panic_marker "$bin" && echo "ok: tainted bazel build, $PANIC_MARKER, $DELAY_MARKER and $DELETE_MARKER found (scanner is not blind)" || { echo "SELFTEST BAD: a test-support switch absent from a tainted bazel binary"; rc=1; }
+    scanner_sees_panic_marker "$bin" && echo "ok: tainted bazel build, $PANIC_MARKER and $DELAY_MARKER found (scanner is not blind)" || { echo "SELFTEST BAD: a test-support switch absent from a tainted bazel binary"; rc=1; }
+    if gbin=$(bazel_dist_binary --//build:test_support=true --config=gate-d); then
+      scanner_sees_delete_marker "$gbin" && echo "ok: tainted gate-d bazel build, $DELETE_MARKER found (scanner is not blind)" || { echo "SELFTEST BAD: $DELETE_MARKER absent from a tainted gate-d bazel binary"; rc=1; }
+      leg_panic_marker "$gbin" && { echo "SELFTEST BAD: tainted gate-d bazel build, marker leg passed"; rc=1; } || echo "ok: tainted gate-d bazel build, marker leg fails"
+    else echo "SELFTEST BAD: tainted gate-d bazel build failed to build"; rc=1; fi
     leg_panic_marker "$bin" && { echo "SELFTEST BAD: tainted bazel build, panic marker leg passed"; rc=1; } || echo "ok: tainted bazel build, panic marker leg fails"
   else echo "SELFTEST BAD: tainted bazel build failed to build"; rc=1; fi
   return "$rc"
@@ -194,8 +200,12 @@ selftest() {
   bin=$(printf '%s' "$json" | bin_from_json | head -1)
   scanner_sees_marker "$bin" && echo "ok: forced build, marker found in $bin (scanner is not blind)" || { echo "SELFTEST BAD: marker absent from a test-support binary: scanner blind"; rc=1; }
   leg_marker "$bin" && { echo "SELFTEST BAD: forced build, marker leg passed"; rc=1; } || echo "ok: forced build, marker leg fails"
-  scanner_sees_panic_marker "$bin" && echo "ok: forced build, $PANIC_MARKER, $DELAY_MARKER and $DELETE_MARKER found (scanner is not blind)" || { echo "SELFTEST BAD: a test-support switch absent from a test-support binary: scanner blind"; rc=1; }
+  scanner_sees_panic_marker "$bin" && echo "ok: forced build, $PANIC_MARKER and $DELAY_MARKER found (scanner is not blind)" || { echo "SELFTEST BAD: a test-support switch absent from a test-support binary: scanner blind"; rc=1; }
   leg_panic_marker "$bin" && { echo "SELFTEST BAD: forced build, panic marker leg passed"; rc=1; } || echo "ok: forced build, panic marker leg fails"
+  json=$(CARGO_TARGET_DIR="$t/target" cargo build --release -p "$PKG" --features "$CORE/test-support,$PKG/gate-d" --message-format=json 2>/dev/null)
+  bin=$(printf '%s' "$json" | bin_from_json | head -1)
+  scanner_sees_delete_marker "$bin" && echo "ok: forced gate-d build, $DELETE_MARKER found (scanner is not blind)" || { echo "SELFTEST BAD: $DELETE_MARKER absent from a forced gate-d test-support binary: scanner blind"; rc=1; }
+  leg_panic_marker "$bin" && { echo "SELFTEST BAD: forced gate-d build, marker leg passed"; rc=1; } || echo "ok: forced gate-d build, marker leg fails"
   # 3 manifest pins
   printf '[workspace]\nresolver = "1"\n' > "$t/Cargo.toml"
   leg_resolver "$t/Cargo.toml" && { echo "SELFTEST BAD: resolver 1 accepted"; rc=1; } || echo "ok: resolver 1 rejected"

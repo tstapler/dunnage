@@ -121,7 +121,7 @@ run() {
   if [ "$smoke" = 1 ]; then
     cargo test -p disk-cleanup --test explore_bench -- --nocapture >"$logf" 2>&1 || rc=$?
   else
-    DC_BENCH_EXPLORE=1 DC_BENCH_REAL_HOME=${DC_BENCH_OWNER_MACHINE:-0} DC_BENCH_BIN=$bin cargo test -p disk-cleanup --test explore_bench -- --nocapture >"$logf" 2>&1 || rc=$?
+    DC_BENCH_EXPLORE=1 DC_BENCH_REAL_HOME=${DC_BENCH_OWNER_MACHINE:-0} DC_BENCH_REAL_HOME_PATH=${DC_BENCH_REAL_HOME_PATH:-$HOME} DC_BENCH_BIN=$bin cargo test -p disk-cleanup --test explore_bench -- --nocapture >"$logf" 2>&1 || rc=$?
   fi
   grep '^BENCH ' "$logf" > "$res"; load1=$(cut -d' ' -f1-3 "$LOADAVG_FILE")
   cat "$res"

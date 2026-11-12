@@ -65,7 +65,7 @@ fn report(name: &str, value: impl std::fmt::Display) {
 }
 
 struct Env {
-    _dir: tempfile::TempDir,
+    tmp: tempfile::TempDir,
     home: PathBuf,
     xdg: PathBuf,
 }
@@ -85,14 +85,14 @@ impl Env {
             fs::create_dir_all(&d).unwrap();
         }
         Env {
-            _dir: dir,
+            tmp: dir,
             home,
             xdg,
         }
     }
 
     fn pty_dir(&self) -> PathBuf {
-        self._dir.path().join("pty")
+        self.tmp.path().join("pty")
     }
 
     fn dirs(&self) -> Dirs {
@@ -180,7 +180,7 @@ fn heap_per_directory(env: &Env, root: &Path, total: u64) -> (f64, f64, f64) {
     let (mut painted, mut painted_secs, mut painted_heap) = (0u64, 0.0, 0.0);
     let per = |t: &ExploreTree| t.heap_bytes() as f64 / t.directories().max(1) as f64;
     loop {
-        match h.rx.recv_timeout(Duration::from_secs(900)).unwrap() {
+        match h.rx.recv_timeout(Duration::from_mins(15)).unwrap() {
             ScanMsg::Batch {
                 generation,
                 mode,
@@ -306,7 +306,7 @@ fn session(env: &Env, root: &Path, want: Option<&str>, keys: bool) -> (Run, Dura
         30,
         100,
     );
-    let limit = Duration::from_secs(900);
+    let limit = Duration::from_mins(15);
     let (tl, _) = watch(&mut p, t0, limit, &|s| {
         s.contains("SCANNING") || s.contains("SCAN D")
     });
@@ -425,9 +425,10 @@ fn the_bench_harness_should_measure_the_cold_stale_and_warm_runs_on_the_large_tr
     report("cold_key_to_frame_max_ms", latency.as_millis());
 
     if on && std::env::var_os("DC_BENCH_REAL_HOME").is_some_and(|v| v == "1") {
-        let real = std::env::var_os("DC_BENCH_REAL_HOME_PATH").map_or_else(
-            || PathBuf::from(std::env::var_os("HOME").unwrap()),
-            PathBuf::from,
+        // The script hands over the owner's home; a test never reads `$HOME` itself.
+        let real = PathBuf::from(
+            std::env::var_os("DC_BENCH_REAL_HOME_PATH")
+                .expect("DC_BENCH_REAL_HOME_PATH names the directory to scan"),
         );
         let real_env = Env::new();
         let _ = fs::remove_file(explorer_cache_path(&real_env.dirs()));
