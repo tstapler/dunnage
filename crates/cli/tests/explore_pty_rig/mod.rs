@@ -154,6 +154,44 @@ pub fn sh_quote(s: &str) -> String {
 }
 
 impl Pty {
+    /// `explore <roots>` in a plain `sh -c` over `cmd`, a `sh` command whose environment the caller built. `dir`
+    /// holds `before`, `after` and `pid`.
+    pub fn spawn_with(
+        cmd: Command,
+        bin: &Path,
+        roots: &[&Path],
+        dir: &Path,
+        rows: u16,
+        cols: u16,
+    ) -> Pty {
+        let args: Vec<String> = roots
+            .iter()
+            .map(|r| sh_quote(&r.to_string_lossy()))
+            .collect();
+        let body = format!("'{}' explore {}", bin.display(), args.join(" "));
+        Pty::spawn_script(cmd, &body, dir, rows, cols)
+    }
+
+    /// Runs the shell command `body` (it ends with the status that `EXIT=` reports) between the saved
+    /// `stty -a` of `before` and `after`.
+    pub fn spawn_script(mut cmd: Command, body: &str, dir: &Path, rows: u16, cols: u16) -> Pty {
+        fs::create_dir_all(dir).unwrap();
+        cmd.arg("-c").arg(format!(
+            "echo $$ > '{d}/pid'; stty rows {rows} cols {cols}; stty -a > '{d}/before'; {body}; echo EXIT=$?; stty -a > '{d}/after'",
+            d = dir.display(),
+        ));
+        cmd.env("TERM", "xterm");
+        let mut session = expectrl::Session::spawn(cmd).unwrap();
+        session.set_expect_timeout(Some(WAIT));
+        let shell_pid = session.get_process().pid().as_raw() as u32;
+        Pty {
+            session,
+            seen: Vec::new(),
+            dir: dir.to_path_buf(),
+            shell_pid,
+        }
+    }
+
     pub fn pump(&mut self) {
         let mut buf = [0u8; 16384];
         while let Ok(n) = self.session.try_read(&mut buf) {
@@ -274,7 +312,7 @@ impl Pty {
     pub fn binary_pid(&self) -> u32 {
         let end = Instant::now() + WAIT;
         loop {
-            if let Some(p) = child_named(self.shell_pid_for_children(), "disk-cleanup") {
+            if let Some(p) = descendant_named(self.shell_pid_for_children(), "disk-cleanup") {
                 return p;
             }
             assert!(Instant::now() < end, "no disk-cleanup child of the shell");
@@ -399,7 +437,7 @@ fn without_size(t: &str) -> String {
 /// The painter redraws only the cells that changed, so a phrase can reach the wire with letters missing where
 /// the old frame already had them. This finds `needle` as an in-order subsequence over a span of at most
 /// twice its length (letters only; used for waiting, never for an assertion about content).
-fn fuzzy_find(hay: &str, needle: &str) -> Option<usize> {
+pub fn fuzzy_find(hay: &str, needle: &str) -> Option<usize> {
     let want: Vec<char> = needle.chars().filter(|c| !c.is_whitespace()).collect();
     let chars: Vec<(usize, char)> = hay.char_indices().collect();
     if want.len() < 8 {
@@ -435,9 +473,10 @@ fn strip(bytes: &mut Vec<u8>, pat: &[u8]) {
     }
 }
 
-/// A direct child of `parent` whose command name is `name`, or the descendant one level further down.
-fn child_named(parent: u32, name: &str) -> Option<u32> {
-    let mut found = None;
+/// A descendant of `ancestor` (child, grandchild, ...) whose command name starts with `name`.
+fn descendant_named(ancestor: u32, name: &str) -> Option<u32> {
+    let mut parent_of = std::collections::HashMap::new();
+    let mut named = Vec::new();
     for e in fs::read_dir("/proc").ok()?.flatten() {
         let Some(pid) = e.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else {
             continue;
@@ -448,15 +487,25 @@ fn child_named(parent: u32, name: &str) -> Option<u32> {
         let (Some(open), Some(close)) = (stat.find('('), stat.rfind(')')) else {
             continue;
         };
-        let comm = &stat[open + 1..close];
         let ppid: u32 = stat[close + 2..]
             .split(' ')
             .nth(1)
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
-        if ppid == parent && comm.starts_with(name) {
-            found = Some(pid);
+        parent_of.insert(pid, ppid);
+        if stat[open + 1..close].starts_with(name) {
+            named.push(pid);
         }
     }
-    found
+    named.into_iter().find(|pid| {
+        let mut cur = *pid;
+        for _ in 0..16 {
+            match parent_of.get(&cur) {
+                Some(p) if *p == ancestor => return true,
+                Some(p) if *p > 1 => cur = *p,
+                _ => return false,
+            }
+        }
+        false
+    })
 }

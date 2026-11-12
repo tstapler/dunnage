@@ -108,15 +108,18 @@ run() {
   if [ "$smoke" = 0 ] && ! load_ok; then
     say "INCONCLUSIVE: load average $(cut -d' ' -f1-3 "$LOADAVG_FILE") is above DC_BENCH_MAX_LOAD=$MAX_LOAD (set it higher to run anyway and record the load)"; return 77
   fi
-  if [ -z "$bin" ]; then
+  if [ -z "$bin" ] && [ "$smoke" = 1 ]; then
+    bin=''  # the smoke run measures nothing: the harness uses the test build's own binary
+  elif [ -z "$bin" ]; then
     cargo build --release -p disk-cleanup >&2 || { say "FAIL: cargo build --release"; return 1; }
     bin=${CARGO_TARGET_DIR:-target}/release/disk-cleanup
   fi
-  [ -x "$bin" ] || { say "FAIL: no binary $bin"; return 1; }
-  bin=$(readlink -f "$bin"); res=$(mktemp); logf=$(mktemp)
+  [ -z "$bin" ] || [ -x "$bin" ] || { say "FAIL: no binary $bin"; return 1; }
+  [ -z "$bin" ] || bin=$(readlink -f "$bin")
+  res=$(mktemp); logf=$(mktemp)
   load0=$(cut -d' ' -f1-3 "$LOADAVG_FILE")
   if [ "$smoke" = 1 ]; then
-    DC_BENCH_BIN=$bin cargo test -p disk-cleanup --test explore_bench -- --nocapture >"$logf" 2>&1 || rc=$?
+    cargo test -p disk-cleanup --test explore_bench -- --nocapture >"$logf" 2>&1 || rc=$?
   else
     DC_BENCH_EXPLORE=1 DC_BENCH_REAL_HOME=${DC_BENCH_OWNER_MACHINE:-0} DC_BENCH_BIN=$bin cargo test -p disk-cleanup --test explore_bench -- --nocapture >"$logf" 2>&1 || rc=$?
   fi

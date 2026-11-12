@@ -63,7 +63,7 @@ pub use delete_types::{
     DirEntryInfo, FileKind, Freed, NamePattern, StatInfo, CMD_MSG_MAX,
 };
 pub use dirs::Dirs;
-pub use flavor::{build_flavor, explore_panic_at};
+pub use flavor::{build_flavor, explore_panic_at, explore_plan_delay_ms};
 pub use gate_stamp::{
     break_glass_reason, break_glass_warning, check_stamp, required_gate, GateStamp, StampRefusal,
     BREAK_GLASS_NO_TTY, BREAK_GLASS_NO_TTY_CODE, BREAK_GLASS_WORD, STAMP_SCHEMA,

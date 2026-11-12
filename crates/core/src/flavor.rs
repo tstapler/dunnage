@@ -24,3 +24,17 @@ pub fn explore_panic_at() -> Option<String> {
 pub fn explore_panic_at() -> Option<String> {
     None
 }
+
+/// Milliseconds a planner call waits before it plans, from `DC_EXPLORE_PLAN_DELAY_MS` (the full-disk journeys
+/// send a signal during a slow planner). `test-support` builds only, like [`explore_panic_at`].
+#[cfg(feature = "test-support")]
+pub fn explore_plan_delay_ms() -> Option<u64> {
+    std::env::var("DC_EXPLORE_PLAN_DELAY_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+}
+
+#[cfg(not(feature = "test-support"))]
+pub fn explore_plan_delay_ms() -> Option<u64> {
+    None
+}

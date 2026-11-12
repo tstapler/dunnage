@@ -276,6 +276,9 @@ fn plan_marks(
     if marks.is_empty() {
         return Err("Nothing is marked. Space marks an item.".to_string());
     }
+    if let Some(ms) = disk_cleanup_core::explore_plan_delay_ms() {
+        std::thread::sleep(Duration::from_millis(ms));
+    }
     let kinds = ports.path_kinds();
     if kinds.is_empty() {
         return Err("This build lists no kind whose items are paths. Nothing was deleted.".into());

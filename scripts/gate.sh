@@ -66,6 +66,8 @@ run_gate() {
     printf '{"schema":1,"gate":"%s","commit":"%s","binary_sha256":"%s"}\n' "$gate" "$(git rev-parse HEAD)" "$(sha256sum "$bin" | cut -d' ' -f1)" \
       > "$(git rev-parse --git-dir)/gate-reports/stamp-$gate.json"
     echo "stamp: $(git rev-parse --git-dir)/gate-reports/stamp-$gate.json"
+    # The owner cuts the tag after OWNER WAIT F (RELEASE.md); the gate never creates one.
+    [ "$gate" != F ] || echo "gate F is green at $(git rev-parse --short HEAD). After OWNER WAIT F (RELEASE.md) the owner tags it: git tag explore-gate-f $(git rev-parse HEAD)"
   fi
   [ $fails = 0 ]
 }

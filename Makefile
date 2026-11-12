@@ -1,4 +1,4 @@
-.PHONY: gate safety mutants install-gated bazel-build bazel-test lint dist sync
+.PHONY: gate safety mutants install-gated bazel-build bazel-test lint dist sync bench-explore
 
 # Bazel is the build, test and lint system (ADR-008); scripts/bazel.sh is bazelisk with a private output base and
 # disk cache (DC_BAZEL_OUTPUT_ROOT, DC_BAZEL_DISK_CACHE, DC_BAZEL_JOBS). Cargo stays for `cargo publish`,
@@ -30,6 +30,11 @@ sync:
 gate:
 	@test -n "$(GATE)" || { echo "usage: make gate GATE=<A-F>"; exit 64; }
 	scripts/gate.sh $(GATE)
+
+# Gate F's large-tree bench (Story 6.5.6b): wall-clock bounds on a 676,296-directory tree; writes research/spikes.md.
+# DC_BENCH_MAX_LOAD=<n> runs it on a busy machine (the load is recorded); DC_BENCH_OWNER_MACHINE=1 adds the real $$HOME.
+bench-explore:
+	scripts/bench-explore.sh
 
 # Checks that ci/safety lists and the safety_ tests agree (Story 2.3.5b), then runs every test whose name
 # starts with safety_ on both profiles (fastbuild and opt, with the active gate's registry), printing the names.
