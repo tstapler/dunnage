@@ -69,8 +69,7 @@ pub fn handlers_installed(pid: u32, bits: u64) -> bool {
     Command::new("ps")
         .args(["-o", "etime=", "-p", &pid.to_string()])
         .output()
-        .ok()
-        .is_some_and(|o| elapsed_secs(String::from_utf8_lossy(&o.stdout).trim()) >= 2)
+        .is_ok_and(|o| elapsed_secs(String::from_utf8_lossy(&o.stdout).trim()) >= 2)
 }
 
 /// Seconds in `ps` elapsed time `[[dd-]hh:]mm:ss`; 0 when it cannot be read.
