@@ -6,7 +6,7 @@
 //!
 //! The order (each name is pushed onto the [`Trace`]):
 //!
-//! 1. `check_plan_id`  : `plan::check_plan_id` over the confirmed plan's marks, identities and roots
+//! 1. `check_plan_id`  : `plan::check_plan_id` over the marks' fresh `lstat` identities and the roots resolved now (a changed mark or root refuses the whole run)
 //! 2. `check_stamp`    : the gate stamp for gate D
 //! 3. `run_lock`       : the run lock, non-blocking
 //! 4. `audit_open`     : `run_start`; then `explorer_confirm` (synced)
@@ -34,13 +34,13 @@ use disk_cleanup_adapters::dirops::DirOps;
 use disk_cleanup_adapters::signals::term_signal;
 use disk_cleanup_adapters::targets::explorer_selection::{candidate_of, ExplorerSelectionTarget};
 use disk_cleanup_core::audit_types::{ConfirmedItem, ExplorerConfirm};
-use disk_cleanup_core::explore::confirm::ConfirmedPlan;
+use disk_cleanup_core::explore::confirm::{ConfirmedPlan, ReviewedPlan};
 use disk_cleanup_core::explore::mark_check::OwnState;
 use disk_cleanup_core::explore::msg::{
     DeleteItemOutcome, DeleteItemResult, DeleteMsg, DeleteSummary,
 };
 use disk_cleanup_core::explorer_plan::{measure_attributed, TreeSizer};
-use disk_cleanup_core::plan::{check_plan_id, PlanId};
+use disk_cleanup_core::plan::{check_plan_id, ExplorerGateRefusal, ItemIdentity, PlanId};
 use disk_cleanup_core::plan_state::{BuildInfo, SaveOutcome};
 use disk_cleanup_core::ports::{Env, ExtentProbe};
 use disk_cleanup_core::roots::{strictly_below, RootSet};
@@ -365,13 +365,12 @@ fn sequence<D: DirOps + 'static>(
     if let Some(text) = set_refusal(&sel) {
         return refuse(run, EXIT_REFUSED, text);
     }
-    let recomputed = PlanId::for_explorer(
-        reviewed
-            .items()
-            .iter()
-            .map(|i| (i.path.as_path(), i.identity)),
-        reviewed.roots(),
-    );
+    // The id is recomputed from what is on disk now, never from the reviewed identities: a mark or a scan root
+    // replaced since the review makes the whole run refuse here, before anything is deleted. The per-item
+    // `fstat` compare in the target stays as the second line of defence for changes after this gate.
+    let Some(recomputed) = fresh_plan_id(env, w, &reviewed) else {
+        return refuse(run, EXIT_REFUSED, ExplorerGateRefusal::Changed.text());
+    };
     if let Err(r) = check_plan_id(
         &sel,
         plan_id,
@@ -579,6 +578,26 @@ fn sequence<D: DirOps + 'static>(
         outcomes: books.outcomes,
         summary,
     }
+}
+
+/// The plan-id of the reviewed marks as they are now (`lstat` of each, the scan roots resolved again). `None`
+/// when a mark can no longer be read: it is not what was reviewed. A root set that cannot be resolved keeps the
+/// reviewed roots, so the existing `resolve_roots` refusal (with its `run_end`) reports it.
+fn fresh_plan_id<D: DirOps>(
+    env: &Env,
+    w: &ExplorerApplyPorts<'_, D>,
+    reviewed: &ReviewedPlan,
+) -> Option<PlanId> {
+    let mut fresh = Vec::with_capacity(reviewed.items().len());
+    for item in reviewed.items() {
+        let st = env.fs.lstat(&item.path).ok()?;
+        fresh.push((item.path.as_path(), ItemIdentity::of(&st)));
+    }
+    let roots = match (w.resolve_roots)() {
+        Ok(set) => set.root_identities().to_vec(),
+        Err(_) => reviewed.roots().to_vec(),
+    };
+    Some(PlanId::for_explorer(fresh, &roots))
 }
 
 fn reviewed_roots(

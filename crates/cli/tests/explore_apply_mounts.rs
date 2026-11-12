@@ -16,7 +16,7 @@ use std::path::Path;
 use std::process::Command;
 
 use disk_cleanup_core::{SkipReason, Status};
-use explore_rig::{manifest, Ex};
+use explore_rig::{manifest, Ex, Knobs};
 
 const VAR: &str = "DC_EX_MOUNT_CHILD";
 
@@ -65,17 +65,31 @@ fn safety_apply_should_skip_a_reviewed_directory_that_a_tmpfs_now_covers() {
 }
 
 #[test]
-fn child_tmpfs_on_the_item() {
-    if std::env::var_os(VAR).is_none() {
-        return;
-    }
+fn safety_apply_should_refuse_the_whole_set_When_a_tmpfs_covers_a_reviewed_directory_before_the_apply(
+) {
+    in_namespace("child_tmpfs_on_the_item_before_the_apply");
+}
+
+/// Mounts a tmpfs on the reviewed directory `a` after the plan: before the apply (`after_gate` false, the
+/// plan-id gate refuses the whole set) or in the window after the gate (the per-item compare skips it).
+fn tmpfs_on_the_item(after_gate: bool) {
     let ex = Ex::new();
     let a = ex.tree("app/dist", 3, 3000);
     let confirmed = ex.confirmed(&[a.clone()]);
     let under = manifest(&a);
-    sh("mount -t tmpfs tmpfs \"$1\"", &a, &a);
-    std::fs::write(a.join("on-the-tmpfs"), b"x").unwrap();
-    let ran = ex.run(confirmed, ex.confined_ops());
+    let cover = {
+        let a = a.clone();
+        move || {
+            sh("mount -t tmpfs tmpfs \"$1\"", &a, &a);
+            std::fs::write(a.join("on-the-tmpfs"), b"x").unwrap();
+        }
+    };
+    let ran = if after_gate {
+        ex.run_with(confirmed, ex.confined_ops(), &Knobs::after_gate(cover))
+    } else {
+        cover();
+        ex.run(confirmed, ex.confined_ops())
+    };
     let covered = manifest(&a);
     assert!(
         covered.contains_key(&a.join("on-the-tmpfs")),
@@ -96,8 +110,31 @@ fn child_tmpfs_on_the_item() {
             _ => None,
         })
         .collect();
-    assert_eq!(statuses, [Status::Skipped(SkipReason::IdentityChanged)]);
+    if after_gate {
+        assert_eq!(statuses, [Status::Skipped(SkipReason::IdentityChanged)]);
+    } else {
+        assert!(statuses.is_empty(), "{statuses:?}");
+        assert_eq!(ran.report.exit, 64, "{:?}", ran.report);
+        assert!(ran.report.refused.is_some());
+    }
     assert_eq!(ran.report.summary.removed, 0);
+}
+
+#[test]
+fn child_tmpfs_on_the_item() {
+    if std::env::var_os(VAR).is_none() {
+        return;
+    }
+    tmpfs_on_the_item(true);
+    println!("CHILD_OK");
+}
+
+#[test]
+fn child_tmpfs_on_the_item_before_the_apply() {
+    if std::env::var_os(VAR).is_none() {
+        return;
+    }
+    tmpfs_on_the_item(false);
     println!("CHILD_OK");
 }
 

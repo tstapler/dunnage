@@ -21,7 +21,7 @@ use disk_cleanup_cli::explore::apply::{
 };
 use disk_cleanup_core::testing::{AuditCall, FakeAuditSink, FakeRunGuard};
 use disk_cleanup_core::{AuditRecord, SkipReason, Status};
-use explore_rig::{kinds_of, manifest, Ex, FixedSizer, Knobs, NOW};
+use explore_rig::{kinds_of, manifest, Ex, FixedSizer, Knobs, Ran, NOW};
 
 const ORDER: [&str; 11] = [
     "check_plan_id",
@@ -53,6 +53,38 @@ fn result_statuses(ex: &Ex) -> Vec<Status> {
             _ => None,
         })
         .collect()
+}
+
+/// Runs `confirmed` after `change` was made: before the apply (the plan-id gate recomputes from what is on disk
+/// and refuses the whole set) or in the window after the gate (only the per-item identity compare can see it).
+fn run_swapped(
+    ex: &Ex,
+    confirmed: disk_cleanup_core::explore::confirm::ConfirmedPlan,
+    change: impl FnOnce() + Send + 'static,
+    after_gate: bool,
+) -> Ran {
+    if after_gate {
+        ex.run_with(confirmed, ex.confined_ops(), &Knobs::after_gate(change))
+    } else {
+        change();
+        ex.run(confirmed, ex.confined_ops())
+    }
+}
+
+/// The whole set was refused at step 1: exit 64, the plan-id text, nothing audited, no capability.
+fn assert_gate_refused(ex: &Ex, ran: &Ran) {
+    assert_eq!(ran.report.exit, 64, "{:?}", ran.report);
+    assert!(
+        ran.report.refused.as_deref().is_some_and(|t| t.contains(
+            "changed since the plan was made. Review the plan, then press d again. Nothing was deleted."
+        )),
+        "{:?}",
+        ran.report.refused
+    );
+    assert_eq!(ran.steps, ["check_plan_id"]);
+    assert_eq!(ran.minted, 0);
+    assert!(kinds_of(&ex.audit).is_empty(), "{:?}", kinds_of(&ex.audit));
+    assert_eq!(ran.report.summary.removed, 0);
 }
 
 #[test]
@@ -329,16 +361,18 @@ fn exit_for_signal_should_fold_hup_and_quit_into_143() {
     assert_eq!(exit_for_signal(10), 138);
 }
 
-#[test]
-fn safety_apply_should_skip_an_item_that_became_a_symlink_to_a_directory_that_must_stay() {
+fn symlink_swap_case(after_gate: bool) {
     let ex = Ex::new();
     let (a, b) = two_marks(&ex);
     let keep = ex.tree("keepdir", 2, 500);
     let keep_before = manifest(&keep);
     let confirmed = ex.confirmed(&[a.clone(), b.clone()]);
-    std::fs::remove_dir_all(&a).unwrap();
-    std::os::unix::fs::symlink(&keep, &a).unwrap();
-    let ran = ex.run(confirmed, ex.confined_ops());
+    let (victim, target) = (a.clone(), keep.clone());
+    let swap = move || {
+        std::fs::remove_dir_all(&victim).unwrap();
+        std::os::unix::fs::symlink(&target, &victim).unwrap();
+    };
+    let ran = run_swapped(&ex, confirmed, swap, after_gate);
     assert_eq!(
         manifest(&keep),
         keep_before,
@@ -348,38 +382,73 @@ fn safety_apply_should_skip_an_item_that_became_a_symlink_to_a_directory_that_mu
         .unwrap()
         .file_type()
         .is_symlink());
-    assert!(!b.exists(), "the other item is still removed");
-    assert_eq!(ran.report.exit, 0);
-    let statuses = result_statuses(&ex);
+    if after_gate {
+        assert!(!b.exists(), "the other item is still removed");
+        assert_eq!(ran.report.exit, 0);
+        let statuses = result_statuses(&ex);
+        assert!(
+            statuses.contains(&Status::Skipped(SkipReason::IdentityChanged)),
+            "{statuses:?}"
+        );
+    } else {
+        assert!(
+            b.exists(),
+            "the whole set is refused, the other item stays too"
+        );
+        assert_gate_refused(&ex, &ran);
+    }
+}
+
+#[test]
+fn safety_apply_should_skip_an_item_that_became_a_symlink_to_a_directory_that_must_stay() {
+    symlink_swap_case(true);
+}
+
+#[test]
+fn safety_apply_should_refuse_the_whole_set_When_an_item_became_a_symlink_before_the_apply() {
+    symlink_swap_case(false);
+}
+
+fn recreated_case(after_gate: bool) {
+    let ex = Ex::new();
+    let (a, _) = two_marks(&ex);
+    let confirmed = ex.confirmed(&[a.clone()]);
+    let (victim, decoy) = (a.clone(), ex.p("decoy"));
+    let swap = move || {
+        std::fs::remove_dir_all(&victim).unwrap();
+        // Occupy the freed inode number elsewhere so the new directory cannot get the old one back.
+        std::fs::create_dir_all(&decoy).unwrap();
+        std::fs::write(decoy.join("f0"), [0u8; 10]).unwrap();
+        std::fs::create_dir_all(victim.join("precious")).unwrap();
+        std::fs::write(victim.join("precious/data"), b"new life").unwrap();
+    };
+    let ran = run_swapped(&ex, confirmed, swap, after_gate);
     assert!(
-        statuses.contains(&Status::Skipped(SkipReason::IdentityChanged)),
-        "{statuses:?}"
+        a.join("precious/data").exists(),
+        "the new directory is intact"
     );
+    assert_eq!(ran.report.summary.removed, 0);
+    if after_gate {
+        assert_eq!(
+            result_statuses(&ex),
+            [Status::Skipped(SkipReason::IdentityChanged)]
+        );
+    } else {
+        assert_gate_refused(&ex, &ran);
+    }
 }
 
 #[test]
 fn safety_apply_should_skip_an_item_removed_and_recreated_with_a_new_inode() {
-    let ex = Ex::new();
-    let (a, _) = two_marks(&ex);
-    let confirmed = ex.confirmed(&[a.clone()]);
-    std::fs::remove_dir_all(&a).unwrap();
-    // Occupy the freed inode number elsewhere so the new directory cannot get the old one back.
-    let decoy = ex.tree("decoy", 1, 10);
-    let _ = decoy;
-    std::fs::create_dir_all(a.join("precious")).unwrap();
-    std::fs::write(a.join("precious/data"), b"new life").unwrap();
-    let before = manifest(&a);
-    let ran = ex.run(confirmed, ex.confined_ops());
-    assert_eq!(manifest(&a), before);
-    assert_eq!(
-        result_statuses(&ex),
-        [Status::Skipped(SkipReason::IdentityChanged)]
-    );
-    assert_eq!(ran.report.summary.removed, 0);
+    recreated_case(true);
 }
 
 #[test]
-fn safety_apply_should_skip_every_item_below_a_parent_that_was_swapped_for_a_symlink() {
+fn safety_apply_should_refuse_the_whole_set_When_an_item_was_recreated_before_the_apply() {
+    recreated_case(false);
+}
+
+fn parent_swap_case(after_gate: bool) {
     let ex = Ex::new();
     let sub = ex.tree("proj/dist", 2, 300);
     let confirmed = ex.confirmed(&[sub.clone()]);
@@ -388,38 +457,71 @@ fn safety_apply_should_skip_every_item_below_a_parent_that_was_swapped_for_a_sym
     std::fs::write(elsewhere.join("dist/precious"), b"keep me").unwrap();
     let before = manifest(&elsewhere);
     let proj = ex.code.join("proj");
-    std::fs::rename(&proj, ex.code.join("proj.old")).unwrap();
-    std::os::unix::fs::symlink(&elsewhere, &proj).unwrap();
-    let ran = ex.run(confirmed, ex.confined_ops());
+    let (old, target) = (ex.code.join("proj.old"), elsewhere.clone());
+    let swap = move || {
+        std::fs::rename(&proj, &old).unwrap();
+        std::os::unix::fs::symlink(&target, &proj).unwrap();
+    };
+    let ran = run_swapped(&ex, confirmed, swap, after_gate);
     assert_eq!(manifest(&elsewhere), before);
     assert!(ex.code.join("proj.old/dist").exists());
     assert_eq!(ran.report.summary.removed, 0);
-    assert!(matches!(
-        result_statuses(&ex)[..],
-        [Status::Skipped(
-            SkipReason::IdentityChanged | SkipReason::Symlink
-        )]
-    ));
+    if after_gate {
+        assert!(matches!(
+            result_statuses(&ex)[..],
+            [Status::Skipped(
+                SkipReason::IdentityChanged | SkipReason::Symlink
+            )]
+        ));
+    } else {
+        assert_gate_refused(&ex, &ran);
+    }
 }
 
 #[test]
-fn safety_apply_should_skip_every_item_When_the_scan_root_was_replaced_by_a_new_directory() {
+fn safety_apply_should_skip_every_item_below_a_parent_that_was_swapped_for_a_symlink() {
+    parent_swap_case(true);
+}
+
+#[test]
+fn safety_apply_should_refuse_the_whole_set_When_a_parent_was_swapped_for_a_symlink_before_the_apply(
+) {
+    parent_swap_case(false);
+}
+
+fn root_replaced_case(after_gate: bool) {
     let ex = Ex::new();
     let a = ex.tree("app/dist", 2, 300);
     let confirmed = ex.confirmed(&[a.clone()]);
     // The root is renamed away and a new directory, holding a same-named tree, takes its name.
-    std::fs::rename(&ex.code, ex.home.join("code.old")).unwrap();
-    std::fs::create_dir_all(ex.code.join("app/dist")).unwrap();
-    std::fs::write(ex.code.join("app/dist/new"), b"x").unwrap();
-    let before = manifest(&ex.code);
-    let ran = ex.run(confirmed, ex.confined_ops());
-    assert_eq!(manifest(&ex.code), before);
+    let (code, old) = (ex.code.clone(), ex.home.join("code.old"));
+    let swap = move || {
+        std::fs::rename(&code, &old).unwrap();
+        std::fs::create_dir_all(code.join("app/dist")).unwrap();
+        std::fs::write(code.join("app/dist/new"), b"x").unwrap();
+    };
+    let ran = run_swapped(&ex, confirmed, swap, after_gate);
+    assert!(ex.code.join("app/dist/new").exists());
     assert!(ex.home.join("code.old/app/dist").exists());
-    assert_eq!(
-        result_statuses(&ex),
-        [Status::Skipped(SkipReason::IdentityChanged)]
-    );
     assert_eq!(ran.report.summary.removed, 0);
+    if after_gate {
+        assert_eq!(
+            result_statuses(&ex),
+            [Status::Skipped(SkipReason::IdentityChanged)]
+        );
+    } else {
+        assert_gate_refused(&ex, &ran);
+    }
+}
+
+#[test]
+fn safety_apply_should_skip_every_item_When_the_scan_root_was_replaced_by_a_new_directory() {
+    root_replaced_case(true);
+}
+
+#[test]
+fn safety_apply_should_refuse_the_whole_set_When_the_scan_root_was_replaced_before_the_apply() {
+    root_replaced_case(false);
 }
 
 #[test]
@@ -449,28 +551,47 @@ fn safety_apply_should_skip_every_item_When_the_scan_root_became_a_symlink() {
     assert_eq!(ran.report.summary.removed, 0);
 }
 
-#[test]
-fn safety_apply_should_skip_an_item_When_the_roots_resolved_now_no_longer_hold_it() {
+fn roots_no_longer_hold_case(after_gate: bool) {
     let ex = Ex::new();
     let a = ex.tree("app/dist", 2, 300);
     let confirmed = ex.confirmed(&[a.clone()]);
     let other = ex.home.join("other");
     std::fs::create_dir_all(&other).unwrap();
     let roots = ex.roots_of(&[other]);
-    let ran = ex.run_with(
-        confirmed,
-        ex.confined_ops(),
-        &Knobs {
+    let knobs = if after_gate {
+        Knobs {
+            roots_after_gate: Some(Ok(roots)),
+            ..Knobs::default()
+        }
+    } else {
+        Knobs {
             roots: Some(Ok(roots)),
             ..Knobs::default()
-        },
-    );
+        }
+    };
+    let ran = ex.run_with(confirmed, ex.confined_ops(), &knobs);
     assert!(a.exists());
-    assert_eq!(
-        result_statuses(&ex),
-        [Status::Skipped(SkipReason::OutsideRoot)]
-    );
     assert_eq!(ran.report.summary.removed, 0);
+    if after_gate {
+        // The planned root no longer resolves: a root change since the plan, not a path outside every root.
+        assert_eq!(
+            result_statuses(&ex),
+            [Status::Skipped(SkipReason::IdentityChanged)]
+        );
+    } else {
+        assert_gate_refused(&ex, &ran);
+    }
+}
+
+#[test]
+fn safety_apply_should_skip_an_item_When_the_roots_resolved_now_no_longer_hold_it() {
+    roots_no_longer_hold_case(true);
+}
+
+#[test]
+fn safety_apply_should_refuse_the_whole_set_When_the_roots_resolved_at_the_gate_differ_from_the_reviewed_ones(
+) {
+    roots_no_longer_hold_case(false);
 }
 
 #[test]
@@ -728,9 +849,12 @@ fn apply_should_leave_no_measured_bytes_on_a_skipped_item_and_some_on_a_removed_
     let ex = Ex::new();
     let (a, b) = two_marks(&ex);
     let confirmed = ex.confirmed(&[a.clone(), b.clone()]);
-    std::fs::remove_dir_all(&b).unwrap();
-    std::fs::write(&b, b"a file now").unwrap();
-    let _ = ex.run(confirmed, ex.confined_ops());
+    let victim = b.clone();
+    let swap = move || {
+        std::fs::remove_dir_all(&victim).unwrap();
+        std::fs::write(&victim, b"a file now").unwrap();
+    };
+    let _ = run_swapped(&ex, confirmed, swap, true);
     let rows: Vec<_> = ex
         .audit
         .records()

@@ -28,7 +28,7 @@ use disk_cleanup_core::explorer_plan::{judge_fresh, mount_facts, FreshCheck};
 use disk_cleanup_core::floor_rule::ForAllowedError;
 use disk_cleanup_core::plan::ItemIdentity;
 use disk_cleanup_core::ports::Env;
-use disk_cleanup_core::roots::{RootIdentity, RootSet};
+use disk_cleanup_core::roots::{strictly_below, RootIdentity, RootSet};
 use disk_cleanup_core::selector::Selection;
 use disk_cleanup_core::target::{Guarded, Target};
 use disk_cleanup_core::{
@@ -115,7 +115,19 @@ impl<D: DirOps> ExplorerSelectionTarget<D> {
     /// The longest scan root that holds `path` and the identity the plan recorded for it. `IdentityChanged`
     /// when the root is not in the plan or the root now resolves to another directory.
     fn root_of(&self, path: &Path) -> Result<(PathBuf, Identity), SkipReason> {
-        let root = self.roots.root_of(path).ok_or(SkipReason::OutsideRoot)?;
+        let Some(root) = self.roots.root_of(path) else {
+            // A planned root that held the path no longer resolves to a root (replaced by a symlink or moved):
+            // that is a change since the plan, not a path outside every root.
+            let was_planned = self
+                .reviewed_roots
+                .iter()
+                .any(|r| strictly_below(&r.path, path));
+            return Err(if was_planned {
+                SkipReason::IdentityChanged
+            } else {
+                SkipReason::OutsideRoot
+            });
+        };
         let planned = self
             .reviewed_roots
             .iter()
