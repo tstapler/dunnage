@@ -45,7 +45,6 @@ use dunnage_adapters::{RealDirOps, RealProbe};
 use dunnage_cli::explore::apply::{
     compose_explorer_apply, skip_text, ExplorerApplyPorts, ExplorerReport, ExplorerRun,
 };
-use dunnage_cli::wiring::audit::StampOutcome;
 use dunnage_cli::wiring::compose::Trace;
 use dunnage_cli::wiring::env::{tool_dirs, RealFs, SystemClock, Wired};
 use dunnage_cli::wiring::explore::canonical_lenient;
@@ -451,12 +450,10 @@ impl Rig {
         env.audit = &sink;
         let binary = opts.binary.clone().unwrap_or_else(|| self.binary.clone());
         let own = self.own_state(&binary);
-        let stamp = |_gate: char| Ok(StampOutcome::Confined);
         let mint = ApplyToken::for_tests;
         let resolve = || self.roots();
         let ports = ExplorerApplyPorts {
             env: &env,
-            stamp: &stamp,
             mint: &mint,
             ops,
             resolve_roots: &resolve,

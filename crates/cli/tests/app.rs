@@ -6,14 +6,13 @@ mod rig;
 mod support;
 
 use dunnage_cli::args;
-use dunnage_cli::wiring::audit::GateExit;
 use dunnage_core::candidate::BuildDirFlavor;
 use dunnage_core::delete_types::{DeleteError, DeleteFailure, Freed};
 use dunnage_core::kind::{Risk, SelectorId};
 use dunnage_core::plan_state::{ItemKey, SavedSelection};
 use dunnage_core::snapshot_types::{AllocSnapshot, SpaceUse};
 use dunnage_core::testing::{AuditCall, FakePlanStore, FakeSpaceMeter};
-use rig::{confined, executed_total, plan_id_of, run, FakeTarget, Rig, NOW};
+use rig::{executed_total, plan_id_of, run, FakeTarget, Rig, NOW};
 use support::{
     btrfs_balance, build_dir, cache, docker_dangling, docker_volumes, steam, worktree, GIB,
 };
@@ -64,7 +63,7 @@ fn no_scan_line(s: &str) -> String {
 fn bare_run_should_be_a_dry_run_that_touches_nothing_When_a_cache_exists() {
     let rig = Rig::new();
     let c = caches();
-    let r = run(&rig, &[&c], &[], true, &confined);
+    let r = run(&rig, &[&c], &[], true);
     assert_eq!(r.code, 0, "{r:?}");
     assert!(r.stdout.contains("DRY RUN"), "{}", r.stdout);
     assert!(c.executed().is_empty());
@@ -81,9 +80,9 @@ fn bare_run_should_be_a_dry_run_that_touches_nothing_When_a_cache_exists() {
 fn dry_run_flags_alone_should_give_the_bare_runs_output() {
     let rig = Rig::new();
     let c = caches();
-    let bare = run(&rig, &[&c], &[], true, &confined);
+    let bare = run(&rig, &[&c], &[], true);
     for flag in ["-n", "--dry-run"] {
-        let r = run(&rig, &[&c], &[flag], true, &confined);
+        let r = run(&rig, &[&c], &[flag], true);
         assert_eq!(r.code, 0, "{flag}");
         assert_eq!(
             no_scan_line(&r.stdout),
@@ -97,7 +96,7 @@ fn dry_run_flags_alone_should_give_the_bare_runs_output() {
 fn force_yes_and_y_should_exit_64_with_empty_stdout_and_the_tip() {
     let rig = Rig::new();
     for flag in ["--force", "-y", "--yes"] {
-        let r = run(&rig, &[], &[flag], true, &confined);
+        let r = run(&rig, &[], &[flag], true);
         assert_eq!(r.code, 64, "{flag}");
         assert!(r.stdout.is_empty(), "{flag}: {}", r.stdout);
         assert!(
@@ -112,7 +111,7 @@ fn force_yes_and_y_should_exit_64_with_empty_stdout_and_the_tip() {
 #[test]
 fn kinds_all_and_plus_kind_should_exit_64_with_the_catalogue_text() {
     let rig = Rig::new();
-    let r = run(&rig, &[], &["--kinds", "all"], true, &confined);
+    let r = run(&rig, &[], &["--kinds", "all"], true);
     assert_eq!(r.code, 64);
     assert!(r.stdout.is_empty());
     assert!(
@@ -121,7 +120,7 @@ fn kinds_all_and_plus_kind_should_exit_64_with_the_catalogue_text() {
         "{}",
         r.stderr
     );
-    let r = run(&rig, &[], &["--kinds", "+build-dirs"], true, &confined);
+    let r = run(&rig, &[], &["--kinds", "+build-dirs"], true);
     assert_eq!(r.code, 64);
     assert!(
         r.stderr
@@ -143,7 +142,7 @@ fn a_kind_flag_without_its_kind_should_exit_64_with_the_only_applies_to_text_bef
     ];
     for argv in cases {
         // No target registered at all: the kind-bound check still comes first.
-        let r = run(&rig, &[], argv, true, &confined);
+        let r = run(&rig, &[], argv, true);
         assert_eq!(r.code, 64, "{argv:?}");
         assert!(r.stdout.is_empty());
         assert!(
@@ -172,7 +171,7 @@ fn dry_run_flags_with_apply_should_exit_64_with_the_contradiction_text_and_touch
         &["--kinds", "caches", "--dry-run", "--apply"],
     ];
     for argv in combos {
-        let r = run(&rig, &[&c], argv, true, &confined);
+        let r = run(&rig, &[&c], argv, true);
         assert_eq!(r.code, 64, "{argv:?}");
         assert!(r.stdout.is_empty(), "{argv:?}");
         assert_eq!(
@@ -202,7 +201,7 @@ fn the_clap_definition_should_declare_the_apply_conflict() {
 #[test]
 fn help_should_say_in_its_first_line_that_nothing_is_deleted_without_apply_and_document_every_flag()
 {
-    let r = run(&Rig::new(), &[], &["--help"], true, &confined);
+    let r = run(&Rig::new(), &[], &["--help"], true);
     assert_eq!(r.code, 0);
     let first = r.stdout.lines().next().unwrap();
     assert!(
@@ -251,9 +250,7 @@ fn help_should_say_in_its_first_line_that_nothing_is_deleted_without_apply_and_d
     assert!(h.contains("3 btrfs starved, 64 usage, 74 status/audit verify could not read state"));
     assert!(h.contains("130 interrupted (SIGINT), 143 (SIGTERM)"));
     assert!(h.contains("Environment:"));
-    assert!(
-        h.contains("DUNNAGE_UNGATED=<reason>") && h.contains("BYPASS") && h.contains("NO_COLOR")
-    );
+    assert!(h.contains("NO_COLOR") && !h.contains("UNGATED") && !h.contains("BYPASS"));
     assert!(h.contains("made in the last 24h"));
 }
 
@@ -262,7 +259,7 @@ fn hidden_aliases_and_plan_id_case_should_parse_and_quiet_with_verbose_should_ex
     let rig = Rig::new();
     let c = caches();
     for argv in [&["--stale-days", "3"][..], &["--no-color"][..]] {
-        assert_eq!(run(&rig, &[&c], argv, true, &confined).code, 0, "{argv:?}");
+        assert_eq!(run(&rig, &[&c], argv, true).code, 0, "{argv:?}");
     }
     match args::parse(["--apply", "--kinds", "build-dirs", "--plan-id", "91BE04D7"]) {
         args::Parsed::Run(cli) => {
@@ -270,7 +267,7 @@ fn hidden_aliases_and_plan_id_case_should_parse_and_quiet_with_verbose_should_ex
         }
         other @ args::Parsed::Exit { .. } => panic!("{other:?}"),
     }
-    let r = run(&rig, &[&c], &["-q", "-v"], true, &confined);
+    let r = run(&rig, &[&c], &["-q", "-v"], true);
     assert_eq!(r.code, 64);
     assert!(r.stdout.is_empty());
 }
@@ -285,7 +282,6 @@ fn a_malformed_plan_id_should_exit_64_before_every_other_check_with_empty_stdout
             &[&b],
             &["--apply", "--kinds", "build-dirs", "--plan-id", id],
             true,
-            &confined,
         );
         assert_eq!(r.code, 64, "{id:?}");
         assert!(r.stdout.is_empty(), "{id:?}");
@@ -328,7 +324,7 @@ fn every_guarded_or_destructive_kind_not_named_should_be_a_risk_row_and_stay_unt
         assert_ne!(id.tier(), Risk::Safe, "{} is not a risky kind", id.id());
         let rig = Rig::new();
         let c = caches();
-        let r = run(&rig, &[&c, target], &["--apply", "--json"], true, &confined);
+        let r = run(&rig, &[&c, target], &["--apply", "--json"], true);
         assert_eq!(r.code, 0, "{}: {r:?}", id.id());
         // The live apply table omits RISK rows (S2); the document lists every one as data.
         let doc: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
@@ -403,7 +399,7 @@ fn a_destructive_apply_should_exit_64_without_stdout_or_effects_unless_the_revie
     for (rig, extra, text) in refusals {
         let mut argv = vec!["--apply", "--kinds", "build-dirs"];
         argv.extend(extra.iter());
-        let r = run(&rig, &[&b], &argv, true, &confined);
+        let r = run(&rig, &[&b], &argv, true);
         assert_eq!(r.code, 64, "{argv:?}: {r:?}");
         assert!(r.stdout.is_empty(), "{argv:?}: {}", r.stdout);
         assert!(r.stderr.contains(text), "{argv:?}: {}", r.stderr);
@@ -424,7 +420,6 @@ fn a_destructive_apply_should_be_accepted_with_the_id_of_a_dry_run_of_the_same_s
         &[&b],
         &["--apply", "--kinds", "build-dirs", "--plan-id", &id],
         true,
-        &confined,
     );
     assert_eq!(r.code, 0, "{r:?}");
     assert!(r.stdout.contains("APPLYING - deleting."), "{}", r.stdout);
@@ -446,7 +441,6 @@ fn worktree_ignored_discard_and_the_default_sets_should_follow_the_same_rule() {
             "discard",
         ],
         true,
-        &confined,
     );
     assert_eq!(r.code, 64, "{r:?}");
     assert!(r.stdout.is_empty());
@@ -456,7 +450,7 @@ fn worktree_ignored_discard_and_the_default_sets_should_follow_the_same_rule() {
         &["--apply"][..],
         &["--apply", "--kinds", "caches,worktrees"][..],
     ] {
-        let r = run(&rig, &[&w, &c], argv, true, &confined);
+        let r = run(&rig, &[&w, &c], argv, true);
         assert_eq!(r.code, 0, "{argv:?}: {r:?}");
     }
 }
@@ -474,7 +468,7 @@ fn a_gate_refusal_under_json_should_be_one_document_with_the_code_and_detail_and
         "--plan-id",
         "91be04d7",
     ];
-    let r = run(&rig, &[&b], &argv, true, &confined);
+    let r = run(&rig, &[&b], &argv, true);
     assert_eq!(r.code, 64);
     assert!(r.stderr.contains("does not match the plan just computed"));
     let d: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
@@ -496,51 +490,17 @@ fn a_gate_refusal_under_json_should_be_one_document_with_the_code_and_detail_and
     assert_eq!(detail["vanished"][0], GONE);
     assert_eq!(detail["appeared"][0], NOW_KEY);
     let without: Vec<&str> = argv.iter().copied().filter(|a| *a != "--json").collect();
-    let plain = run(&rig, &[&b], &without, true, &confined);
+    let plain = run(&rig, &[&b], &without, true);
     assert_eq!(plain.code, 64);
     assert!(plain.stdout.is_empty());
     assert!(rig.audit.calls().is_empty());
 }
 
 #[test]
-fn the_stamp_and_break_glass_refusals_should_be_data_under_json_and_silent_on_stdout_without() {
-    let rig = Rig::new();
-    let c = caches();
-    for (code, text) in [
-        (
-            "stamp_refused",
-            "error: no stamp was installed. Nothing was deleted.",
-        ),
-        (
-            "break_glass_no_tty",
-            "error: break-glass needs a terminal. Nothing was deleted.",
-        ),
-    ] {
-        let stamp = move |_g: char| {
-            Err(GateExit {
-                text: text.to_string(),
-                json_code: code,
-            })
-        };
-        let r = run(&rig, &[&c], &["--apply", "--json"], true, &stamp);
-        assert_eq!(r.code, 64);
-        assert_eq!(r.stderr, format!("{text}\n"));
-        let d: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
-        assert_eq!(d["errors"][0]["code"], code);
-        assert_eq!(d["exit_code"], 64);
-        let r = run(&rig, &[&c], &["--apply"], true, &stamp);
-        assert_eq!((r.code, r.stdout.as_str()), (64, ""));
-    }
-    assert!(rig.audit.calls().is_empty());
-    assert_eq!(rig.guard.acquire_calls(), 0);
-    assert!(c.executed().is_empty());
-}
-
-#[test]
 fn apply_should_be_refused_with_the_gate_a_text_When_the_build_has_no_apply_path() {
     let rig = Rig::new();
     let c = caches();
-    let r = run(&rig, &[&c], &["--apply"], false, &confined);
+    let r = run(&rig, &[&c], &["--apply"], false);
     assert_eq!(r.code, 64);
     assert!(r.stdout.is_empty());
     assert!(r.stderr.contains("apply is not enabled in this build"));
@@ -578,7 +538,7 @@ fn exit_code_should_be_1_for_an_eacces_item_2_for_enospc_and_signal_plus_128_Whe
             Ok(rig::freed(c.est_bytes().0))
         }
     });
-    let r = run(&Rig::new(), &[&eacces], &["--apply"], true, &confined);
+    let r = run(&Rig::new(), &[&eacces], &["--apply"], true);
     assert_eq!(r.code, 1, "{r:?}");
     assert!(
         r.stdout.contains("APPLY FINISHED - exit 1."),
@@ -593,20 +553,14 @@ fn exit_code_should_be_1_for_an_eacces_item_2_for_enospc_and_signal_plus_128_Whe
             freed: Freed::default(),
         })
     });
-    let r = run(
-        &Rig::new(),
-        &[&enospc],
-        &["--apply", "--jobs", "1"],
-        true,
-        &confined,
-    );
+    let r = run(&Rig::new(), &[&enospc], &["--apply", "--jobs", "1"], true);
     assert_eq!(r.code, 2, "{r:?}");
 
     for (sig, code) in [(15, 143), (2, 130)] {
         let rig = Rig::new();
         rig.guard.interrupt(sig);
         let c = caches();
-        let r = run(&rig, &[&c], &["--apply"], true, &confined);
+        let r = run(&rig, &[&c], &["--apply"], true);
         assert_eq!(r.code, code, "signal {sig}: {r:?}");
         assert!(
             c.executed().is_empty(),
@@ -615,7 +569,7 @@ fn exit_code_should_be_1_for_an_eacces_item_2_for_enospc_and_signal_plus_128_Whe
     }
     let rig = Rig::new();
     rig.guard.interrupt(15);
-    let r = run(&rig, &[&caches()], &[], true, &confined);
+    let r = run(&rig, &[&caches()], &[], true);
     assert_eq!(r.code, 143);
     assert!(r
         .stderr
@@ -632,15 +586,12 @@ fn clap_usage_errors_should_map_to_64_and_help_flags_to_0() {
         &["--top", "x"],
         &["status", "--nope"],
     ] {
-        let r = run(&rig, &[], argv, true, &confined);
+        let r = run(&rig, &[], argv, true);
         assert_eq!(r.code, 64, "{argv:?}");
         assert!(r.stdout.is_empty());
     }
-    assert_eq!(run(&rig, &[], &["--help"], true, &confined).code, 0);
-    assert_eq!(
-        run(&rig, &[], &["status", "--help"], true, &confined).code,
-        0
-    );
+    assert_eq!(run(&rig, &[], &["--help"], true).code, 0);
+    assert_eq!(run(&rig, &[], &["status", "--help"], true).code, 0);
 }
 
 fn btrfs_snapshot(unallocated_gib: f64) -> dunnage_core::FsSnapshot {
@@ -669,7 +620,7 @@ fn status_rig(snap: dunnage_core::FsSnapshot) -> Rig {
 fn status_should_exit_1_for_warn_2_for_crit_0_for_ok_and_write_nothing_but_the_outcome_line() {
     for (gib, code, word) in [(9.8, 1, "WARN"), (2.0, 2, "CRIT"), (50.0, 0, "OK")] {
         let rig = status_rig(btrfs_snapshot(gib));
-        let r = run(&rig, &[], &["status"], true, &confined);
+        let r = run(&rig, &[], &["status"], true);
         assert_eq!(r.code, code, "{gib} GiB: {r:?}");
         assert!(
             r.stdout.contains(&format!("verdict: {word}")),
@@ -694,7 +645,7 @@ fn status_should_exit_74_with_the_catalogue_text_and_an_unknown_verdict_under_js
     let mut rig = Rig::new();
     rig.space =
         FakeSpaceMeter::new(vec![btrfs_snapshot(50.0)], FakeSpaceMeter::stable()).failing(5);
-    let r = run(&rig, &[], &["status"], true, &confined);
+    let r = run(&rig, &[], &["status"], true);
     assert_eq!(r.code, 74);
     assert!(r.stdout.is_empty());
     assert!(
@@ -703,7 +654,7 @@ fn status_should_exit_74_with_the_catalogue_text_and_an_unknown_verdict_under_js
         "{}",
         r.stderr
     );
-    let r = run(&rig, &[], &["status", "--json"], true, &confined);
+    let r = run(&rig, &[], &["status", "--json"], true);
     assert_eq!(r.code, 74);
     let d: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
     assert_eq!(d["verdict"], "unknown");
@@ -719,7 +670,7 @@ fn status_should_exit_74_with_the_catalogue_text_and_an_unknown_verdict_under_js
 fn status_should_print_n_a_for_a_non_btrfs_path_and_for_fields_that_need_root_and_exit_64_for_a_missing_path(
 ) {
     let rig = status_rig(FakeSpaceMeter::plain_snapshot("/", 100 * GIB, 1000 * GIB));
-    let r = run(&rig, &[], &["status"], true, &confined);
+    let r = run(&rig, &[], &["status"], true);
     assert_eq!(r.code, 0);
     assert!(
         r.stdout
@@ -732,7 +683,7 @@ fn status_should_print_n_a_for_a_non_btrfs_path_and_for_fields_that_need_root_an
 
     let mut needs_root = FakeSpaceMeter::plain_snapshot("/", 100 * GIB, 1000 * GIB);
     needs_root.fs_type = "btrfs".into();
-    let r = run(&status_rig(needs_root), &[], &["status"], true, &confined);
+    let r = run(&status_rig(needs_root), &[], &["status"], true);
     assert_eq!(r.code, 0, "{r:?}");
     assert!(r.stdout.contains("n/a (needs root)"), "{}", r.stdout);
     assert!(
@@ -741,13 +692,7 @@ fn status_should_print_n_a_for_a_non_btrfs_path_and_for_fields_that_need_root_an
         r.stdout
     );
 
-    let r = run(
-        &rig,
-        &[],
-        &["status", "/definitely/not/here"],
-        true,
-        &confined,
-    );
+    let r = run(&rig, &[], &["status", "/definitely/not/here"], true);
     assert_eq!(r.code, 64);
     assert!(r.stdout.is_empty());
 }
@@ -757,7 +702,7 @@ fn kinds_should_print_the_table_with_availability_and_exit_0_and_json_should_ret
 {
     let rig = Rig::new();
     let c = caches();
-    let r = run(&rig, &[&c], &["kinds"], true, &confined);
+    let r = run(&rig, &[&c], &["kinds"], true);
     assert_eq!(r.code, 0);
     let first = r.stdout.lines().next().unwrap();
     assert!(first.starts_with("ID") && first.contains("AVAILABLE") && first.contains("MIN-AGE"));
@@ -770,7 +715,7 @@ fn kinds_should_print_the_table_with_availability_and_exit_0_and_json_should_ret
     };
     assert!(line("caches").contains(" yes "));
     assert!(line("build-dirs").contains("not available in this build"));
-    let j = run(&rig, &[&c], &["kinds", "--json"], true, &confined);
+    let j = run(&rig, &[&c], &["kinds", "--json"], true);
     let d: serde_json::Value = serde_json::from_str(&j.stdout).unwrap();
     assert_eq!(d["mode"], "kinds");
     assert_eq!(d["kinds"].as_array().unwrap().len(), SelectorId::ALL.len());
@@ -784,9 +729,9 @@ fn walk_flags_should_leave_the_plan_output_and_id_unchanged_When_the_deadline_is
     let rig = Rig::new();
     let b = build_dirs();
     let kinds = ["--kinds", "build-dirs"];
-    let bare = run(&rig, &[&b], &kinds, true, &confined);
+    let bare = run(&rig, &[&b], &kinds, true);
     let flagged_args: Vec<&str> = kinds.iter().chain(&WALK_FLAGS).copied().collect();
-    let flagged = run(&rig, &[&b], &flagged_args, true, &confined);
+    let flagged = run(&rig, &[&b], &flagged_args, true);
     assert_eq!(flagged.code, 0, "{flagged:?}");
     assert_eq!(no_scan_line(&flagged.stdout), no_scan_line(&bare.stdout));
     assert!(!flagged.stdout.contains("PARTIAL SCAN"));
@@ -807,7 +752,6 @@ fn a_plan_should_print_the_partial_scan_banner_and_exit_0_When_a_walking_kind_hi
         &[&b],
         &["--kinds", "build-dirs", "--max-seconds", "5"],
         true,
-        &confined,
     );
     assert_eq!(r.code, 0, "{r:?}");
     assert!(
@@ -822,7 +766,6 @@ fn a_plan_should_print_the_partial_scan_banner_and_exit_0_When_a_walking_kind_hi
         &[&b],
         &["--kinds", "build-dirs", "--max-seconds", "5", "--json"],
         true,
-        &confined,
     );
     let doc: serde_json::Value = serde_json::from_str(&j.stdout).unwrap();
     assert_eq!(doc["partial_scan"], true);
@@ -847,7 +790,6 @@ fn an_apply_should_warn_that_the_scan_was_partial_When_a_walking_kind_hit_max_se
             "5",
         ],
         true,
-        &confined,
     );
     assert_eq!(r.code, 0, "{r:?}");
     assert!(

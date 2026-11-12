@@ -37,16 +37,6 @@ fn start(run: &str) -> RunStart {
         kinds: "caches".into(),
         plan_id: Some("7f3a91c2".into()),
         build: build(),
-        stamp: Some(StampSummary {
-            gate: "B".into(),
-            commit: "c0ffee".into(),
-            binary_sha256: "ab".into(),
-            verified: true,
-        }),
-        break_glass: Some(BreakGlass {
-            reason: "rebuilt locally for Gate B".into(),
-            tty_confirmed: true,
-        }),
         roots: RunRoots::default(),
         verdict_start: Some(DiskVerdict::Warn),
     }
@@ -130,15 +120,13 @@ fn audit_should_have_run_start_intent_result_run_end_with_schema_1_and_same_run_
         assert_eq!(l["schema"], 1, "{l}");
         assert_eq!(l["run_id"], "r1", "{l}");
     }
-    // Build provenance, gate stamp, break-glass and the start verdict ride on run_start (T-443, first half).
+    // Build provenance and the start verdict ride on run_start (T-443, first half).
     let rs = &v[0];
     assert_eq!(rs["build"]["dirty"], true);
     assert_eq!(rs["build"]["git_commit"], build().git_commit);
     assert_eq!(rs["build"]["metascope_rev"], build().metascope_rev);
     assert_eq!(rs["build"]["patched"], false);
     assert_eq!(rs["build"]["metascope_dirty"], false);
-    assert_eq!(rs["stamp"]["verified"], true);
-    assert_eq!(rs["break_glass"]["tty_confirmed"], true);
     assert_eq!(rs["verdict_start"], "warn");
     assert_eq!(v[2]["path"], "/home/u/.npm/_cacache");
     assert_eq!(v[2]["est_bytes"], 4096);

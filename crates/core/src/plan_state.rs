@@ -1,5 +1,5 @@
-//! Plain data behind the `PlanStore` port and the audit `run_start`: `SavedPlan`, `BuildInfo`,
-//! `StampSummary`. The merge rule (`merge_saved`) is Task 1.1.2a, the real store Story 2.2.1.
+//! Plain data behind the `PlanStore` port and the audit `run_start`: `SavedPlan`, `BuildInfo`.
+//! The merge rule (`merge_saved`) is Task 1.1.2a, the real store Story 2.2.1.
 
 use serde::{Deserialize, Serialize};
 
@@ -65,13 +65,4 @@ pub struct BuildInfo {
     /// `crates/scan` had uncommitted changes when it was built.
     #[serde(default)]
     pub metascope_dirty: bool,
-}
-
-/// The verified gate stamp of the running binary.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StampSummary {
-    pub gate: String,
-    pub commit: String,
-    pub binary_sha256: String,
-    pub verified: bool,
 }

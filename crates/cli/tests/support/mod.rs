@@ -486,7 +486,6 @@ impl RunFx {
         ApplyInput {
             plan_id: PlanId::from_hex("91be04d7").unwrap(),
             selection: &self.selection,
-            gate_bypass: None,
             audit_path: Some("/home/tstapler/.local/state/dunnage/audit.jsonl".into()),
             selected_items: 7,
             selected_est: gib(96.4),

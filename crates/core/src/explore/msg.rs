@@ -315,7 +315,7 @@ pub struct DeleteSummary {
 }
 
 /// Everything the worker of an explorer delete sends to the UI loop, in this order: `Progress` and `Item` per
-/// item, then exactly one of `Done` or `Refused`. `Refused` means nothing was deleted (the stamp, the lock,
+/// item, then exactly one of `Done` or `Refused`. `Refused` means nothing was deleted (the lock,
 /// `Changed since you confirmed ...`, an unwritable audit log); its text is the whole message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeleteMsg {

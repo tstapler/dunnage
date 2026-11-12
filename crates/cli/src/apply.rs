@@ -40,8 +40,6 @@ pub enum LastDryRun {
 pub struct ApplyInput<'a> {
     pub plan_id: PlanId,
     pub selection: &'a Selection,
-    /// `WARNING: gate check bypassed (<reason>)`, known at step 3.
-    pub gate_bypass: Option<String>,
     pub audit_path: Option<PathBuf>,
     pub selected_items: usize,
     pub selected_est: u64,
@@ -58,7 +56,7 @@ pub struct ApplyInput<'a> {
     pub verbose: bool,
     pub quiet: bool,
     pub tty: bool,
-    /// L1 (and the bypass WARNING) were already written to stdout when the run committed
+    /// L1 were already written to stdout when the run committed
     /// (`render_marker`), so the screen continues below them.
     pub marker_printed: bool,
 }
@@ -486,30 +484,19 @@ fn row_table(out: &mut Out, input: &ApplyInput, rows: &[ItemRow]) {
     }
 }
 
-/// L1 and the optional bypass WARNING: what stdout shows the moment the run passes step 4 of
+/// L1: what stdout shows the moment the run passes step 4 of
 /// `design/ux.md` 1.4, before the lock, so every later refusal still sits under a marker.
-pub fn render_marker(plan_id: PlanId, gate_bypass: Option<&str>, term: &Terminal) -> String {
+pub fn render_marker(plan_id: PlanId, term: &Terminal) -> String {
     let mut out = Out::new(term);
     marker(&mut out, &format!("{APPLYING} plan-id {plan_id}"));
-    if let Some(w) = gate_bypass {
-        out.text(w);
-    }
     out.finish()
 }
 
-/// L1, the optional WARNING and nothing else: the shape of a run refused by the lock, the audit log or the
+/// L1 and nothing else: the shape of a run refused by the lock, the audit log or the
 /// starvation check (`design/ux.md` 3.1).
-pub fn render_refused(
-    plan_id: PlanId,
-    gate_bypass: Option<&str>,
-    exit_code: i32,
-    term: &Terminal,
-) -> String {
+pub fn render_refused(plan_id: PlanId, exit_code: i32, term: &Terminal) -> String {
     let mut out = Out::new(term);
     marker(&mut out, &format!("{APPLYING} plan-id {plan_id}"));
-    if let Some(w) = gate_bypass {
-        out.text(w);
-    }
     out.text(&finished_line(exit_code));
     out.finish()
 }
@@ -524,9 +511,6 @@ pub fn render_closing(exit_code: i32, term: &Terminal) -> String {
 fn header(out: &mut Out, input: &ApplyInput) {
     if !input.marker_printed {
         marker(out, &format!("{APPLYING} plan-id {}", input.plan_id));
-        if let Some(w) = &input.gate_bypass {
-            out.text(w);
-        }
     }
     if let Some(p) = &input.audit_path {
         out.text(&format!(

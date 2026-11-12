@@ -16,7 +16,6 @@ use std::sync::{Arc, Mutex};
 use common::Fixture;
 use dunnage_cli::app::{ApplyMode, Ports};
 use dunnage_cli::terminal::Terminal;
-use dunnage_cli::wiring::audit::{GateExit, StampOutcome};
 use dunnage_cli::wiring::compose::{compose_apply, ApplyState, ApplyWiring, Sink, Trace};
 use dunnage_core::candidate::BuildDirFlavor;
 use dunnage_core::ports::Env;
@@ -122,19 +121,11 @@ struct Ran {
     trace: Trace,
 }
 
-type Stamp = dyn Fn(char) -> Result<StampOutcome, GateExit>;
-
-#[allow(clippy::unnecessary_wraps)] // the signature is the `stamp` port's
-fn ok_stamp(_gate: char) -> Result<StampOutcome, GateExit> {
-    Ok(StampOutcome::Confined)
-}
-
 fn go(
     rig: &Rig,
     state: &FakeState,
     targets: &[&dyn Target],
     argv: &[&str],
-    stamp: &Stamp,
     stderr_tty: bool,
 ) -> Ran {
     let env = rig.env();
@@ -145,7 +136,6 @@ fn go(
         targets: targets.to_vec(),
         apply: ApplyMode::Granted(&mint),
         apply_capable: None,
-        stamp,
         build: build(),
         roots: RunRoots::default(),
         scan_roots: 1,
@@ -191,10 +181,9 @@ fn caches() -> FakeTarget {
     )
 }
 
-const FULL: [&str; 15] = [
+const FULL: [&str; 14] = [
     "parse_args",
     "kind_availability",
-    "check_stamp",
     "plan_id_gate",
     "unclean_notice",
     "marker",
@@ -221,7 +210,6 @@ fn a_full_apply_should_run_the_steps_in_the_order_of_the_ux_doc_When_caches_are_
         &state,
         &[&c],
         &["--apply", "--kinds", "caches"],
-        &ok_stamp,
         false,
     );
     assert_eq!(r.code, 0, "{} {}", r.stdout, r.stderr);
@@ -243,38 +231,6 @@ fn a_full_apply_should_run_the_steps_in_the_order_of_the_ux_doc_When_caches_are_
 }
 
 #[test]
-fn a_missing_stamp_should_end_the_run_at_check_stamp_with_no_state_and_empty_stdout() {
-    let (rig, state, c) = (Rig::new(), FakeState::default(), caches());
-    let stamp = |_g: char| {
-        Err(GateExit {
-            text: "error: no stamp was installed. Nothing was deleted.".into(),
-            json_code: "stamp_refused",
-        })
-    };
-    let r = go(
-        &rig,
-        &state,
-        &[&c],
-        &["--apply", "--kinds", "caches"],
-        &stamp,
-        false,
-    );
-    assert_eq!(r.code, 64);
-    assert_eq!(r.trace.steps(), &FULL[..3]);
-    assert!(r.stdout.is_empty(), "{}", r.stdout);
-    assert!(r.stderr.contains("no stamp was installed"));
-    assert_eq!(
-        state.reserves.load(Ordering::SeqCst),
-        0,
-        "no reserve before step 4"
-    );
-    assert_eq!(state.unclean.load(Ordering::SeqCst), 0);
-    assert!(rig.audit.calls().is_empty());
-    assert_eq!(rig.guard.acquire_calls(), 0);
-    assert!(c.executed().is_empty());
-}
-
-#[test]
 fn the_plan_id_gate_should_end_the_run_at_plan_id_gate_with_the_same_empty_state() {
     let rig = Rig::new();
     let state = FakeState::default();
@@ -292,11 +248,10 @@ fn the_plan_id_gate_should_end_the_run_at_plan_id_gate_with_the_same_empty_state
         &state,
         &[&t],
         &["--apply", "--kinds", "build-dirs"],
-        &ok_stamp,
         false,
     );
     assert_eq!(r.code, 64, "{}", r.stderr);
-    assert_eq!(r.trace.steps(), &FULL[..4]);
+    assert_eq!(r.trace.steps(), &FULL[..3]);
     assert!(r.stdout.is_empty(), "{}", r.stdout);
     assert_eq!(state.reserves.load(Ordering::SeqCst), 0);
     assert_eq!(state.unclean.load(Ordering::SeqCst), 0);
@@ -313,7 +268,6 @@ fn every_selected_selector_unavailable_should_end_the_run_at_kind_availability_w
         &state,
         &[&DownTarget],
         &["--apply", "--kinds", "docker-volumes"],
-        &ok_stamp,
         false,
     );
     assert_eq!(r.code, 1, "{}", r.stderr);
@@ -354,7 +308,6 @@ fn a_held_run_lock_should_print_the_marker_and_the_closing_line_only_with_exit_2
         &state,
         &[&c],
         &["--apply", "--kinds", "caches"],
-        &ok_stamp,
         false,
     );
     finished_with(
@@ -362,7 +315,6 @@ fn a_held_run_lock_should_print_the_marker_and_the_closing_line_only_with_exit_2
         &[
             "parse_args",
             "kind_availability",
-            "check_stamp",
             "plan_id_gate",
             "unclean_notice",
             "marker",
@@ -390,10 +342,9 @@ fn an_unwritable_audit_log_should_refuse_with_exit_2_and_no_intent() {
         &state,
         &[&c],
         &["--apply", "--kinds", "caches"],
-        &ok_stamp,
         false,
     );
-    finished_with(&r, &[&FULL[..9], &["closing"]].concat(), 2);
+    finished_with(&r, &[&FULL[..8], &["closing"]].concat(), 2);
     assert!(
         r.stderr.contains("cannot write the audit log"),
         "{}",
@@ -425,10 +376,9 @@ fn a_starved_filesystem_should_refuse_with_exit_3_after_the_audit_opened_and_bef
         &state,
         &[&c],
         &["--apply", "--kinds", "caches"],
-        &ok_stamp,
         false,
     );
-    finished_with(&r, &[&FULL[..10], &["closing"]].concat(), 3);
+    finished_with(&r, &[&FULL[..9], &["closing"]].concat(), 3);
     assert!(
         r.stderr.contains("deleting could fail with ENOSPC"),
         "{}",
@@ -454,24 +404,16 @@ fn reserves_that_cannot_be_created_should_refuse_with_exit_2_before_the_lock() {
         &state,
         &[&c],
         &["--apply", "--kinds", "caches"],
-        &ok_stamp,
         false,
     );
-    finished_with(&r, &[&FULL[..7], &["closing"]].concat(), 2);
+    finished_with(&r, &[&FULL[..6], &["closing"]].concat(), 2);
     assert_eq!(rig.guard.acquire_calls(), 0);
 }
 
 #[test]
 fn the_progress_hook_should_print_one_removing_line_per_item_on_stderr_When_stdout_is_redirected() {
     let (rig, state, c) = (Rig::new(), FakeState::default(), caches());
-    let r = go(
-        &rig,
-        &state,
-        &[&c],
-        &["--apply", "--kinds", "caches"],
-        &ok_stamp,
-        true,
-    );
+    let r = go(&rig, &state, &[&c], &["--apply", "--kinds", "caches"], true);
     assert_eq!(r.code, 0);
     // Workers start in either order, so the first line names whichever item began first.
     assert!(
@@ -488,7 +430,6 @@ fn the_progress_hook_should_print_one_removing_line_per_item_on_stderr_When_stdo
         &state,
         &[&c],
         &["--apply", "--kinds", "caches", "--quiet"],
-        &ok_stamp,
         true,
     );
     assert!(!quiet.stderr.contains("removing"), "{}", quiet.stderr);
@@ -502,7 +443,6 @@ fn a_json_apply_should_print_no_marker_and_one_document() {
         &state,
         &[&c],
         &["--apply", "--kinds", "caches", "--json"],
-        &ok_stamp,
         false,
     );
     assert_eq!(r.code, 0);
@@ -700,7 +640,6 @@ fn only_should_name_an_item_of_the_selected_kinds_or_end_the_run_with_exit_64() 
             "--only",
             "/home/u/.npm/_cache",
         ],
-        &ok_stamp,
         false,
     );
     assert_eq!(r.code, 64, "{}", r.stderr);
@@ -727,7 +666,6 @@ fn only_should_name_an_item_of_the_selected_kinds_or_end_the_run_with_exit_64() 
             "--only",
             "/home/u/.npm/_cacache",
         ],
-        &ok_stamp,
         false,
     );
     assert_eq!(ok.code, 0, "{}", ok.stderr);

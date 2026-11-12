@@ -709,7 +709,6 @@ mod enospc {
     use dunnage_adapters::RealDirOps;
     use dunnage_cli::app::{ApplyMode, Ports};
     use dunnage_cli::terminal::Terminal;
-    use dunnage_cli::wiring::audit::{GateExit, StampOutcome};
     use dunnage_cli::wiring::compose::{compose_apply, ApplyState, ApplyWiring, Sink, Trace};
     use dunnage_core::ports::Env;
     use dunnage_core::roots::RootSet;
@@ -747,11 +746,6 @@ mod enospc {
         fn ensure_reserves(&self) -> Result<Option<String>, FatalError> {
             Ok(None)
         }
-    }
-
-    #[allow(clippy::unnecessary_wraps)]
-    fn confined(_gate: char) -> Result<StampOutcome, GateExit> {
-        Ok(StampOutcome::Confined)
     }
 
     fn canon(p: &std::path::Path) -> std::io::Result<(PathBuf, Identity)> {
@@ -826,7 +820,6 @@ mod enospc {
             targets: vec![&target],
             apply: ApplyMode::Granted(&mint),
             apply_capable: None,
-            stamp: &confined,
             build: BuildInfo {
                 bin_version: "0.1.0".into(),
                 git_commit: "abc".into(),
@@ -1117,122 +1110,4 @@ fn the_owner_flow_on_a_full_state_dir_should_save_the_id_and_apply_with_the_rese
         f.home().join("code/proj/stale-a").is_dir(),
         "the stale directory was deleted"
     );
-}
-
-// ------------------------------------------------------------------ an unconfined apply needs a valid gate stamp
-
-/// The release Gate B binary, built in the private target dir `kind_registry.rs` uses, or `None` when
-/// `DC_SKIP_PROFILE_BUILDS` is set.
-fn release_gate_b() -> Option<PathBuf> {
-    if std::env::var_os("DC_SKIP_PROFILE_BUILDS").is_some() {
-        eprintln!("SKIP: DC_SKIP_PROFILE_BUILDS is set");
-        return None;
-    }
-    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-    let target = common::repo_root().join("target/kind-registry-builds");
-    let out = Command::new(cargo)
-        .current_dir(common::repo_root())
-        .env_remove("CARGO_ENCODED_RUSTFLAGS")
-        .env("CARGO_TARGET_DIR", &target)
-        .args([
-            "build",
-            "--locked",
-            "-p",
-            "dunnage",
-            "--release",
-            "--features",
-            "gate-b",
-        ])
-        .output()
-        .expect("cargo");
-    assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    Some(target.join("release/dunnage"))
-}
-
-fn sha256_of(path: &Path) -> String {
-    let out = Command::new("sha256sum").arg(path).output().unwrap();
-    String::from_utf8(out.stdout)
-        .unwrap()
-        .split_whitespace()
-        .next()
-        .unwrap()
-        .to_string()
-}
-
-fn git_head() -> String {
-    let out = Command::new("git")
-        .current_dir(common::repo_root())
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .unwrap();
-    String::from_utf8(out.stdout).unwrap().trim().to_string()
-}
-
-fn write_stamp(f: &Fixture, commit: &str, sha: &str) {
-    let dir = f.xdg("state").join("dunnage");
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(
-        dir.join("gate-stamp.json"),
-        format!(
-            "{{\"schema\":1,\"gate\":\"B\",\"commit\":\"{commit}\",\"binary_sha256\":\"{sha}\"}}\n"
-        ),
-    )
-    .unwrap();
-}
-
-#[test]
-fn safety_ungated_apply_needs_stamp() {
-    let Some(bin) = release_gate_b() else { return };
-    let real_sha = sha256_of(&bin);
-    let mut one_off: Vec<char> = real_sha.chars().collect();
-    one_off[0] = if one_off[0] == '0' { '1' } else { '0' };
-    let one_off: String = one_off.into_iter().collect();
-    // (name, stamp to install)
-    let legs: [(&str, Option<(String, String)>); 3] = [
-        ("no stamp", None),
-        (
-            "a stamp for another commit",
-            Some(("deadbeef".repeat(5), real_sha.clone())),
-        ),
-        (
-            "a stamp whose binary_sha256 differs by one digit",
-            Some((git_head(), one_off)),
-        ),
-    ];
-    for (name, stamp) in legs {
-        let f = Fixture::new();
-        cold(&f);
-        if let Some((commit, sha)) = &stamp {
-            write_stamp(&f, commit, sha);
-        }
-        // No DC_TEST_ROOT: the run is unconfined, so it needs a stamp. HOME is the fixture's; the refusal comes
-        // before any lock or audit file, so nothing is deleted even if the gate were open.
-        let out = f
-            .command_for(&bin)
-            .env_remove("DC_TEST_ROOT")
-            .args(["--apply", "--kinds", "caches"])
-            .stdin(std::process::Stdio::null())
-            .output()
-            .unwrap();
-        let (stdout, stderr) = text_of(&out);
-        assert_eq!(out.status.code(), Some(64), "{name}: {stderr}");
-        assert!(stdout.is_empty(), "{name}: {stdout}");
-        assert!(
-            stderr.contains("this binary has no valid gate stamp"),
-            "{name}: {stderr}"
-        );
-        assert!(stderr.contains("Nothing was deleted"), "{name}: {stderr}");
-        assert!(!caches_gone(&f), "{name}: a cache was deleted");
-        let state = f.xdg("state").join("dunnage");
-        for created in ["run.lock", "audit.jsonl", "audit.reserve", "last_plan"] {
-            assert!(
-                !state.join(created).exists(),
-                "{name}: {created} was created before the refusal"
-            );
-        }
-    }
 }

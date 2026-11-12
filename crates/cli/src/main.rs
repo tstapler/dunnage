@@ -19,7 +19,7 @@ use dunnage_cli::app::{self, ApplyMode, Io, Ports};
 use dunnage_cli::args::{self, Cli, Command, Parsed};
 use dunnage_cli::render_json::{fatal_doc, to_text};
 use dunnage_cli::terminal;
-use dunnage_cli::wiring::audit::{build_info, StampOutcome};
+use dunnage_cli::wiring::audit::build_info;
 use dunnage_cli::wiring::compose;
 use dunnage_cli::wiring::confine;
 use dunnage_cli::wiring::dirs::{real_canon, resolve_real_dirs};
@@ -215,8 +215,7 @@ fn run_wired(cli: &Cli, base: &Dirs, roots: &RootSet, writes_state: bool) -> i32
             eprintln!("warning: could not record the run in outcome.jsonl ({e}).");
         }
     };
-    // Plan, status and the read-only commands never reach the stamp step; `--apply` is `wiring::compose`.
-    let stamp = |_gate: char| Ok(StampOutcome::Confined);
+    // Plan, status and the read-only commands never apply; `--apply` is `wiring::compose`.
     let reserves_note = wired
         .state
         .dir
@@ -233,7 +232,6 @@ fn run_wired(cli: &Cli, base: &Dirs, roots: &RootSet, writes_state: bool) -> i32
         targets: registry.targets(),
         apply: ApplyMode::Disabled,
         apply_capable: Some(&capable),
-        stamp: &stamp,
         build: build.clone(),
         roots: roots.run_roots(),
         scan_roots: roots.scan_roots().len(),

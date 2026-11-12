@@ -11,4 +11,3 @@ B safety_floor_rule_both_sides               # the floor rule F refuses on both 
 B safety_fixture_home_canary                 # nothing outside the fixture HOME, DC_TEST_ROOT and the allowlist is opened (Story 2.1.6)
 B safety_mislabelled_mutating_cmd_refused    # a mutating Cmd labelled read-only is refused in plan mode (Story 1.1.6)
 B safety_destructive_apply_needs_plan_id     # destructive kinds need the reviewed plan's id (Story 2.3.3)
-B safety_ungated_apply_needs_stamp           # an unconfined --apply needs a valid gate stamp (Story 2.2.1d)

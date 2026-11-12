@@ -36,10 +36,10 @@ run_gate() {
   # Build, lint and test with Bazel (ADR-008); the Cargo leg keeps the tests Bazel cannot run hermetically
   # (they build release profiles with cargo) and a release build that detects Cargo/Bazel drift.
   # DC_GATE_SKIP_BUILD=1 (alias DC_GATE_SKIP_CARGO) skips this block, for the selftest.
-  local bin=${DC_GATE_BINARY:-} copy=""
+  local bin=${DC_GATE_BINARY:-}
   if [ "${DC_GATE_SKIP_BUILD:-${DC_GATE_SKIP_CARGO:-0}}" != 1 ]; then
     # The kinds a gate registers are a build setting (Story 2.3.4): gate B and later build with the gate's feature,
-    # so the binary the gate stamps is the one whose registry matches ci/safety/kinds-by-gate.txt. Gate A has none.
+    # so the binary the gate checks is the one whose registry matches ci/safety/kinds-by-gate.txt. Gate A has none.
     local cfg=() feat=()
     case $gate in B) cfg=(--config=gate-b); feat=(--features dunnage/gate-b) ;; C) cfg=(--config=gate-c); feat=(--features dunnage/gate-c) ;;
       D|E|F) cfg=(--config=gate-d); feat=(--features dunnage/gate-d) ;; esac
@@ -52,7 +52,7 @@ run_gate() {
       if bin=$(scripts/gate-binary.sh "$gate" 2>/dev/null); then ok=$((ok+1)); echo "ok:   bazel -c opt gate binary $bin"; else fails=$((fails+1)); echo "FAIL: bazel -c opt gate binary"; fi
     fi
   fi
-  # The binary the gate stamps (and the owner installs) carries no test-support marker and none of the explorer's
+  # The gated binary carries no test-support marker and none of the explorer's
   # test-only switches (Story 6.5.6).
   if [ -n "$bin" ] && [ -f "$bin" ] && [ -e scripts/check-release-features.sh ]; then step "gated binary: no test-support marker or switch" scripts/check-release-features.sh --artifact "$bin"; fi
   prev=$(ls -t "$(git rev-parse --git-dir)/gate-reports/$gate-"*.txt 2>/dev/null | head -1)
@@ -61,14 +61,7 @@ run_gate() {
   if [ -n "$prev" ] && git rev-parse -q --verify "$prev^{commit}" >/dev/null; then git diff "$prev" HEAD -- ci/delete_adversarial.sha256 | sed 's/^/  /'; else echo "  (no previous report to compare with)"; fi
   line="GATE $gate commit $sha tree clean checks $((ok+fails)) ok $ok failed $fails"
   mkdir -p "$(git rev-parse --git-dir)/gate-reports"; echo "$line" > "$(git rev-parse --git-dir)/gate-reports/$gate-$sha.txt"; echo "$line"
-  # Gate stamp (Task 0.1.1d, consumed by Task 2.2.1d): only an all-green gate on a clean tree stamps the release binary it built.
-  rm -f "$(git rev-parse --git-dir)/gate-reports/stamp-$gate.json"
-  if [ $fails = 0 ] && [ -n "$bin" ] && [ -f "$bin" ]; then
-    # Bazel reuses one output path for every gate: keep the exact stamped file for `make install-gated`.
-    copy=$(git rev-parse --git-dir)/gate-reports/bin-$gate; cp -f "$bin" "$copy"
-    printf '{"schema":1,"gate":"%s","commit":"%s","binary_sha256":"%s"}\n' "$gate" "$(git rev-parse HEAD)" "$(sha256sum "$bin" | cut -d' ' -f1)" \
-      > "$(git rev-parse --git-dir)/gate-reports/stamp-$gate.json"
-    echo "stamp: $(git rev-parse --git-dir)/gate-reports/stamp-$gate.json"
+  if [ $fails = 0 ]; then
     # The owner cuts the tag after OWNER WAIT F (RELEASE.md); the gate never creates one.
     [ "$gate" != F ] || echo "gate F is green at $(git rev-parse --short HEAD). After OWNER WAIT F (RELEASE.md) the owner tags it: git tag explore-gate-f $(git rev-parse HEAD)"
   fi
@@ -102,13 +95,8 @@ selftest() {
   rm scripts/untracked.txt
   expect usage "an unknown gate letter is a usage error" "usage" "$self" Z "$d/r"
   ls .git/gate-reports/A-*.txt >/dev/null 2>&1 && { n=$((n+1)); echo "ok: a report file named after gate and commit was written"; } || { echo "SELFTEST BAD: no report file"; bad=$((bad+1)); }
-  # stamp: written only when green and a binary exists; names the full commit and the binary hash; removed by a later failing run
-  printf 'fake-binary-v1' > fakebin; export DC_GATE_BINARY="$d/r/fakebin"; git add -A; git commit -qm bin
-  expect pass "a green gate with a binary prints the stamp path" "stamp: " "$self" A "$d/r"
-  if [ "$(jq -r .binary_sha256 .git/gate-reports/stamp-A.json)" = "$(printf 'fake-binary-v1' | sha256sum | cut -d' ' -f1)" ] && [ "$(jq -r .commit .git/gate-reports/stamp-A.json)" = "$(git rev-parse HEAD)" ]; then n=$((n+1)); echo "ok: the stamp holds the binary sha256 and the full commit"; else echo "SELFTEST BAD: stamp content: $(cat .git/gate-reports/stamp-A.json 2>&1)"; bad=$((bad+1)); fi
   printf '#!/bin/sh\nexit 1\n' > scripts/check-bad.sh; chmod +x scripts/check-bad.sh; git add -A; git commit -qm bad2
   expect fail "a red gate fails" "FAIL: scripts/check-bad.sh" "$self" A "$d/r"
-  [ ! -e .git/gate-reports/stamp-A.json ] && { n=$((n+1)); echo "ok: a red gate leaves no stamp (the old one is removed)"; } || { echo "SELFTEST BAD: stale stamp survived a red gate"; bad=$((bad+1)); }
   unset DC_GATE_BINARY
   echo "selftest: $n ok, $bad bad"; [ $bad = 0 ]
 }

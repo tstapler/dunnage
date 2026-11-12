@@ -16,16 +16,13 @@ use std::path::PathBuf;
 
 use dunnage_adapters::testing::{Event, FaultDirOps};
 use dunnage_adapters::RealDirOps;
-use dunnage_cli::explore::apply::{
-    changed_text, exit_for_signal, grew_too_much, skip_text, STAMP_REFUSED,
-};
+use dunnage_cli::explore::apply::{changed_text, exit_for_signal, grew_too_much, skip_text};
 use dunnage_core::testing::{AuditCall, FakeAuditSink, FakeRunGuard};
 use dunnage_core::{AuditRecord, SkipReason, Status};
 use explore_rig::{kinds_of, manifest, Ex, FixedSizer, Knobs, Ran, NOW};
 
-const ORDER: [&str; 11] = [
+const ORDER: [&str; 10] = [
     "check_plan_id",
-    "check_stamp",
     "run_lock",
     "audit_open",
     "explorer_confirm",
@@ -185,36 +182,13 @@ fn apply_should_refuse_When_the_plan_in_the_store_is_for_other_marks() {
 }
 
 #[test]
-fn safety_apply_should_say_deleting_is_disabled_and_mint_nothing_When_the_stamp_is_refused() {
-    let ex = Ex::new();
-    let (a, _) = two_marks(&ex);
-    let confirmed = ex.confirmed(&[a.clone()]);
-    let ran = ex.run_with(
-        confirmed,
-        ex.confined_ops(),
-        &Knobs {
-            stamp_ok: false,
-            ..Knobs::default()
-        },
-    );
-    assert_eq!(ran.steps, ["check_plan_id", "check_stamp"]);
-    assert_eq!(ran.minted, 0);
-    assert_eq!(ran.report.refused.as_deref(), Some(STAMP_REFUSED));
-    assert!(STAMP_REFUSED.starts_with(
-        "Deleting is disabled in this build: run 'make gate' and 'make install-gated'."
-    ));
-    assert!(a.exists());
-    assert!(ex.audit.records().is_empty());
-}
-
-#[test]
 fn apply_should_name_the_holder_and_delete_nothing_When_the_run_lock_is_held() {
     let mut ex = Ex::new();
     let (a, _) = two_marks(&ex);
     let confirmed = ex.confirmed(&[a.clone()]);
     ex.guard = FakeRunGuard::lock_held_by(4242);
     let ran = ex.run(confirmed, ex.confined_ops());
-    assert_eq!(ran.steps, ["check_plan_id", "check_stamp", "run_lock"]);
+    assert_eq!(ran.steps, ["check_plan_id", "run_lock"]);
     assert_eq!(ran.minted, 0);
     assert_eq!(
         ran.report.refused.as_deref(),
@@ -285,7 +259,6 @@ fn apply_should_refuse_with_the_changed_text_and_log_a_refused_run_When_the_tree
         ran.steps,
         [
             "check_plan_id",
-            "check_stamp",
             "run_lock",
             "audit_open",
             "explorer_confirm",
@@ -737,17 +710,11 @@ fn cleaner_steps() -> Vec<String> {
 
 #[test]
 fn the_explorer_apply_should_share_named_steps_with_the_cleaner_and_keep_their_relative_order() {
-    // Steps 1 and 2 of the explorer are the cleaner's `plan_id_gate` (the same `destructive_gate`) and
-    // `check_stamp`, in the opposite order: the AC puts the plan-id first. The rest are the cleaner's own.
-    let shared = [
-        "check_stamp",
-        "run_lock",
-        "audit_open",
-        "execute",
-        "run_end",
-    ];
+    // Step 1 of the explorer is the cleaner's `plan_id_gate` (the same `destructive_gate`). The rest are the
+    // cleaner's own.
+    let shared = ["run_lock", "audit_open", "execute", "run_end"];
     let cleaner = cleaner_steps();
-    assert_eq!(cleaner.len(), 15, "{cleaner:?}");
+    assert_eq!(cleaner.len(), 14, "{cleaner:?}");
     let pos = |list: &[String], s: &str| list.iter().position(|x| x == s).unwrap();
     let explorer: Vec<String> = ORDER.iter().map(ToString::to_string).collect();
     let mut last = (0, 0);
@@ -810,20 +777,25 @@ fn apply_should_send_progress_item_and_done_messages_in_order_to_the_loop() {
 #[test]
 fn apply_should_send_exactly_one_refused_message_and_nothing_else_When_a_gate_stops_it() {
     use dunnage_core::explore::msg::DeleteMsg;
-    let ex = Ex::new();
+    let mut ex = Ex::new();
+    ex.guard = FakeRunGuard::lock_held_by(4242);
     let (a, _) = two_marks(&ex);
     let (tx, rx) = std::sync::mpsc::sync_channel(64);
     let _ = ex.run_with(
         ex.confirmed(&[a.clone()]),
         ex.confined_ops(),
         &Knobs {
-            stamp_ok: false,
             events: Some(tx),
             ..Knobs::default()
         },
     );
     let msgs: Vec<DeleteMsg> = rx.try_iter().collect();
-    assert_eq!(msgs, [DeleteMsg::Refused(STAMP_REFUSED.to_string())]);
+    assert_eq!(
+        msgs,
+        [DeleteMsg::Refused(
+            "another dunnage apply is running (pid 4242). Nothing was deleted.".to_string()
+        )]
+    );
 }
 
 #[test]

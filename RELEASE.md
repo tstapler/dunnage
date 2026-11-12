@@ -120,18 +120,19 @@ run of the same selection, rule F (the floor) and the allowed roots bound every 
 first, and the explorer's delete needs a plan and the typed count. The sections below are kept as the checklists a
 reviewer can still run; read their "not registered in the shipped binary" sentences as the state before this decision.
 
-Still in force: an unconfined `--apply` checks the gate stamp (`gate_stamp`, written by `make install-gated`), so a
-binary from a release archive or Homebrew refuses a real `--apply` ("no valid gate stamp") unless the owner uses
-the audited `DUNNAGE_UNGATED` break-glass. This decision registered the kinds; it did not remove that check.
+The gate stamp is gone (owner decision, 2026-11-12): `--apply` no longer checks for a stamp written by `make gate`
+or accepts the `DUNNAGE_UNGATED` / `BYPASS` break-glass, so a binary from a release archive, Homebrew or
+`make install` can apply. `make install-gated`, the stamp files under `.git/gate-reports/` and the `stamp` and
+`break_glass` fields of the audit `run_start` record are removed; older audit logs that carry the fields still
+verify, because the reader ignores unknown fields. `make gate` still runs the whole check list and writes its report.
 
 ## OWNER WAIT B: the first live `--apply --kinds caches`
 
 The Gate B apply path is built but the shipped binary does not register it (`gate-b` is not a default feature of
 `crates/cli`). Review it from a gated build, then make the feature a default and tag.
 
-1. Build and gate: `make gate GATE=B`, then at once `make install-gated GATE=B` (the next gate rebuilds the release
-   binary and would break the stamp). The install copies the Bazel gate binary (`.git/gate-reports/bin-<gate>`, the file the stamp names) to `~/.cargo/bin`, the stamp
-   to `$XDG_STATE_HOME/dunnage/gate-stamp.json`, and runs `dunnage status`, which leaves `audit.reserve`
+1. Build and gate: `make gate GATE=B`, then `make install`, which builds the Cargo release binary into `~/.cargo/bin` and runs
+   `dunnage status`, which leaves `audit.reserve`
    and `last_plan.reserve` (1 MiB each) in the state dir; record that in the gate report.
 2. Rehearse a full disk first: `scripts/rehearse-full-disk.sh --prime 'dunnage status' -- sh` and, in that
    shell, do the flow below using only the lines printed; then once more with `--no-reserve` and follow the
@@ -155,7 +156,7 @@ The Gate B apply path is built but the shipped binary does not register it (`gat
 Build dirs (Story 3.2.4) are built but not registered in the shipped binary: `gate-c` is not a default feature of
 `crates/cli`. Worktrees (Story 3.1.3) are reviewed in the same wait; its steps follow the build-dir ones.
 
-1. Gate: `make gate GATE=C` on a clean tree, then at once `make install-gated GATE=C`; attach the report, the
+1. Gate: `make gate GATE=C` on a clean tree, then `make install`; attach the report, the
    `make safety` output and `make mutants` (the guard modules in `ci/mutants.d/*.files`, survivors listed in
    `ci/mutants.d/*.survivors.txt`).
 2. Read the dry run: `dunnage --kinds build-dirs`. Rows show the newest-mtime age, `kept as newest of N
@@ -243,7 +244,7 @@ What the repository has already proved, on fixtures, on the real binary (read th
 Owner steps (a real terminal, the real `$HOME`; nothing here runs unattended):
 
 1. Gate and install: `make gate GATE=F` on a clean tree (it prints `gate F is green at <sha>` and the tag command),
-   then at once `make install-gated GATE=F` (the next gate rebuilds the binary and would break the stamp). Attach
+   then `make install`. Attach
    `.git/gate-reports/F-<sha>.txt`. `make safety` must pass on both profiles.
 2. Cold, then warm, with a stopwatch (or a phone video) from pressing Enter:
    - Cold: `dunnage explore --rescan ~` (ignores the saved cache and writes a new one). Note the time to the

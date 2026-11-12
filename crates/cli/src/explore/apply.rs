@@ -1,23 +1,22 @@
 //! The explorer's apply (Task 6.6.3b, ADR-006 section 4 and amendments A3, A5, A7): the sequence that turns a
 //! [`ConfirmedPlan`] into deletions, written once and reached from `wiring::compose::run_apply` through
 //! `ApplyRequest::Explorer`. This file never mints the capability: `compose` hands it a `mint` closure that
-//! it calls after the plan-id and stamp gates, and `check-token-sites.sh --expect-sites 1` fails the build if
+//! it calls after the plan-id gate, and `check-token-sites.sh --expect-sites 1` fails the build if
 //! a second `grant_apply` appears anywhere else.
 //!
 //! The order (each name is pushed onto the [`Trace`]):
 //!
 //! 1. `check_plan_id`  : `plan::check_plan_id` over the marks' fresh `lstat` identities and the roots resolved now (a changed mark or root refuses the whole run)
-//! 2. `check_stamp`    : the gate stamp for gate D
-//! 3. `run_lock`       : the run lock, non-blocking
-//! 4. `audit_open`     : `run_start`; then `explorer_confirm` (synced)
-//! 5. `remeasure`      : total more than 10% or 1 GiB above the confirmed one ends the run, `run_end ... refused`
-//! 6. `resolve_roots`  : the roots resolved again, now
-//! 7. `mint`           : the capability, as late as possible: every refusal above leaves none in existence
-//! 8. `execute`        : per item: M1 to M5 again, fd-relative open, `fstat` against the planned identity,
+//! 2. `run_lock`       : the run lock, non-blocking
+//! 3. `audit_open`     : `run_start`; then `explorer_confirm` (synced)
+//! 4. `remeasure`      : total more than 10% or 1 GiB above the confirmed one ends the run, `run_end ... refused`
+//! 5. `resolve_roots`  : the roots resolved again, now
+//! 6. `mint`           : the capability, as late as possible: every refusal above leaves none in existence
+//! 7. `execute`        : per item: M1 to M5 again, fd-relative open, `fstat` against the planned identity,
 //!    `intent`, `delete_tree`, `result`
-//! 9. `settle`, 10. `run_end`
+//! 8. `settle`, 9. `run_end`
 //!
-//! Steps 2, 4, 5 (`run_start`), 8 and 10 are the cleaner's `check_stamp`, `run_lock`, `audit_open`, `execute`
+//! Steps 2, 3, 4 (`run_start`), 7 and 9 are the cleaner's `run_lock`, `audit_open`, `execute`
 //! and `run_end` of `wiring/compose.rs:1-8` and run the same ports; step 1 is the explorer's form of the
 //! cleaner's `plan_id_gate` (the same `destructive_gate`). The cleaner's `parse_args`, `kind_availability`,
 //! `unclean_notice`, `marker`, `ensure_reserves`, `starvation_preflight`, `header_rest`, `summary` and `closing`
@@ -50,17 +49,10 @@ use dunnage_core::{
 };
 
 use crate::units;
-use crate::wiring::audit::{GateExit, StampOutcome};
 use crate::wiring::compose::Trace;
-
-/// The gate the explorer's kind needs.
-const REQUIRED_GATE: char = 'D';
 
 /// What `d` says in a build that does not register `explorer-selection` (every build but Gate D).
 pub const NOT_IN_BUILD: &str = dunnage_core::explore::ports::DELETE_NOT_IN_BUILD;
-
-pub const STAMP_REFUSED: &str =
-    "Deleting is disabled in this build: run 'make gate' and 'make install-gated'. Nothing was deleted.";
 
 /// A re-measured total more than this fraction above the confirmed one refuses the delete.
 const GROWTH_FRACTION_DIVISOR: u64 = 10;
@@ -137,9 +129,7 @@ impl ExplorerRun {
 /// Every port the sequence reads, so a test drives it over fakes and the real wiring supplies the real ones.
 pub struct ExplorerApplyPorts<'a, D: DirOps> {
     pub env: &'a Env<'a>,
-    /// The stamp step for the gate the kind needs (no break-glass prompt: the explorer owns the terminal).
-    pub stamp: &'a dyn Fn(char) -> Result<StampOutcome, GateExit>,
-    /// Mints the capability. Called once, after the plan-id and stamp gates.
+    /// Mints the capability. Called once, after the plan-id gate.
     pub mint: &'a dyn Fn() -> ApplyToken,
     /// The directory operations that delete; built from the capability after it exists.
     pub ops: &'a dyn Fn(&ApplyToken) -> D,
@@ -381,22 +371,12 @@ fn sequence<D: DirOps + 'static>(
         return refuse(run, EXIT_REFUSED, r.text());
     }
 
-    trace.push("check_stamp");
-    let Ok(stamp) = (w.stamp)(REQUIRED_GATE) else {
-        return refuse(run, EXIT_REFUSED, STAMP_REFUSED.to_string());
-    };
-
     trace.push("run_lock");
     if let Err(e) = env.guard.acquire() {
         return refuse(run, EXIT_FATAL, lock_text(&e));
     }
 
     trace.push("audit_open");
-    let (stamp_summary, break_glass) = match &stamp {
-        StampOutcome::Confined => (None, None),
-        StampOutcome::Verified(s) => (Some(s.clone()), None),
-        StampOutcome::BrokeGlass { break_glass, .. } => (None, Some(break_glass.clone())),
-    };
     let start = RunStart {
         schema: AUDIT_SCHEMA,
         run_id: w.run_id.clone(),
@@ -405,8 +385,6 @@ fn sequence<D: DirOps + 'static>(
         kinds: sel.kinds_resolved(),
         plan_id: Some(plan_id.to_string()),
         build: w.build.clone(),
-        stamp: stamp_summary,
-        break_glass,
         roots: reviewed_roots(&reviewed),
         verdict_start: None,
     };

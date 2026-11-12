@@ -218,8 +218,6 @@ fn options() -> RunOptions {
                 patched: false,
                 metascope_dirty: false,
             },
-            stamp: None,
-            break_glass: None,
             roots: RunRoots::default(),
             verdict_start: None,
         },

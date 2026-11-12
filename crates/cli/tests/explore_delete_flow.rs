@@ -7,8 +7,8 @@
 )]
 //! Task 6.6.4c: the explorer's delete key end to end over a fixture tree. The TUI loop runs on a
 //! `TestBackend` with scripted keys; the review is the real planner over the fixture, and the delete is the
-//! public `compose_explorer_apply` sequence the real `delete` runs on a worker (fake audit sink, lock and
-//! stamp; real `lstat`, mount table and fd-relative directory operations). Nothing outside the tempdir is
+//! public `compose_explorer_apply` sequence the real `delete` runs on a worker (fake audit sink and lock;
+//! real `lstat`, mount table and fd-relative directory operations). Nothing outside the tempdir is
 //! read for deletion or written.
 
 mod explore_rig;

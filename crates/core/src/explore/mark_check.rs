@@ -56,7 +56,7 @@ impl MountTable {
 
 /// The tool's own state (rule M5): the state, cache and config directories and the running binary. A path is
 /// refused when it is inside one of the directories, is one of them or is above one (their ancestors), or is
-/// the binary or one of its ancestors (deleting the binary's `target/` directory also breaks the stamp check).
+/// the binary or one of its ancestors.
 ///
 /// Marked paths are canonical (M4 refuses symlink components), so the comparison must be too: build it with
 /// [`OwnState::canonical`] in production; [`OwnState::new`] compares the spellings it was given.

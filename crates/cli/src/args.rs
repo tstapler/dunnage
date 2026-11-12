@@ -27,8 +27,6 @@ Exit codes: 0 ok, 1 partial failure (status: warn), 2 fatal (status: crit; audit
 Example: dunnage --json | jq -r '.items[] | [.status, .kind, .est_bytes, .path] | @tsv'
 
 Environment:
-  DUNNAGE_UNGATED=<reason>  audited break-glass for the gate-stamp check of an unconfined --apply;
-                                 you must also type BYPASS on the terminal
   NO_COLOR                       turn colour off (--color always overrides it)";
 
 // A command line is a set of independent switches.

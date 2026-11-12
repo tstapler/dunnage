@@ -38,16 +38,6 @@ fn audit_record_should_roundtrip_each_line_type_with_a_type_tag() {
             patched: false,
             metascope_dirty: false,
         },
-        stamp: Some(StampSummary {
-            gate: "A".into(),
-            commit: "abc".into(),
-            binary_sha256: "00".into(),
-            verified: true,
-        }),
-        break_glass: Some(BreakGlass {
-            reason: "disk full".into(),
-            tty_confirmed: true,
-        }),
         roots: RunRoots::default(),
         verdict_start: None,
     });

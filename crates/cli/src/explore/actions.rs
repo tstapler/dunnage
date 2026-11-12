@@ -296,8 +296,6 @@ fn plan_marks(
         meta: dunnage_core::executor::RunMeta {
             run_id: ports.run_id.clone(),
             build: ports.build.clone(),
-            stamp: None,
-            break_glass: None,
             roots: ports.roots.clone(),
             verdict_start: None,
         },

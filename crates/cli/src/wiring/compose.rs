@@ -1,17 +1,16 @@
-//! The apply-path composition root (Story 2.3.4, Task 2.3.4a). One place wires the gate stamp, the reserves,
+//! The apply-path composition root (Story 2.3.4, Task 2.3.4a). One place wires the reserves,
 //! the run lock, the audit log, the plan store, the apply token and the confinement, in the order of
 //! `design/ux.md` 1.4:
 //!
-//! `parse_args, kind_availability, check_stamp, plan_id_gate, unclean_notice, marker, ensure_reserves,
+//! `parse_args, kind_availability, plan_id_gate, unclean_notice, marker, ensure_reserves,
 //! run_lock, audit_open, starvation_preflight, header_rest, execute, run_end, summary, closing`
 //!
 //! [`compose_apply`] is that sequence over ports (so a test drives it with fakes and a [`Trace`]);
 //! [`run_apply`] builds the real ports and is the only place that mints the capability: it holds the single
-//! production call of `grant_apply`, the `check_stamp` step with the hash of `std::env::current_exe()` and the
-//! `/dev/tty` `BYPASS` prompt, `confine_mode`, and the construction of `RealAuditSink`, `RealPlanStore`,
+//! production call of `grant_apply`, `confine_mode`, and the construction of `RealAuditSink`, `RealPlanStore`,
 //! `RealRunGuard` and `RealSpaceMeter` into the `Env`.
 //!
-//! A run refused in steps 1 to 4 creates no state file: nothing here touches the state directory before the
+//! A run refused in steps 1 to 3 creates no state file: nothing here touches the state directory before the
 //! plan-id gate has passed, and `ensure_reserves` runs before the lock and before the first state write.
 
 use std::cell::Cell;
@@ -22,9 +21,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use dunnage_adapters::audit::{unclean_run_warning, RealAuditSink};
-use dunnage_adapters::gate_stamp::{
-    current_exe_sha256, open_controlling_tty, read_stamp, stamp_path,
-};
 use dunnage_adapters::lock::RealRunGuard;
 use dunnage_adapters::signals::{SignalState, SwallowBrokenPipe};
 use dunnage_adapters::space_meter::run_meter;
@@ -54,7 +50,7 @@ use crate::explore::apply::{
 };
 use crate::progress::{progress_mode, Progress};
 use crate::terminal::{self, Terminal};
-use crate::wiring::audit::{build_info, stamp_gate, GateExit, StampInputs, StampOutcome};
+use crate::wiring::audit::build_info;
 use crate::wiring::confine::{self, Confine};
 use crate::wiring::env::{open_state, read_root, tool_dirs, RealFs, SystemClock};
 use crate::wiring::kinds::{KindCtx, KindRegistry};
@@ -189,7 +185,6 @@ struct Hooks<'a> {
     err: Sink,
     term: &'a Terminal,
     json: bool,
-    bypass: Mutex<Option<String>>,
     marker_done: AtomicBool,
     progress: Mutex<Progress<'a>>,
     started: Instant,
@@ -225,12 +220,7 @@ impl RunHooks for Hooks<'_> {
         }
         self.step("marker");
         if !self.json {
-            let bypass = self
-                .bypass
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            let text = render_marker(plan_id, bypass.as_deref(), self.term);
+            let text = render_marker(plan_id, self.term);
             let mut out = &self.out;
             let _ = out.write_all(text.as_bytes());
             let _ = out.flush();
@@ -261,13 +251,6 @@ impl RunHooks for Hooks<'_> {
 impl ApplyHooks for Hooks<'_> {
     fn marker_printed(&self) -> bool {
         self.marker_done.load(Ordering::SeqCst)
-    }
-
-    fn stamped(&self, warning: Option<&str>) {
-        *self
-            .bypass
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = warning.map(str::to_string);
     }
 }
 
@@ -329,7 +312,6 @@ pub fn compose_apply(
         err: err.clone(),
         term: &p.term,
         json: cli.json,
-        bypass: Mutex::new(None),
         marker_done: AtomicBool::new(false),
         progress: Mutex::new(Progress::new(mode, &mut progress_sink, 0)),
         started: Instant::now(),
@@ -360,7 +342,7 @@ fn unix_now() -> i64 {
 }
 
 /// Which kind of apply `run_apply` serves. Both variants go through the one function below: the same
-/// confinement, state directory, audit sink, run lock, stamp step and capability mint site. The explorer's
+/// confinement, state directory, audit sink, run lock and capability mint site. The explorer's
 /// variant takes only the [`ConfirmedPlan`] (the typed count bound to the plan the owner reviewed); the
 /// per-run switches in [`ExplorerRun`] carry no authority.
 pub enum ApplyRequest<'a> {
@@ -376,7 +358,7 @@ pub enum ApplyRequest<'a> {
 
 /// The one place the capability is minted (`scripts/check-token-sites.sh --expect-sites 1`). The cleaner
 /// calls it before it builds the registry that deletes through it; the explorer calls it only after its
-/// plan-id and stamp gates, so a refused explorer run mints nothing.
+/// plan-id gate, so a refused explorer run mints nothing.
 fn mint_apply() -> ApplyToken {
     grant_apply()
 }
@@ -393,7 +375,6 @@ struct RealApply {
     space: Box<dyn dunnage_core::ports::SpaceMeter>,
     runner: Box<dyn dunnage_core::ports::CommandRunner>,
     guard: RealRunGuard,
-    confined: bool,
     build: BuildInfo,
 }
 
@@ -433,7 +414,6 @@ impl RealApply {
             space,
             runner,
             guard,
-            confined: matches!(confinement, Confine::Root(_)),
             build: build_info(),
         })
     }
@@ -450,24 +430,6 @@ impl RealApply {
             plans: &self.plans,
             dirs: self.dirs.clone(),
         }
-    }
-
-    /// The stamp step for `gate`; `ungated` is `DUNNAGE_UNGATED` (the explorer passes `None`: it owns the
-    /// terminal, so there is no break-glass prompt).
-    fn stamp(&self, gate: char, ungated: Option<&str>) -> Result<StampOutcome, GateExit> {
-        let installed = read_stamp(&stamp_path(&self.dirs.state));
-        let exe_sha256 = current_exe_sha256().unwrap_or_default();
-        stamp_gate(
-            &StampInputs {
-                build: &self.build,
-                stamp: installed.as_ref(),
-                exe_sha256: &exe_sha256,
-                required_gate: gate,
-                confined: self.confined,
-                ungated_var: ungated,
-            },
-            &open_controlling_tty,
-        )
     }
 }
 
@@ -527,7 +489,6 @@ fn run_explorer_apply(
     let (fs, clock) = (RealFs, SystemClock);
     let env = real.env(&fs, &clock);
     let read = read_root();
-    let stamp = |gate: char| real.stamp(gate, None);
     let mint = mint_apply;
     let ops = |t: &ApplyToken| {
         confine::apply_dir_ops(confinement, t).unwrap_or_else(|| RealDirOps::confined_to(&read))
@@ -537,7 +498,6 @@ fn run_explorer_apply(
     let exe = std::env::current_exe().unwrap_or_default();
     let ports = ExplorerApplyPorts {
         env: &env,
-        stamp: &stamp,
         mint: &mint,
         ops: &ops,
         resolve_roots: &resolve,
@@ -619,8 +579,6 @@ fn run_cleaner_apply(
     let build = real.build.clone();
     let run_id = run_id_now();
     let via = crate::wiring::env::tool_env("VIA").and_then(|v| v.into_string().ok());
-    let ungated = crate::wiring::env::tool_env("UNGATED").and_then(|v| v.into_string().ok());
-    let stamp = |gate: char| real.stamp(gate, ungated.as_deref());
     let outcome_run_id = run_id.clone();
     let outcome_via = via.clone();
     let outcome = |m: OutcomeMode, verdict: DiskVerdict, free: u64, unalloc: Option<u64>| {
@@ -648,7 +606,6 @@ fn run_cleaner_apply(
             ApplyMode::Granted(&mint)
         },
         apply_capable: Some(&capable),
-        stamp: &stamp,
         build,
         roots: roots.run_roots(),
         scan_roots: roots.scan_roots().len(),

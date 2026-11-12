@@ -1,10 +1,10 @@
 //! The dispatch of `dunnage` (Story 1.2.4, Task 1.2.4a): a parsed command line and a set of ports in, an
 //! exit code and two streams out. Everything outside the process (the filesystem, the targets, the state
-//! store, the stamp step, the apply capability) arrives through [`Ports`], so every acceptance criterion runs
+//! store, the apply capability) arrives through [`Ports`], so every acceptance criterion runs
 //! against fakes and `main` only wires the real ones.
 //!
-//! The order of an apply follows `design/ux.md` 1.4 as far as this story owns it: usage checks, the stamp
-//! step, then the executor (availability, plan-id gate, lock, audit, deletes). The composition order test
+//! The order of an apply follows `design/ux.md` 1.4 as far as this story owns it: usage checks,
+//! then the executor (availability, plan-id gate, lock, audit, deletes). The composition order test
 //! with its `Trace` is Story 2.3.4.
 
 use std::collections::HashMap;
@@ -40,7 +40,6 @@ use crate::terminal::Terminal;
 use crate::view::{
     saved_entries, ErrorEntry, FsBlock, Options, PlanInput, PlanView, ScanFacts, SortKey,
 };
-use crate::wiring::audit::{GateExit, StampOutcome};
 use crate::{audit_cmd, kinds, status};
 use dunnage_adapters::steam::default_steam_roots;
 
@@ -65,8 +64,6 @@ pub struct Ports<'a> {
     /// The selectors that may delete in this build (the per-gate registry of Story 2.3.4); `None` means every
     /// registered one, which is what the fake-driven tests use.
     pub apply_capable: Option<&'a [SelectorId]>,
-    /// The stamp step of an apply, given the gate the selection needs; `StampOutcome::Confined` skips it.
-    pub stamp: &'a dyn Fn(char) -> Result<StampOutcome, GateExit>,
     pub build: BuildInfo,
     pub roots: RunRoots,
     pub scan_roots: usize,
@@ -243,28 +240,21 @@ fn cleaner(cli: &Cli, p: &Ports, io: &mut Io) -> i32 {
     }
 }
 
-fn run_meta(p: &Ports, stamp: &StampOutcome) -> RunMeta {
-    let (stamp_summary, break_glass) = match stamp {
-        StampOutcome::Confined => (None, None),
-        StampOutcome::Verified(s) => (Some(s.clone()), None),
-        StampOutcome::BrokeGlass { break_glass, .. } => (None, Some(break_glass.clone())),
-    };
+fn run_meta(p: &Ports) -> RunMeta {
     RunMeta {
         run_id: p.run_id.clone(),
         build: p.build.clone(),
-        stamp: stamp_summary,
-        break_glass,
         roots: p.roots.clone(),
         verdict_start: None,
     }
 }
 
-fn options(cli: &Cli, p: &Ports, stamp: &StampOutcome) -> RunOptions {
+fn options(cli: &Cli, p: &Ports) -> RunOptions {
     RunOptions {
         jobs: cli.jobs.max(1),
         settle_timeout: Duration::from_secs(30),
         meter_path: None,
-        meta: run_meta(p, stamp),
+        meta: run_meta(p),
     }
 }
 
@@ -292,14 +282,10 @@ pub(crate) fn fs_block(report: &RunReport) -> FsBlock {
 
 fn plan_mode(cli: &Cli, sel: &Selection, registered: &[SelectorId], p: &Ports, io: &mut Io) -> i32 {
     let started = std::time::Instant::now();
-    let executor = dunnage_core::executor::Executor::new(
-        p.env,
-        p.targets.clone(),
-        options(cli, p, &StampOutcome::Confined),
-    );
+    let executor = dunnage_core::executor::Executor::new(p.env, p.targets.clone(), options(cli, p));
     let report = match executor.run(sel, &Mode::Plan, None) {
         Ok(r) => r,
-        Err(r) => return refused(cli, &r, sel, p, io, &Plain, None),
+        Err(r) => return refused(cli, &r, sel, p, io, &Plain),
     };
     if let Some(sig) = p.env.guard.interrupted() {
         io.stderr_line("INTERRUPTED during scan. Nothing was deleted; no report produced.");
@@ -378,15 +364,12 @@ fn plan_mode(cli: &Cli, sel: &Selection, registered: &[SelectorId], p: &Ports, i
 }
 
 /// What a composition root watches during an apply, beyond the executor's fixed points: whether L1 is already
-/// on stdout and what the stamp step found.
+/// on stdout.
 pub trait ApplyHooks: RunHooks {
-    /// True when the run wrote L1 (and the bypass WARNING) to stdout as it committed.
+    /// True when the run wrote L1 to stdout as it committed.
     fn marker_printed(&self) -> bool {
         false
     }
-
-    /// The stamp step passed; `warning` is the bypass line of a confirmed break-glass.
-    fn stamped(&self, _warning: Option<&str>) {}
 }
 
 /// No observer: the screen is written once, after the run.
@@ -417,7 +400,7 @@ fn not_apply_capable(sel: &Selection, p: &Ports) -> Option<String> {
     })
 }
 
-/// An apply in the order of `design/ux.md` 1.4: availability, the stamp, then the executor (plan-id gate, lock,
+/// An apply in the order of `design/ux.md` 1.4: availability, then the executor (plan-id gate, lock,
 /// audit, starvation check, deletes), with `hooks` told of each step.
 pub fn apply_flow(
     cli: &Cli,
@@ -437,29 +420,13 @@ pub fn apply_flow(
     let supplied = cli.plan_id.map(dunnage_core::plan::PlanIdArg::plan_id);
     hooks.step("kind_availability");
     if let Some(r) = availability_refusal(p.env, &p.targets, sel) {
-        return refused(cli, &r, sel, p, io, hooks, None);
+        return refused(cli, &r, sel, p, io, hooks);
     }
-    let kinds: Vec<dunnage_core::Kind> = sel
-        .kinds()
-        .ids()
-        .flat_map(|s| s.kinds().iter().copied())
-        .collect();
-    hooks.step("check_stamp");
-    let stamp = match (p.stamp)(dunnage_core::required_gate(&kinds)) {
-        Ok(s) => s,
-        Err(e) => return stamp_refusal(cli, &e, supplied, io),
-    };
-    let warning = match &stamp {
-        StampOutcome::BrokeGlass { warning, .. } => Some(warning.clone()),
-        _ => None,
-    };
-    hooks.stamped(warning.as_deref());
     let saved_before = p.env.plans.load_last();
-    let executor =
-        dunnage_core::executor::Executor::new(p.env, p.targets.clone(), options(cli, p, &stamp));
+    let executor = dunnage_core::executor::Executor::new(p.env, p.targets.clone(), options(cli, p));
     let mut report = match executor.run_hooked(sel, &Mode::Apply(mint()), supplied, hooks) {
         Ok(r) => r,
-        Err(r) => return refused(cli, &r, sel, p, io, hooks, warning.as_deref()),
+        Err(r) => return refused(cli, &r, sel, p, io, hooks),
     };
     hooks.step("summary");
     report
@@ -501,7 +468,6 @@ pub fn apply_flow(
     let input = ApplyInput {
         plan_id: report.plan_id,
         selection: sel,
-        gate_bypass: warning,
         audit_path: Some(p.env.dirs.state.join("audit.jsonl")),
         selected_items: will.len(),
         selected_est: will.iter().map(|i| i.candidate.est_bytes().0).sum(),
@@ -624,14 +590,6 @@ fn error_doc(code: &str, message: &str, plan_id: Option<PlanId>, exit: i32) -> S
     }))
 }
 
-fn stamp_refusal(cli: &Cli, e: &GateExit, supplied: Option<PlanId>, io: &mut Io) -> i32 {
-    io.stderr_line(&e.text);
-    if cli.json {
-        io.stdout(&error_doc(e.json_code, &e.text, supplied, 64));
-    }
-    64
-}
-
 /// A run that ended before any item was touched.
 fn refused(
     cli: &Cli,
@@ -640,7 +598,6 @@ fn refused(
     p: &Ports,
     io: &mut Io,
     hooks: &dyn ApplyHooks,
-    bypass: Option<&str>,
 ) -> i32 {
     for n in &r.notes {
         if !r.text.contains(n.as_str()) {
@@ -680,7 +637,7 @@ fn refused(
         let text = if hooks.marker_printed() {
             render_closing(code, &p.term)
         } else {
-            render_refused(plan_id, bypass, code, &p.term)
+            render_refused(plan_id, code, &p.term)
         };
         io.stdout(&text);
     }

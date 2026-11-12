@@ -465,7 +465,6 @@ fn every_refusal_text_is_shown_and_keeps_the_marks_and_the_closing_line_stays_th
     for text in [
         "another dunnage apply is running (pid 4242). Nothing was deleted.",
         "Changed since you confirmed: 40.1 GiB then, 55.0 GiB now. Nothing was deleted. Press d to review again.",
-        "Deleting is disabled in this build: run 'make gate' and 'make install-gated'. Nothing was deleted.",
     ] {
         let mut a = ControlActions::new();
         let t = text.to_string();

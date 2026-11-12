@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # gate-binary.sh <A-F|none|gate-b|gate-c|gate-d>   builds the release binary of that gate with Bazel and prints its path.
-# "Release" is `-c opt` (== cargo --release) with the gate's registry (`--config=gate-X`, which also stamps the commit).
+# "Release" is `-c opt` (== cargo --release) with the gate's registry (`--config=gate-X`, which also bakes in the commit).
 # The shipped archives use --config=dist on top (thin LTO); the gate measures the same code without the LTO wait.
 # Bazel reuses one output path (bazel-out/k8-opt/bin/...) for every gate, so a caller that keeps the binary must copy it.
 set -euo pipefail

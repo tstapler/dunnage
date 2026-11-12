@@ -10,7 +10,7 @@ use crate::candidate::{Candidate, KindFacts, Locator};
 use crate::ids::CandidateId;
 use crate::kind::{Kind, SelectorId};
 use crate::outcome::Outcome;
-use crate::plan_state::{BuildInfo, StampSummary};
+use crate::plan_state::BuildInfo;
 use crate::summary::{Cause, DiskVerdict};
 
 pub const AUDIT_SCHEMA: u32 = 1;
@@ -38,13 +38,6 @@ pub struct RunRoots {
     pub steam_libraries: Vec<PathBuf>,
 }
 
-/// `DUNNAGE_UNGATED` used, and whether a person confirmed it on the terminal.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BreakGlass {
-    pub reason: String,
-    pub tty_confirmed: bool,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunStart {
     pub schema: u32,
@@ -54,8 +47,6 @@ pub struct RunStart {
     pub kinds: String,
     pub plan_id: Option<String>,
     pub build: BuildInfo,
-    pub stamp: Option<StampSummary>,
-    pub break_glass: Option<BreakGlass>,
     pub roots: RunRoots,
     /// Verdict of the snapshot taken at the start of the run (the qualifying-run rule of `outcome-report.sh`).
     #[serde(default)]

@@ -94,7 +94,7 @@ fn closing_line_should_be_printed_exactly_when_L1_was_printed_so_lock_audit_and_
 ) {
     let id = PlanId::from_hex("91be04d7").unwrap();
     for exit in [2, 3] {
-        let out = render_refused(id, None, exit, &pipe(80));
+        let out = render_refused(id, exit, &pipe(80));
         let ls: Vec<&str> = out.lines().collect();
         assert_eq!(
             ls,
@@ -104,18 +104,6 @@ fn closing_line_should_be_printed_exactly_when_L1_was_printed_so_lock_audit_and_
             ]
         );
     }
-    let with_warning = render_refused(
-        id,
-        Some("WARNING: gate check bypassed (disk full)"),
-        2,
-        &pipe(80),
-    );
-    assert_eq!(with_warning.lines().count(), 3);
-    assert_eq!(
-        with_warning.lines().nth(1).unwrap(),
-        "WARNING: gate check bypassed (disk full)"
-    );
-
     let fx = RunFx::s3();
     for exit in [0, 1, 2, 3, 130, 143] {
         let out = apply_text(&fx, exit);
@@ -139,19 +127,17 @@ fn closing_line_should_be_printed_exactly_when_L1_was_printed_so_lock_audit_and_
 }
 
 #[test]
-fn apply_header_should_print_in_order_warning_audit_selected_and_last_dry_run() {
+fn apply_header_should_print_in_order_audit_selected_and_last_dry_run() {
     let fx = RunFx::s3();
     let mut input = fx.input(1);
-    input.gate_bypass = Some("WARNING: gate check bypassed (no room to build)".into());
     let out = render_apply(&input, &pipe(80));
     let ls: Vec<&str> = out.lines().collect();
-    assert!(ls[1].starts_with("WARNING: gate check bypassed"));
-    assert_eq!(ls[2], "audit log: ~/.local/state/dunnage/audit.jsonl");
+    assert_eq!(ls[1], "audit log: ~/.local/state/dunnage/audit.jsonl");
     assert_eq!(
-        ls[3],
+        ls[2],
         "Selected: caches, worktrees, build-dirs   (7 items, est. 96.4 GiB)"
     );
-    assert_eq!(ls[4], "Last dry run: matches.");
+    assert_eq!(ls[3], "Last dry run: matches.");
     input.last_dry_run = Some(LastDryRun::Differs("4be012aa".into()));
     assert!(render_apply(&input, &pipe(80))
         .contains("Last dry run: differs (it was plan-id 4be012aa)."));

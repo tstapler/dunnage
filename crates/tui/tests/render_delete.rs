@@ -340,10 +340,6 @@ fn a_long_result_list_keeps_its_end_and_the_freed_line_on_a_short_screen() {
 fn every_refusal_shows_its_ready_made_text_and_says_nothing_was_deleted() {
     let texts = [
         (
-            "stamp",
-            "Deleting is disabled in this build: run 'make gate' and 'make install-gated'. Nothing was deleted.",
-        ),
-        (
             "lock",
             "another dunnage apply is running (pid 4242). Nothing was deleted.",
         ),

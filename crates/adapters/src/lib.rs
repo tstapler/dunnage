@@ -14,7 +14,6 @@ pub mod discover_cache;
 pub mod docker_cli;
 pub mod explore;
 pub mod fiemap;
-pub mod gate_stamp;
 pub mod lock;
 pub mod mtime_probe;
 pub mod probe;

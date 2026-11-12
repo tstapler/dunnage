@@ -5,7 +5,7 @@
     clippy::cloned_ref_to_slice_refs
 )]
 //! A rig for the explorer's apply: a real fixture tree in a tempdir, the real `lstat`, mount table and
-//! directory operations, and fakes for the audit sink, the run lock, the plan store, the clock and the stamp.
+//! directory operations, and fakes for the audit sink, the run lock, the plan store and the clock.
 //! Nothing outside the tempdir is ever read for deletion or written.
 
 use std::collections::HashMap;
@@ -18,7 +18,6 @@ use dunnage_adapters::{RealDirOps, RealProbe};
 use dunnage_cli::explore::apply::{
     compose_explorer_apply, ExplorerApplyPorts, ExplorerReport, ExplorerRun,
 };
-use dunnage_cli::wiring::audit::{GateExit, StampOutcome};
 use dunnage_cli::wiring::compose::Trace;
 use dunnage_cli::wiring::dirs::real_canon;
 use dunnage_cli::wiring::env::RealFs;
@@ -272,17 +271,6 @@ impl Ex {
         };
         env.audit = &hooked;
         let minted = AtomicUsize::new(0);
-        let stamp_ok = knobs.stamp_ok;
-        let stamp = move |_g: char| -> Result<StampOutcome, GateExit> {
-            if stamp_ok {
-                Ok(StampOutcome::Confined)
-            } else {
-                Err(GateExit {
-                    text: "no stamp".into(),
-                    json_code: "stamp",
-                })
-            }
-        };
         let mint = || {
             minted.fetch_add(1, Ordering::SeqCst);
             ApplyToken::for_tests()
@@ -305,7 +293,6 @@ impl Ex {
         let own = knobs.own_state.clone().unwrap_or_else(|| self.own_state());
         let ports = ExplorerApplyPorts {
             env: &env,
-            stamp: &stamp,
             mint: &mint,
             ops: &ops,
             resolve_roots: &resolve,
@@ -342,7 +329,6 @@ impl Ex {
 }
 
 pub struct Knobs {
-    pub stamp_ok: bool,
     pub sizer: Option<FixedSizer>,
     pub roots: Option<Result<RootSet, String>>,
     pub own_state: Option<OwnState>,
@@ -403,7 +389,6 @@ impl dunnage_core::ports::AuditSink for GateHook<'_> {
 impl Default for Knobs {
     fn default() -> Knobs {
         Knobs {
-            stamp_ok: true,
             sizer: None,
             roots: None,
             own_state: None,

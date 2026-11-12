@@ -6,7 +6,7 @@ mod rig;
 mod support;
 
 use dunnage_core::kind::SelectorId;
-use rig::{confined, run, FakeTarget, Rig};
+use rig::{run, FakeTarget, Rig};
 use support::cache;
 
 const NOTE: &str = "snapshots present (snapper: #12 2026-09-01, #13 2026-10-01): freed-bytes estimates may overcount shared extents";
@@ -40,12 +40,12 @@ fn caches() -> FakeTarget {
 #[test]
 fn a_plan_should_carry_the_snapshot_note_only_when_snapshots_are_detected() {
     let c = caches();
-    let with = run(&rig_with_snapper(), &[&c], &[], false, &confined);
+    let with = run(&rig_with_snapper(), &[&c], &[], false);
     assert_eq!(with.code, 0, "{with:?}");
     assert!(flat(&with.stdout).contains(NOTE), "{}", with.stdout);
-    let json = run(&rig_with_snapper(), &[&c], &["--json"], false, &confined);
+    let json = run(&rig_with_snapper(), &[&c], &["--json"], false);
     assert!(json.stdout.contains(NOTE), "{}", json.stdout);
-    let without = run(&Rig::new(), &[&c], &[], false, &confined);
+    let without = run(&Rig::new(), &[&c], &[], false);
     assert!(
         !without.stdout.contains("snapshots present"),
         "{}",
@@ -61,36 +61,23 @@ fn an_apply_summary_should_carry_the_snapshot_note() {
         &[&c],
         &["--apply", "--kinds", "caches"],
         true,
-        &confined,
     );
     assert_eq!(r.code, 0, "{r:?}");
     assert!(flat(&r.stdout).contains(NOTE), "{}", r.stdout);
-    let plain = run(
-        &Rig::new(),
-        &[&c],
-        &["--apply", "--kinds", "caches"],
-        true,
-        &confined,
-    );
+    let plain = run(&Rig::new(), &[&c], &["--apply", "--kinds", "caches"], true);
     assert!(!plain.stdout.contains("snapshots present"));
 }
 
 #[test]
 fn status_should_print_the_snapshot_note_in_text_and_leave_the_json_document_unchanged() {
-    let text = run(&rig_with_snapper(), &[], &["status"], false, &confined);
+    let text = run(&rig_with_snapper(), &[], &["status"], false);
     assert!(
         flat(&text.stdout).contains(&format!("Note: {NOTE}")),
         "{}",
         text.stdout
     );
-    let json = run(
-        &rig_with_snapper(),
-        &[],
-        &["status", "--json"],
-        false,
-        &confined,
-    );
+    let json = run(&rig_with_snapper(), &[], &["status", "--json"], false);
     assert!(!json.stdout.contains("snapshots present"));
-    let none = run(&Rig::new(), &[], &["status"], false, &confined);
+    let none = run(&Rig::new(), &[], &["status"], false);
     assert!(!none.stdout.contains("snapshots present"));
 }

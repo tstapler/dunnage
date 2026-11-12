@@ -9,7 +9,6 @@ use std::sync::{Arc, Mutex};
 use dunnage_cli::app::{self, ApplyMode, Io, Ports};
 use dunnage_cli::args::{self, Parsed};
 use dunnage_cli::terminal::Terminal;
-use dunnage_cli::wiring::audit::{GateExit, StampOutcome};
 use dunnage_core::delete_types::{DeleteFailure, Freed};
 use dunnage_core::ports::Env;
 use dunnage_core::selector::Selection;
@@ -166,10 +165,8 @@ pub struct Ran {
     pub stderr: String,
 }
 
-pub type StampFn = dyn Fn(char) -> Result<StampOutcome, GateExit>;
-
 /// Parses `argv` and runs it. `apply` decides whether the build can delete at all.
-pub fn run(rig: &Rig, targets: &[&dyn Target], argv: &[&str], apply: bool, stamp: &StampFn) -> Ran {
+pub fn run(rig: &Rig, targets: &[&dyn Target], argv: &[&str], apply: bool) -> Ran {
     let cli = match args::parse(argv.iter().copied()) {
         Parsed::Run(c) => c,
         Parsed::Exit {
@@ -196,7 +193,6 @@ pub fn run(rig: &Rig, targets: &[&dyn Target], argv: &[&str], apply: bool, stamp
             ApplyMode::Disabled
         },
         apply_capable: None,
-        stamp,
         build: build(),
         roots: RunRoots::default(),
         scan_roots: 1,
@@ -225,17 +221,11 @@ pub fn run(rig: &Rig, targets: &[&dyn Target], argv: &[&str], apply: bool, stamp
     }
 }
 
-// The signature is the `stamp` port's.
-#[allow(clippy::unnecessary_wraps)]
-pub fn confined(_gate: char) -> Result<StampOutcome, GateExit> {
-    Ok(StampOutcome::Confined)
-}
-
 /// The id of the plan a dry run of `argv` printed.
 pub fn plan_id_of(rig: &Rig, targets: &[&dyn Target], argv: &[&str]) -> String {
     let mut a: Vec<&str> = argv.to_vec();
     a.push("--json");
-    let r = run(rig, targets, &a, true, &confined);
+    let r = run(rig, targets, &a, true);
     assert_eq!(r.code, 0, "{r:?}");
     let doc: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
     doc["plan_id"].as_str().unwrap().to_string()

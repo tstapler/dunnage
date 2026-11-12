@@ -38,6 +38,6 @@ fn wrapper_note_should_appear_on_report_line_2_and_in_json_notes_and_stderr_and_
     let none = render_plan(&fx.input(), &PlanView::build(&fx.input()), &pipe(80));
     assert!(!none.contains("NOTE:"));
     assert!(wrapper_note(None, false).is_none());
-    let refused = render_refused(PlanId::from_hex("91be04d7").unwrap(), None, 2, &pipe(80));
+    let refused = render_refused(PlanId::from_hex("91be04d7").unwrap(), 2, &pipe(80));
     assert!(!refused.contains("NOTE"));
 }

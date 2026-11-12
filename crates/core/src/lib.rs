@@ -19,7 +19,6 @@ pub mod explore;
 pub mod explorer_plan;
 pub mod flavor;
 pub mod floor_rule;
-pub mod gate_stamp;
 pub mod guard;
 pub mod ids;
 pub mod kind;
@@ -45,8 +44,8 @@ pub mod testing;
 pub use allowed::{Allowed, ExplorerScope, ExplorerScopeWrongKind, WorktreeRemoval, WrongKind};
 pub use apply_token::ApplyToken;
 pub use audit_types::{
-    AuditRecord, BreakGlass, ConfirmedItem, ExplorerConfirm, Intent, ItemResult, RunEnd, RunRoots,
-    RunStart, AUDIT_SCHEMA,
+    AuditRecord, ConfirmedItem, ExplorerConfirm, Intent, ItemResult, RunEnd, RunRoots, RunStart,
+    AUDIT_SCHEMA,
 };
 pub use cache_targets::{
     cache_table, cache_table_with_availability, CacheRow, CacheSource, OsSet, RowAvailability,
@@ -64,16 +63,10 @@ pub use delete_types::{
 };
 pub use dirs::Dirs;
 pub use flavor::{build_flavor, explore_delete_delay_ms, explore_panic_at, explore_plan_delay_ms};
-pub use gate_stamp::{
-    break_glass_reason, break_glass_warning, check_stamp, required_gate, GateStamp, StampRefusal,
-    BREAK_GLASS_NO_TTY, BREAK_GLASS_NO_TTY_CODE, BREAK_GLASS_WORD, STAMP_SCHEMA,
-};
 pub use ids::{AllocatedBytes, AppId, ApparentBytes, CandidateId, DockerId, Identity, RootDev};
 pub use kind::{selector_of, Kind, Risk, SelectorId};
 pub use outcome::{Outcome, SkipReason, Status};
-pub use plan_state::{
-    BuildInfo, ItemKey, SaveOutcome, SavedPlan, SavedSelection, StampSummary, ITEM_KEY_MAX,
-};
+pub use plan_state::{BuildInfo, ItemKey, SaveOutcome, SavedPlan, SavedSelection, ITEM_KEY_MAX};
 pub use platform::{MountEntry, Platform, Tri};
 pub use preflight::{PreflightVerdict, Starvation};
 pub use reasons::{errno_phrase, FatalError, Warning};

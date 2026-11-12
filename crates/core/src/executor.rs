@@ -7,9 +7,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::apply_token::ApplyToken;
-use crate::audit_types::{
-    BreakGlass, Intent, ItemResult, RunEnd, RunRoots, RunStart, AUDIT_SCHEMA,
-};
+use crate::audit_types::{Intent, ItemResult, RunEnd, RunRoots, RunStart, AUDIT_SCHEMA};
 use crate::candidate::{Candidate, Locator};
 use crate::delete_types::{DeleteError, DeleteFailure, Freed};
 use crate::ids::CandidateId;
@@ -19,7 +17,7 @@ use crate::plan::{
     destructive_gate, plan_only, GateRefusal, GateRenderCtx, OnlyMode, OnlyPlan, Plan, PlanId,
     PlanItem, Planned,
 };
-use crate::plan_state::{BuildInfo, StampSummary};
+use crate::plan_state::BuildInfo;
 use crate::ports::{Env, ExtentAttribution, ExtentProbe, Unavailable};
 use crate::preflight;
 use crate::reasons::FatalError;
@@ -128,8 +126,6 @@ pub fn changed_since_scan_note(reason: SkipReason) -> String {
 pub struct RunMeta {
     pub run_id: String,
     pub build: BuildInfo,
-    pub stamp: Option<StampSummary>,
-    pub break_glass: Option<BreakGlass>,
     pub roots: RunRoots,
     pub verdict_start: Option<DiskVerdict>,
 }
@@ -577,8 +573,6 @@ impl<'a> Executor<'a> {
             kinds: sel.kinds_resolved(),
             plan_id: Some(plan_id.to_string()),
             build: self.opts.meta.build.clone(),
-            stamp: self.opts.meta.stamp.clone(),
-            break_glass: self.opts.meta.break_glass.clone(),
             roots: self.opts.meta.roots.clone(),
             verdict_start: self.opts.meta.verdict_start,
         };
