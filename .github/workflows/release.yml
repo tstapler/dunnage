@@ -21,7 +21,7 @@ jobs:
 
   release:
     needs: check-release-artifacts
-    uses: tstapler/gha-actions/.github/workflows/rust-bazel-release.yml@d2b534169ec63d7644d56f5abf2717fdd90b96fa # feat/rust-bazel-publish
+    uses: tstapler/gha-actions/.github/workflows/rust-bazel-release.yml@48cd9d83b80e53909bbf592ef89525a3175d6515 # main
     permissions:
       contents: write
     with:
