@@ -95,6 +95,7 @@ fn planned(ident: Identity, kind: FileKind) -> ItemIdentity {
         dev: ident.dev,
         ino: ident.ino,
         kind,
+        btime: None,
     }
 }
 

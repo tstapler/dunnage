@@ -171,6 +171,7 @@ fn dir_plan(p: &Path) -> ItemIdentity {
         dev: i.dev,
         ino: i.ino,
         kind: FileKind::Dir,
+        btime: None,
     }
 }
 
@@ -407,6 +408,7 @@ fn safety_for_allowed_roots_should_return_not_a_directory_When_the_witness_is_a_
             dev: i.dev,
             ino: i.ino,
             kind: FileKind::File,
+            btime: None,
         },
     );
     assert!(
