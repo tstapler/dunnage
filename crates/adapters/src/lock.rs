@@ -13,7 +13,7 @@ use dunnage_core::{AbortFlag, FatalError};
 use rustix::fs::{flock, FlockOperation};
 
 use crate::signals::SignalState;
-use crate::state::{chown_if, Owner};
+use crate::state::{chown_fd_if, open_nofollow, Owner};
 
 const ENOSPC: i32 = 28;
 
@@ -43,15 +43,17 @@ impl RunLock {
     /// Takes the lock without waiting, creating the file 0600 (owned by `owner` under sudo) and recording this
     /// process's pid in it.
     pub fn try_acquire(path: &Path, owner: Option<Owner>) -> Result<RunLock, LockError> {
-        let mut file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .mode(0o600)
-            .open(path)
-            .map_err(LockError::Io)?;
-        chown_if(owner, path);
+        let mut file = open_nofollow(
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .mode(0o600),
+            path,
+        )
+        .map_err(LockError::Io)?;
+        chown_fd_if(owner, &file);
         match flock(&file, FlockOperation::NonBlockingLockExclusive) {
             Ok(()) => {
                 file.set_len(0).map_err(LockError::Io)?;

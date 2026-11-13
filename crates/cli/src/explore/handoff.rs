@@ -65,6 +65,10 @@ pub fn tier_commands(plan: &Plan, report_sel: &Selection) -> Vec<NextCmd> {
         ids.dedup();
         let mut sel = selection_over(report_sel, &ids);
         sel.only = items.iter().filter_map(|i| item_path(i)).collect();
+        // An empty `--only` selects the whole kind, so a tier whose rows have no path gets no line.
+        if sel.only.is_empty() {
+            continue;
+        }
         let plan_id = sel
             .needs_plan_id()
             .then(|| PlanId::for_selection(plan, &sel));

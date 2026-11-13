@@ -15,7 +15,7 @@ use dunnage_core::{
 };
 use serde::Serialize;
 
-use crate::state::{chown_if, is_no_space, release_reserve, Owner};
+use crate::state::{chown_fd_if, is_no_space, open_nofollow, release_reserve, Owner};
 
 const PRIVATE: u32 = 0o600;
 
@@ -47,12 +47,11 @@ impl RealAuditSink {
     }
 
     fn open(&self) -> io::Result<File> {
-        let f = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .mode(PRIVATE)
-            .open(&self.path)?;
-        chown_if(self.owner, &self.path);
+        let f = open_nofollow(
+            OpenOptions::new().create(true).append(true).mode(PRIVATE),
+            &self.path,
+        )?;
+        chown_fd_if(self.owner, &f);
         Ok(f)
     }
 

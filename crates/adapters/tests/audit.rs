@@ -411,3 +411,16 @@ fn a_non_utf8_name_should_round_trip_through_json_with_path_hex_in_intent_and_re
     assert_eq!(v[1]["path_hex"], v[0]["path_hex"]);
     assert!(v[2].get("path_hex").is_none());
 }
+
+#[test]
+fn audit_should_refuse_and_leave_the_target_alone_When_audit_jsonl_is_a_symlink() {
+    let d = tempfile::tempdir().unwrap();
+    let victim = d.path().join("victim");
+    std::fs::write(&victim, "root-owned\n").unwrap();
+    std::os::unix::fs::symlink(&victim, d.path().join("audit.jsonl")).unwrap();
+
+    let err = sink(d.path()).run_start(&start("r1")).unwrap_err();
+
+    assert!(err.to_string().contains("symbolic link"), "{err}");
+    assert_eq!(std::fs::read_to_string(&victim).unwrap(), "root-owned\n");
+}
