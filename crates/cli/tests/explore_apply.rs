@@ -400,10 +400,20 @@ fn recreated_case(after_gate: bool) {
     let confirmed = ex.confirmed(&[a.clone()]);
     let (victim, decoy) = (a.clone(), ex.p("decoy"));
     let swap = move || {
+        use std::os::unix::fs::MetadataExt;
+        let old_ino = std::fs::metadata(&victim).unwrap().ino();
         std::fs::remove_dir_all(&victim).unwrap();
-        // Occupy the freed inode number elsewhere so the new directory cannot get the old one back.
         std::fs::create_dir_all(&decoy).unwrap();
         std::fs::write(decoy.join("f0"), [0u8; 10]).unwrap();
+        // ext4 reuses a freed inode number at once: park directories that got the old number until the
+        // new victim gets a different one (the engine's identity is (dev, ino)).
+        for n in 0..10_000 {
+            std::fs::create_dir(&victim).unwrap();
+            if std::fs::metadata(&victim).unwrap().ino() != old_ino {
+                break;
+            }
+            std::fs::rename(&victim, decoy.join(format!("held{n}"))).unwrap();
+        }
         std::fs::create_dir_all(victim.join("precious")).unwrap();
         std::fs::write(victim.join("precious/data"), b"new life").unwrap();
     };
