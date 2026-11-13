@@ -365,6 +365,7 @@ impl Fs for FakeFs {
             mtime_secs: 0,
             mtime_nsec: 0,
             mnt_id: None,
+            btime: None,
         })
     }
 

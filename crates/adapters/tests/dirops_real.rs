@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used, non_snake_case)]
 //! RealDirOps against real tempdirs only; every ops value is confined to the tempdir.
 
 use std::ffi::OsStr;
@@ -192,4 +192,43 @@ fn a_non_canonical_confinement_root_should_refuse_everything_in_release() {
         let ops = RealDirOps::confined_to(Path::new("relative/.."));
         assert!(is_scope_violation(&ops.open_root(&p).err().unwrap()));
     }
+}
+
+#[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "statx STATX_BTIME exists on Linux only; elsewhere StatInfo.btime is None by design"
+)]
+fn stat_should_carry_the_birth_time_std_reports_and_none_where_the_filesystem_has_none() {
+    let (_t, p) = tmp();
+    std::fs::create_dir(p.join("d")).unwrap();
+    let ops = RealDirOps::confined_to(&p);
+    let root = open_verified_root(&ops, &p, ident(&p)).unwrap();
+    let st = ops.stat_at(root.dir(), OsStr::new("d")).unwrap();
+    let std_btime = dunnage_core::BirthTime::of(&std::fs::symlink_metadata(p.join("d")).unwrap());
+    // Both read the same statx field; where the filesystem reports none, both say None (the fallback).
+    assert_eq!(st.btime, std_btime);
+    if st.btime.is_none() {
+        eprintln!("NOTE: this filesystem reports no birth time; only the fallback was exercised");
+    }
+}
+
+#[test]
+fn stat_should_give_a_directory_recreated_later_another_birth_time_When_the_filesystem_reports_one()
+{
+    let (_t, p) = tmp();
+    let ops = RealDirOps::confined_to(&p);
+    let root = open_verified_root(&ops, &p, ident(&p)).unwrap();
+    std::fs::create_dir(p.join("d")).unwrap();
+    let first = ops.stat_at(root.dir(), OsStr::new("d")).unwrap();
+    std::fs::remove_dir(p.join("d")).unwrap();
+    // Birth times come from the kernel's coarse clock (a timer tick, a few ms): wait past it.
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    std::fs::create_dir(p.join("d")).unwrap();
+    let second = ops.stat_at(root.dir(), OsStr::new("d")).unwrap();
+    if first.btime.is_none() {
+        eprintln!("NOTE: this filesystem reports no birth time; nothing to compare");
+        return;
+    }
+    assert_ne!(first.btime, second.btime);
 }

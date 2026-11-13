@@ -7,7 +7,8 @@
 //! #[derive(Debug, Clone, PartialEq, Eq)]
 //! pub struct StatInfo { pub ident: Identity, pub kind: FileKind, pub mode: u32, pub nlink: u64,
 //!                       pub blocks: u64 /* 512-byte units */, pub size: u64,
-//!                       pub mtime_secs: i64, pub mtime_nsec: u32, pub mnt_id: Option<u64> }
+//!                       pub mtime_secs: i64, pub mtime_nsec: u32, pub mnt_id: Option<u64>,
+//!                       pub btime: Option<BirthTime> /* None where the filesystem has no birth time */ }
 //! #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 //! pub enum FileKind { Dir, File, Symlink, Fifo, Socket, CharDev, BlockDev, Other }
 //! #[derive(Debug, Clone, PartialEq, Eq)]

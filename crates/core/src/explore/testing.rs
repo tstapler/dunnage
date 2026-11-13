@@ -218,6 +218,7 @@ pub fn reviewed_of(marks: &[PathBuf], bytes_each: u64) -> ReviewedPlan {
                     .iter()
                     .fold(7u64, |a, b| a.wrapping_mul(31).wrapping_add(u64::from(*b))),
                 kind: crate::delete_types::FileKind::Dir,
+                btime: None,
             },
         })
         .collect();

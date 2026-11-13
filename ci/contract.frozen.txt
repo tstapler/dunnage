@@ -5,7 +5,8 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatInfo { pub ident: Identity, pub kind: FileKind, pub mode: u32, pub nlink: u64,
                       pub blocks: u64 /* 512-byte units */, pub size: u64,
-                      pub mtime_secs: i64, pub mtime_nsec: u32, pub mnt_id: Option<u64> }
+                      pub mtime_secs: i64, pub mtime_nsec: u32, pub mnt_id: Option<u64>,
+                      pub btime: Option<BirthTime> /* None where the filesystem has no birth time */ }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileKind { Dir, File, Symlink, Fifo, Socket, CharDev, BlockDev, Other }
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,6 +95,7 @@ pub struct ApparentBytes(pub u64);
 ## crates/core/src/ids.rs /^    pub fn (of|on_dev)[(]/
 pub fn of(m: &std::fs::Metadata) -> Identity {
 pub fn on_dev(&self, d: RootDev) -> bool {
+pub fn of(m: &std::fs::Metadata) -> Option<BirthTime> {
 ## crates/core/src/delete_types.rs /^pub (struct|enum) (Freed|DeleteError|DeleteFailure|DeletePolicy|AllowedTarget|NamePattern|StatInfo|FileKind|DirEntryInfo|AbortFlag)([^A-Za-z_]|$)/
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatInfo {
@@ -106,6 +108,7 @@ pub struct StatInfo {
     pub mtime_secs: i64,
     pub mtime_nsec: u32,
     pub mnt_id: Option<u64>,
+    pub btime: Option<BirthTime>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileKind {

@@ -40,6 +40,7 @@ fn dir_identity(id: Identity) -> ItemIdentity {
         dev: id.dev,
         ino: id.ino,
         kind: FileKind::Dir,
+        btime: None,
     }
 }
 

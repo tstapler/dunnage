@@ -30,6 +30,35 @@ impl Identity {
     }
 }
 
+/// Birth time (`statx` `stx_btime`; `Metadata::created` elsewhere) of a filesystem object.
+///
+/// A directory removed and recreated under one name can get the same inode number back (ext4 does); it cannot get
+/// the same birth time to the nanosecond, so this tells the two apart where the inode number does not. It is
+/// `None` where the filesystem or platform reports no birth time, and then only `(dev, ino)` binds the object.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BirthTime {
+    pub secs: i64,
+    pub nsec: u32,
+}
+
+impl BirthTime {
+    /// `None` when the platform or filesystem does not report a creation time.
+    pub fn of(m: &std::fs::Metadata) -> Option<BirthTime> {
+        BirthTime::from_system_time(m.created().ok()?)
+    }
+
+    fn from_system_time(t: std::time::SystemTime) -> Option<BirthTime> {
+        use std::time::UNIX_EPOCH;
+        match t.duration_since(UNIX_EPOCH) {
+            Ok(d) => Some(BirthTime {
+                secs: i64::try_from(d.as_secs()).ok()?,
+                nsec: d.subsec_nanos(),
+            }),
+            Err(_) => None,
+        }
+    }
+}
+
 /// `st_dev` of the scan root; every descent is compared against it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RootDev(pub u64);

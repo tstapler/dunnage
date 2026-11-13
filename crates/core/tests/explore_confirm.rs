@@ -19,6 +19,7 @@ fn item(path: &str, ino: u64) -> ReviewedItem {
             dev: 1,
             ino,
             kind: FileKind::Dir,
+            btime: None,
         },
     }
 }

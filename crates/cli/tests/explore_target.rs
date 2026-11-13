@@ -21,7 +21,7 @@ use dunnage_core::delete_types::{DirEntryInfo, StatInfo};
 use dunnage_core::explore::confirm::ReviewedPlan;
 use dunnage_core::ports::Fs;
 use dunnage_core::target::{Guarded, Target};
-use dunnage_core::{ApplyToken, Candidate, DeleteError, Identity, SkipReason};
+use dunnage_core::{ApplyToken, BirthTime, Candidate, DeleteError, Identity, SkipReason};
 use explore_rig::{manifest, Ex};
 
 /// `DirOps` that edits what the engine sees, keyed on the name a directory was opened by.
@@ -164,6 +164,78 @@ fn safety_target_should_refuse_the_item_and_delete_nothing_When_the_root_mount_i
     let err = t.execute(&c, &env, &ApplyToken::for_tests()).unwrap_err();
     assert_eq!(err.error.skip_reason(), Some(SkipReason::OutsideRoot));
     assert_eq!(manifest(&a), before);
+}
+
+/// The target over `reviewed`, but with every item's planned birth time passed through `edit`.
+fn target_with_planned_btime(
+    ex: &Ex,
+    reviewed: &ReviewedPlan,
+    edit: impl Fn(Option<BirthTime>) -> Option<BirthTime>,
+) -> ExplorerSelectionTarget<Edit<RealDirOps>> {
+    let mut items = reviewed.items().to_vec();
+    for i in &mut items {
+        i.identity.btime = edit(i.identity.btime);
+    }
+    ExplorerSelectionTarget::new(
+        ex.roots(),
+        ex.own_state(),
+        plain(ex),
+        items,
+        reviewed.roots().to_vec(),
+    )
+}
+
+#[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
+fn safety_target_should_skip_and_delete_nothing_When_dev_ino_and_kind_match_but_the_birth_time_differs(
+) {
+    // The ext4 inode-reuse case: the recreated directory has the planned (dev, ino, kind) and a later birth
+    // time. A plan whose birth time is not the directory's must not authorise the delete, at the guard or at
+    // the fd-relative check in `execute`.
+    let ex = Ex::new();
+    let a = ex.tree("app/dist", 2, 100);
+    let reviewed = ex.review(&[a.clone()]);
+    let planned = reviewed.items()[0].identity;
+    let Some(real) = planned.btime else {
+        eprintln!("SKIP: this filesystem reports no birth time; the fallback tests cover it");
+        return;
+    };
+    let shifted = BirthTime {
+        secs: real.secs - 60,
+        nsec: real.nsec,
+    };
+    let t = target_with_planned_btime(&ex, &reviewed, |_| Some(shifted));
+    let c = cand(&ex, &a);
+    let env = ex.env();
+    let before = manifest(&a);
+    assert_eq!(
+        t.guard(&c, &env),
+        Guarded::Skip(SkipReason::IdentityChanged)
+    );
+    let err = t.execute(&c, &env, &ApplyToken::for_tests()).unwrap_err();
+    assert_eq!(err.error, DeleteError::IdentityMismatch);
+    assert_eq!(manifest(&a), before, "the directory is intact");
+}
+
+#[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
+fn target_should_fall_back_to_dev_ino_and_kind_When_the_plan_has_no_birth_time() {
+    // The explicit fallback: a plan made where no birth time was reported binds (dev, ino, kind) only.
+    let ex = Ex::new();
+    let a = ex.tree("app/dist", 2, 100);
+    let reviewed = ex.review(&[a.clone()]);
+    let t = target_with_planned_btime(&ex, &reviewed, |_| None);
+    let c = cand(&ex, &a);
+    let env = ex.env();
+    assert_eq!(t.guard(&c, &env), Guarded::Allow);
+    t.execute(&c, &env, &ApplyToken::for_tests()).unwrap();
+    assert!(!a.exists());
 }
 
 #[test]

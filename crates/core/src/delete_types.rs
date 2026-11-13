@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::allowed::ExplorerScope;
-use crate::ids::{AllocatedBytes, ApparentBytes, Identity, RootDev};
+use crate::ids::{AllocatedBytes, ApparentBytes, BirthTime, Identity, RootDev};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatInfo {
@@ -19,6 +19,8 @@ pub struct StatInfo {
     pub mtime_secs: i64,
     pub mtime_nsec: u32,
     pub mnt_id: Option<u64>,
+    /// `None` where the filesystem reports no birth time.
+    pub btime: Option<BirthTime>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

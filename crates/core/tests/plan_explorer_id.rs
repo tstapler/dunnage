@@ -79,6 +79,7 @@ fn plan_id_should_change_with_each_identity_field_the_root_list_and_the_kind_Whe
         dev: 1,
         ino: 7,
         kind: FileKind::Dir,
+        btime: None,
     };
     let path = Path::new("/home/u/code/a");
     let root = |p: &str, ino: u64| RootIdentity {

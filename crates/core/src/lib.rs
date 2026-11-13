@@ -63,7 +63,9 @@ pub use delete_types::{
 };
 pub use dirs::Dirs;
 pub use flavor::{build_flavor, explore_delete_delay_ms, explore_panic_at, explore_plan_delay_ms};
-pub use ids::{AllocatedBytes, AppId, ApparentBytes, CandidateId, DockerId, Identity, RootDev};
+pub use ids::{
+    AllocatedBytes, AppId, ApparentBytes, BirthTime, CandidateId, DockerId, Identity, RootDev,
+};
 pub use kind::{selector_of, Kind, Risk, SelectorId};
 pub use outcome::{Outcome, SkipReason, Status};
 pub use plan_state::{BuildInfo, ItemKey, SaveOutcome, SavedPlan, SavedSelection, ITEM_KEY_MAX};
