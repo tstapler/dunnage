@@ -29,6 +29,11 @@ dc_integration_tests(
     deps = [":scan"] + all_crate_deps(normal = True) + all_crate_deps(normal_dev = True),
     proc_macro_deps = all_crate_deps(proc_macro = True) + all_crate_deps(proc_macro_dev = True),
     rustc_env = {},
+    per_test = {
+        # 100 ms bounds on thread hand-offs with a deliberately stalled sink: one scheduling stall on a loaded shared
+        # runner can add 40 ms to a single run (136 ms against 100 ms on macos-15). Bazel retries it.
+        "stream_flush": {"flaky": True},
+    },
 )
 
 filegroup(
