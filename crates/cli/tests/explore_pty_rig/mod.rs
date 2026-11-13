@@ -176,12 +176,21 @@ impl Pty {
     /// `stty -a` of `before` and `after`.
     pub fn spawn_script(mut cmd: Command, body: &str, dir: &Path, rows: u16, cols: u16) -> Pty {
         fs::create_dir_all(dir).unwrap();
+        // `Session::spawn` sets the pty to 80x24 from the parent once the child has exec'd, which on a loaded host can
+        // land after a `stty` run by the shell (measured: `stty -a` printed rows 24; columns 80 after `stty rows 30
+        // cols 100`, so the explorer drew its 80-column tier). The shell therefore waits for a line the parent sends
+        // after it has set the size itself.
         cmd.arg("-c").arg(format!(
-            "echo $$ > '{d}/pid'; stty rows {rows} cols {cols}; stty -a > '{d}/before'; {body}; echo EXIT=$?; stty -a > '{d}/after'",
+            "IFS= read -r _; echo $$ > '{d}/pid'; stty rows {rows} cols {cols}; stty -a > '{d}/before'; {body}; echo EXIT=$?; stty -a > '{d}/after'",
             d = dir.display(),
         ));
         cmd.env("TERM", "xterm");
         let mut session = expectrl::Session::spawn(cmd).unwrap();
+        session
+            .get_process_mut()
+            .set_window_size(cols, rows)
+            .unwrap();
+        session.send("\n").unwrap();
         session.set_expect_timeout(Some(WAIT));
         let shell_pid = session.get_process().pid().as_raw() as u32;
         Pty {
