@@ -123,6 +123,8 @@ cd dunnage && cargo install --path crates/cli
 | Linux aarch64 | yes | yes (Linuxbrew) | yes | a **CI runner only** (GitHub-hosted `ubuntu-24.04-arm`); never run on the author's own aarch64 hardware |
 | macOS arm64 (Apple silicon) | yes | yes | yes | a **CI runner only** (GitHub-hosted `macos-15`); the author has no Mac, so nothing was run on real Mac hardware |
 
+Explorer delete (`d` in `dunnage explore`) is Linux-only in v0.1.0: on macOS it fails closed because the mount-id check needs Linux `statx`. Scanning, reports and the cleaners work on macOS; Steam cleaning is Linux-only.
+
 Not built: macOS on Intel, musl (static) Linux, Windows. The minimum glibc version of the Linux archives is stated in the release notes (<!-- TODO-OUTPUT: the floor measured on the first CI-built archive; RELEASE.md "glibc floor" explains why the local figure of 2.39 is not it -->). **What "CI runner only" does not cover**: on aarch64, real-disk timing and page-size differences; on macOS, apfs and Time Machine local snapshots, your real Homebrew and Xcode caches, `lsof` behaviour under load, and Gatekeeper's handling of a downloaded binary. btrfs-specific features (allocation report, shared-extent estimate, balance, trim) are tested on the author's Linux machine; they are not exercised on the CI runners unless that run says so. The 12.7 s speed target is measured only on the author's Linux machine.
 
 ## Workspace layout

@@ -1,6 +1,5 @@
 # Thin, tag-triggered caller of the reusable Rust+Bazel release workflow (RELEASE.md).
 # A workflow_dispatch run is a dry run: it builds and packages but creates no release and pushes nothing.
-# TODO: pin the ref to a commit SHA once feat/rust-bazel-publish is merged (it was d2b534169ec63d7644d56f5abf2717fdd90b96fa).
 name: Release
 
 on:
@@ -22,7 +21,7 @@ jobs:
 
   release:
     needs: check-release-artifacts
-    uses: tstapler/gha-actions/.github/workflows/rust-bazel-release.yml@feat/rust-bazel-publish
+    uses: tstapler/gha-actions/.github/workflows/rust-bazel-release.yml@d2b534169ec63d7644d56f5abf2717fdd90b96fa # feat/rust-bazel-publish
     permissions:
       contents: write
     with:
