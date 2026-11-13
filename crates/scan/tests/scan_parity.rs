@@ -135,6 +135,11 @@ fn fixture_should_match_its_recorded_checksum_list_When_regenerated() {
     if skip_as_root() {
         return;
     }
+    // fixture-manifest.sh is GNU-only (find -printf and -readable, stat -c, sha256sum): a named skip elsewhere.
+    if !cfg!(target_os = "linux") {
+        eprintln!("SKIP: fixture-manifest.sh needs GNU find/stat/sha256sum (Linux only)");
+        return;
+    }
     let fx = Fixture::new();
     let out = Command::new(parity_dir().join("fixture-manifest.sh"))
         .arg(&fx.root)

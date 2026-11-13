@@ -619,6 +619,10 @@ fn hint_at(w: &World, path: &Path) -> Hint {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "the steam kind is Linux only (Steam keeps its libraries elsewhere on macOS)"
+)]
 fn the_hint_should_agree_with_the_engine_on_the_fixed_look_alikes() {
     let s = fixed_site();
     let w = world(&s, true, std::slice::from_ref(&s.home));

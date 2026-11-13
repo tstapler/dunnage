@@ -147,6 +147,10 @@ const FINISHED: [&str; 7] = [
 ];
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn deleting_a_node_modules_and_a_plain_directory_should_leave_the_audit_trail_and_verify() {
     let f = Fixture::new();
     let root = tree(&f);
@@ -236,6 +240,10 @@ fn a_directory_holding_a_nested_mount_should_end_partial_and_leave_the_mount_unt
 /// SIGTERM while the delete runs (a test-support pause after each item holds it open): exit 143, the terminal
 /// is restored, `run_end` says `interrupted`, the second directory is still there and the log verifies.
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn sigterm_during_the_delete_should_exit_143_record_run_end_interrupted_and_restore() {
     let f = Fixture::new();
     let root = tree(&f);

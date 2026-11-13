@@ -326,7 +326,16 @@ fn each_audit_line_should_be_a_single_write_all_and_valid_json_When_two_processe
     assert_eq!(v.iter().filter(|l| l["run_id"] == "a").count(), 500);
 }
 
+/// Peak resident KiB (`VmHWM`); where there is no /proc, the current resident KiB from `ps` (growth shows in both).
 fn vm_hwm_kib() -> u64 {
+    if !cfg!(target_os = "linux") {
+        return std::process::Command::new("ps")
+            .args(["-o", "rss=", "-p", &std::process::id().to_string()])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse().ok())
+            .unwrap_or(0);
+    }
     std::fs::read_to_string("/proc/self/status")
         .unwrap()
         .lines()

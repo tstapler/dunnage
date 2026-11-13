@@ -6,6 +6,10 @@ build:ci --verbose_failures
 build:ci --keep_going
 build:ci --jobs=HOST_CPUS*0.75
 test:ci --test_output=errors
+# The REQUIRE switches turn a named skip into a failure; unset (the default) they pass nothing.
+test:ci --test_env=DC_REQUIRE_STRACE
+test:ci --test_env=DC_REQUIRE_UNSHARE
+test:ci --test_env=DC_REQUIRE_BIND_MOUNT
 
 # Remote cache: OFF by default. To use the self-hosted bazel-cache-proxy (github.com/tstapler/bazel-cache-proxy),
 # pass it on the command line or in user.bazelrc, never here (no credentials or hostnames in git):

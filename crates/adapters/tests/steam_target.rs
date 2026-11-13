@@ -862,8 +862,11 @@ fn guard_before_delete_should_skip_identity_changed_When_the_dir_was_replaced_af
     let rig = Rig::new(&s);
     let env = rig.env();
     let cands = t.discover(&env, &sel());
-    fs::remove_dir_all(&orphan).unwrap();
+    // Keep the old directory alive while its replacement is made: a freed inode number is reused at once on ext4.
+    let aside = orphan.with_extension("aside");
+    fs::rename(&orphan, &aside).unwrap();
     entry(&s.libs[0], "compatdata", "99999", 100, 90);
+    fs::remove_dir_all(&aside).unwrap();
 
     assert_eq!(
         t.guard_before_delete(find(&cands, &orphan), &env),

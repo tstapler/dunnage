@@ -134,6 +134,7 @@ fn a_quoted_hostile_name_should_reach_the_command_as_one_argument_and_inject_not
         shells.push("dash");
     }
     let mut runs = 0;
+    let mut dash_inert = 0;
     for shell in shells {
         assert!(
             find_on_path(shell).is_some(),
@@ -148,6 +149,19 @@ fn a_quoted_hostile_name_should_reach_the_command_as_one_argument_and_inject_not
                 for (line, cmd, lead) in templates(&quoted) {
                     let dir = tempfile::tempdir().unwrap();
                     let run = run_printed_line(dir.path(), shell, &line).unwrap().unwrap();
+                    if shell == "dash" && quoted.starts_with("$'") {
+                        // dash has no `$'..'`: it reads `$` plus a single-quoted word, so the name cannot arrive
+                        // intact (it cannot spell a control byte without one in the line). The line must still
+                        // be inert.
+                        assert!(
+                            run.injected.is_empty(),
+                            "{shell}: {line:?} ran {:?}",
+                            run.injected
+                        );
+                        assert!(run.success, "{shell}: {line:?}");
+                        dash_inert += 1;
+                        continue;
+                    }
                     let want: Vec<Vec<u8>> = lead
                         .iter()
                         .map(|a| a.as_bytes().to_vec())
@@ -170,6 +184,9 @@ fn a_quoted_hostile_name_should_reach_the_command_as_one_argument_and_inject_not
             }
         }
     }
+    eprintln!(
+        "dash: {dash_inert} lines in the $'..' form ran inert but not intact (dash has no $'..')"
+    );
     assert!(runs >= 2 * 35 * 2 * 3, "{runs}");
 }
 

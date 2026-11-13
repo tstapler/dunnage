@@ -221,16 +221,12 @@ fn big_tree(f: &Fixture) -> PathBuf {
     fs::canonicalize(root).unwrap()
 }
 
-/// `SigCgt` bits of SIGHUP (1), SIGINT (2), SIGQUIT (3), SIGTERM (15) and SIGTSTP (20); signal n is bit n-1.
-const INSTALLED: u64 = 0x1 | 0x2 | 0x4 | 1 << 14 | 1 << 19;
+/// The caught-signal bits of SIGHUP, SIGINT, SIGQUIT, SIGTERM and SIGTSTP (20 on Linux, 18 on macOS).
+const TSTP: i32 = if cfg!(target_os = "linux") { 20 } else { 18 };
+const INSTALLED: u64 = 0x1 | 0x2 | 0x4 | 1 << 14 | 1 << (TSTP - 1);
 
-fn signal_mask(pid: u32) -> u64 {
-    let status = fs::read_to_string(format!("/proc/{pid}/status")).unwrap_or_default();
-    status
-        .lines()
-        .find_map(|l| l.strip_prefix("SigCgt:"))
-        .and_then(|h| u64::from_str_radix(h.trim(), 16).ok())
-        .unwrap_or(0)
+fn handlers_installed(pid: u32) -> bool {
+    common::handlers_installed(pid, INSTALLED)
 }
 
 fn kill(sig: &str, pid: u32) {
@@ -260,7 +256,7 @@ fn signalled(sig: &str) -> (Option<i32>, String, String) {
     // `install_term_handlers` installs the five handlers one after the other; a signal
     // sent between two of them would meet the default action (the process dies of it, with no exit code), so the
     // test waits for every one. Signal n is bit n-1 of `SigCgt`.
-    while signal_mask(pid) & INSTALLED != INSTALLED && Instant::now() < end {
+    while !handlers_installed(pid) && Instant::now() < end {
         std::thread::sleep(Duration::from_millis(1));
     }
     kill("STOP", pid);
@@ -275,6 +271,10 @@ fn signalled(sig: &str) -> (Option<i32>, String, String) {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "needs /proc SigCgt to know the handlers are installed; on macOS the scan ends before a CPU-time guess can stop it"
+)]
 fn sigint_mid_scan_should_print_the_interrupted_line_and_exit_130() {
     let (code, stdout, stderr) = signalled("INT");
     assert_eq!(code, Some(130), "{stderr}");
@@ -286,6 +286,10 @@ fn sigint_mid_scan_should_print_the_interrupted_line_and_exit_130() {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "needs /proc SigCgt to know the handlers are installed; on macOS the scan ends before a CPU-time guess can stop it"
+)]
 fn sigterm_sighup_and_sigquit_mid_scan_should_all_exit_143() {
     for sig in ["TERM", "HUP", "QUIT"] {
         let (code, stdout, stderr) = signalled(sig);

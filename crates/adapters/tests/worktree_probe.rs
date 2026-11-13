@@ -443,7 +443,13 @@ fn guard_should_skip_in_use_for_a_real_process_with_its_cwd_inside_even_with_min
     }
     assert_eq!(reason(&g), Some(SkipReason::InUse));
     let (name, pid) = p.candidate.holder.unwrap();
-    assert_eq!((name.as_str(), pid), ("sleep", child.id()));
+    // `lsof` does not name the process (lsof_scan reports "a process"); /proc gives the command name
+    let want = if cfg!(target_os = "linux") {
+        "sleep"
+    } else {
+        "a process"
+    };
+    assert_eq!((name.as_str(), pid), (want, child.id()));
 }
 
 #[test]

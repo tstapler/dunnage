@@ -37,21 +37,37 @@ fn parent(sig: &str, expect_exit: i32) {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_apply_should_stop_at_the_next_entry_and_exit_130_When_sigint_arrives_mid_item() {
     parent("INT", 130);
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_apply_should_stop_at_the_next_entry_and_exit_143_When_sigterm_arrives_mid_item() {
     parent("TERM", 143);
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_apply_should_stop_at_the_next_entry_and_exit_143_When_sighup_arrives_mid_item() {
     parent("HUP", 143);
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_apply_should_stop_at_the_next_entry_and_exit_143_When_sigquit_arrives_mid_item() {
     parent("QUIT", 143);
 }

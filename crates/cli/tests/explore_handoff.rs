@@ -616,6 +616,12 @@ fn hostile_marked_names_should_reach_the_cleaner_as_one_argument_and_inject_noth
             let run = run_printed_line(dir.path(), shell, &cmds[0])
                 .unwrap()
                 .unwrap();
+            if *shell == "dash" && cmds[0].contains("$'") {
+                // dash has no `$'..'`: the argument cannot arrive intact, but the line must stay inert
+                assert!(run.injected.is_empty(), "{shell}: {:?}", run.injected);
+                assert!(!dir.path().join("INJECTED").exists());
+                continue;
+            }
             let argv = run
                 .argv_of("dunnage")
                 .unwrap_or_else(|| panic!("{shell}: {} did not run: {}", cmds[0], run.stderr));

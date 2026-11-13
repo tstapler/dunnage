@@ -12,6 +12,10 @@ set -u -o pipefail
 allowed_deps='dunnage-core ratatui crossterm unicode-width'
 allowed_dev_deps='insta proptest expectrl dunnage-adapters'
 
+# normpath <path>: the path with "." and ".." resolved lexically (GNU `realpath -m` does not exist on macOS; cargo
+# prints both manifest_path and src_path from one prefix, so symlinks do not matter).
+normpath() { perl -e '@o = (); for (split m{/}, $ARGV[0]) { next if $_ eq "" || $_ eq "."; if ($_ eq "..") { pop @o } else { push @o, $_ } } print "/", join("/", @o)' -- "$1"; }
+
 manifest_half() { # $1 = root
   local root=$1 meta pkg bad=0 line kind name dir
   meta=$(cd "$root" && cargo metadata --no-deps --offline --format-version 1) || { echo "check-tui-deps: cargo metadata failed" >&2; return 2; }
@@ -24,13 +28,13 @@ manifest_half() { # $1 = root
       *) grep -qwF -- "$name" <<<"$allowed_deps" || { echo "FAIL: dunnage-tui depends directly on $name, which is not on the allowlist ($allowed_deps)"; bad=1; } ;;
     esac
   done < <(jq -r '.dependencies[] | "\(.kind // "normal") \(.name)"' <<<"$pkg")
-  dir=$(realpath -m -- "$(dirname "$(jq -r '.manifest_path' <<<"$pkg")")")
+  dir=$(normpath "$(dirname "$(jq -r '.manifest_path' <<<"$pkg")")")
   if jq -e '.targets[] | select(.kind | index("custom-build"))' <<<"$pkg" >/dev/null || [ -e "$dir/build.rs" ]; then
     echo "FAIL: dunnage-tui has a build script (build.rs)"; bad=1
   fi
   while read -r line; do
     [ -n "$line" ] || continue
-    line=$(realpath -m -- "$line")
+    line=$(normpath "$line")
     case $line in "$dir"/*) ;; *) echo "FAIL: dunnage-tui has a target whose path leaves the crate: $line"; bad=1 ;; esac
   done < <(jq -r '.targets[].src_path' <<<"$pkg")
   return $bad

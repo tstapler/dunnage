@@ -306,7 +306,12 @@ fn session(env: &Env, root: &Path, want: Option<&str>, keys: bool) -> (Run, Dura
         30,
         100,
     );
-    let limit = Duration::from_mins(15);
+    // the smoke run over 2 000 directories ends in seconds; 15 minutes is for the 676 296-directory bench
+    let limit = if bench_on() {
+        Duration::from_mins(15)
+    } else {
+        Duration::from_secs(90)
+    };
     let (tl, _) = watch(&mut p, t0, limit, &|s| {
         s.contains("SCANNING") || s.contains("SCAN D")
     });

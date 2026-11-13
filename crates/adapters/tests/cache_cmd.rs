@@ -23,6 +23,11 @@ use dunnage_core::{
 
 const MIB: usize = 1024 * 1024;
 
+/// Bytes the directory inode itself occupies: 0 on tmpfs and btrfs, one block on ext4 and APFS.
+fn own_alloc(dir: &Path) -> u64 {
+    fs::symlink_metadata(dir).unwrap().blocks() * 512
+}
+
 fn fill(dir: &Path, files: usize, bytes: usize) {
     fs::create_dir_all(dir).unwrap();
     for i in 0..files {
@@ -110,6 +115,7 @@ fn go_clean_should_measure_the_delta_of_gocache_and_the_intent_should_record_the
     let gocache = f.home.join(".cache/go-build");
     fill(&gocache, 5, MIB);
     let (ident, dev) = identity_of(&gocache);
+    let root_alloc = own_alloc(&gocache);
     let before = fs::read_dir(&gocache).unwrap().count();
     assert_eq!(before, 5);
 
@@ -168,8 +174,8 @@ fn go_clean_should_measure_the_delta_of_gocache_and_the_intent_should_record_the
     assert_eq!(freed.entries_removed, 5);
     assert_eq!(
         item.candidate.est_bytes().0,
-        got,
-        "the walk before minus the walk after"
+        got + root_alloc,
+        "the walk before (root directory included) minus the walk after (root kept)"
     );
 }
 
@@ -232,6 +238,7 @@ fn a_tool_that_removes_the_whole_directory_should_count_all_of_it_as_freed() {
     let dir = f.home.join("Library/Caches/Homebrew");
     fill(&dir, 3, 128 * 1024);
     let (ident, dev) = identity_of(&dir);
+    let dir_alloc = own_alloc(&dir);
     let d2 = dir.clone();
     let r = EffectRunner::new(move || fs::remove_dir_all(&d2).unwrap());
     let ops = RealDirOps::confined_to(&f.home);
@@ -245,7 +252,7 @@ fn a_tool_that_removes_the_whole_directory_should_count_all_of_it_as_freed() {
         &ApplyToken::for_tests(),
     )
     .unwrap();
-    assert_eq!(freed.attributed_bytes.0, 3 * 128 * 1024);
+    assert_eq!(freed.attributed_bytes.0, 3 * 128 * 1024 + dir_alloc);
 }
 
 fn probe_of(euid: u32) -> FakeProbe {

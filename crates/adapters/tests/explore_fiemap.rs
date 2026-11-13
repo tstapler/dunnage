@@ -204,7 +204,12 @@ fn shared_bytes_should_open_only_regular_files_and_count_the_unreadable_one() {
 
 #[test]
 fn shared_bytes_should_be_unavailable_off_btrfs_before_opening_anything() {
-    // /proc is never btrfs.
+    // /proc is never btrfs; where there is no FIEMAP at all (macOS) the answer is the platform one.
     let est = FiemapProbe.shared_bytes(Path::new("/proc/self"), 10, Duration::from_millis(250));
-    assert_eq!(est, SharedEstimate::Unavailable(Unavailable::NotBtrfs));
+    let want = if cfg!(target_os = "linux") {
+        Unavailable::NotBtrfs
+    } else {
+        Unavailable::UnsupportedOnThisOS
+    };
+    assert_eq!(est, SharedEstimate::Unavailable(want));
 }

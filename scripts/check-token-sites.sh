@@ -543,7 +543,9 @@ main() {
   cd "$root" || return 2
   tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
   mkrules "$tmp"
-  find . -name '*.rs' -not -path '*/target/*' -not -path './.git/*' -print0 | sed -z 's|^\./||' > "$tmp/files0"
+  # (no `sed -z`: BSD sed has none)
+  find . -name '*.rs' -not -path '*/target/*' -not -path './.git/*' -print0 |
+    while IFS= read -r -d '' f; do printf '%s\0' "${f#./}"; done > "$tmp/files0"
   [ -s "$tmp/files0" ] || { echo "FAIL: no .rs files under $root (a check that scans nothing passes nothing)"; return 1; }
 
   hits() {  # $1 = rule name -> "path:line:text" per hit

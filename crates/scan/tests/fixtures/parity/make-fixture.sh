@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # make-fixture.sh <empty-or-absent-dir> : builds the scan parity fixture (Story 0.1.5, ADR-007).
 # Every regular file is 0 bytes or 8192 bytes so allocation (inline vs extent) is the same on btrfs, ext4 and tmpfs,
-# and every mtime is set with `touch -d` so the tree is reproducible. Absolute paths are used only inside the
+# and every mtime is set with `touch -d` (ISO 8601, GNU and BSD) so the tree is reproducible. Absolute paths are used only inside the
 # worktree `.git` pointer files, which the scanner reads to attribute worktrees to their main repository.
 set -euo pipefail
 [ $# -eq 1 ] || { echo "usage: $0 <dir>" >&2; exit 64; }
@@ -42,8 +42,10 @@ mkdir -p "$root/repoB/private/inner"; : > "$root/repoB/private/inner/f"
 mkdir -p "$root/loose/docs"; blob "$root/loose/docs/notes.txt"; : > "$root/loose/empty"
 
 # deterministic mtimes, deepest paths first so a parent is never touched after its child
-find "$root" -mindepth 1 ! -type l -printf '%d %p\n' | sort -rn | cut -d' ' -f2- |
-  while IFS= read -r p; do touch -d '2024-01-02 03:04:05 UTC' "$p"; done
-find "$root" -type l -exec touch -h -d '2024-01-02 03:04:05 UTC' {} +
-touch -d '2024-01-02 03:04:05 UTC' "$root"
+# (portable: the depth is the count of "/", and the ISO 8601 form of `touch -d` is read by GNU and BSD touch alike)
+stamp=2024-01-02T03:04:05Z
+find "$root" -mindepth 1 ! -type l | awk '{ print gsub("/", "/"), $0 }' | sort -rn | cut -d' ' -f2- |
+  while IFS= read -r p; do touch -d "$stamp" "$p"; done
+find "$root" -type l -exec touch -h -d "$stamp" {} +
+touch -d "$stamp" "$root"
 chmod 000 "$root/repoB/private"   # last, so nothing above needs to read it; callers restore it with chmod 755 before rm -r

@@ -1,6 +1,8 @@
 //! The one quoting function of every printed command line that holds a path (N-13, `design/ux.md` 3.6).
 //!
-//! Supported shells: the POSIX sh family and zsh (bash, zsh, dash, busybox ash, ksh). fish is not supported:
+//! Supported shells: the POSIX sh family and zsh (bash, zsh, dash, busybox ash, ksh). dash is inert but not exact
+//! for the `$'...'` form (rule 4 below): it has no `$'`, so the argument arrives as `$` plus the literal text,
+//! never as code. fish is not supported:
 //! it rejects `$'` and reads `\\` and `\'` inside single quotes as escapes, so run a printed line under
 //! `sh -c` there. Command lines print absolute paths only (`~` would not expand inside quotes).
 

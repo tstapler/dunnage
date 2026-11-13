@@ -16,15 +16,56 @@ pub fn platform() -> Platform {
     }
 }
 
-/// Linux reads `/proc/self/mountinfo`. Elsewhere there is no such table: `Unsupported`, so a guard that needs
-/// it fails closed.
+/// Linux reads `/proc/self/mountinfo`, macOS asks `getfsstat`. Elsewhere there is no such table:
+/// `Unsupported`, so a guard that needs it fails closed.
 pub fn mounts() -> io::Result<Vec<MountEntry>> {
     if cfg!(target_os = "linux") {
         let text = std::fs::read_to_string("/proc/self/mountinfo")?;
         Ok(parse_mountinfo(&text))
     } else {
+        #[cfg(target_os = "macos")]
+        return macos_mounts();
+        #[cfg(not(target_os = "macos"))]
         Err(io::Error::from(io::ErrorKind::Unsupported))
     }
+}
+
+/// The mounted filesystems through `getfsstat(2)` (thread-safe, unlike `getmntinfo`). `dev` (and `mnt_id`, which
+/// macOS does not have) is the `st_dev` of the mount point; a mount point that cannot be stat'ed gets `dev` 0.
+#[cfg(target_os = "macos")]
+fn macos_mounts() -> io::Result<Vec<MountEntry>> {
+    use std::ffi::{CStr, OsStr};
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::fs::MetadataExt;
+
+    // SAFETY: a null buffer asks only for the number of mounted filesystems.
+    let count = unsafe { libc::getfsstat(std::ptr::null_mut(), 0, libc::MNT_NOWAIT) };
+    let count = usize::try_from(count).map_err(|_| io::Error::last_os_error())?;
+    // a filesystem mounted between the two calls is missed or fits in the slack
+    let mut rows: Vec<libc::statfs> = Vec::with_capacity(count + 8);
+    let bytes = libc::c_int::try_from(rows.capacity() * std::mem::size_of::<libc::statfs>())
+        .map_err(|_| io::Error::from(io::ErrorKind::InvalidInput))?;
+    // SAFETY: `rows` has room for `bytes` bytes; getfsstat initialises that many rows' worth at most and returns
+    // the number of rows it wrote, and `statfs` is plain old data with no invalid bit patterns
+    let filled = unsafe { libc::getfsstat(rows.as_mut_ptr(), bytes, libc::MNT_NOWAIT) };
+    let filled = usize::try_from(filled).map_err(|_| io::Error::last_os_error())?;
+    // SAFETY: the first `filled` rows were written by getfsstat, and `filled` is at most the capacity it was given
+    unsafe { rows.set_len(filled.min(rows.capacity())) };
+    Ok(rows
+        .iter()
+        .map(|r| {
+            // SAFETY: `f_mntonname` is a NUL-terminated C string inside the struct
+            let on = unsafe { CStr::from_ptr(r.f_mntonname.as_ptr()) };
+            let mount_point = std::path::PathBuf::from(OsStr::from_bytes(on.to_bytes()));
+            let dev = std::fs::metadata(&mount_point).map_or(0, |m| m.dev());
+            // macOS has no mount ids; the device of the mount point tells two mounts apart
+            MountEntry {
+                mount_point,
+                dev,
+                mnt_id: dev,
+            }
+        })
+        .collect())
 }
 
 /// Kernel `new_encode_dev`, so `dev` has the layout of an `st_dev`. It is still never compared with one: the
@@ -117,6 +158,16 @@ garbage line
         assert_eq!(got[1], ("/".into(), "/dev/nvme0n1p2".to_string()));
         assert!(got.contains(&("/mnt/my disk".into(), "/dev/nvme0n1p3".to_string())));
         assert!(!got.iter().any(|(p, _)| p.to_string_lossy() == "garbage"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mounts_should_list_the_root_filesystem_When_run_on_macos() {
+        let m = mounts().unwrap();
+        assert!(
+            m.iter().any(|e| e.mount_point == std::path::Path::new("/")),
+            "{m:?}"
+        );
     }
 
     #[test]

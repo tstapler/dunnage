@@ -166,13 +166,17 @@ fn directories_should_be_skipped_symlinks_listed_with_their_own_size_and_odd_nam
     symlink("real.bin", p.join("link-to-big")).unwrap();
     symlink("/nonexistent/target/of/some/length", p.join("dangling")).unwrap();
     fs::write(p.join("line\nbreak"), b"x").unwrap();
+    // APFS refuses a name that is not valid UTF-8, so the raw-name row exists on Linux only
     let raw = OsString::from_vec(b"bad-\xff\xfe-utf8".to_vec());
-    fs::write(p.join(&raw), b"yy").unwrap();
+    let has_raw = cfg!(target_os = "linux");
+    if has_raw {
+        fs::write(p.join(&raw), b"yy").unwrap();
+    }
 
     let rows = RealDirLister.list(p, 100, &never()).unwrap();
     let names: Vec<&OsString> = rows.rows.iter().map(|r| &r.name).collect();
     assert!(!names.iter().any(|n| *n == "subdir"));
-    assert_eq!(rows.rows.len(), 5);
+    assert_eq!(rows.rows.len(), if has_raw { 5 } else { 4 });
     let by_name = |n: &str| rows.rows.iter().find(|r| r.name == n).unwrap();
     assert_eq!(by_name("real.bin").size_bytes, 40_000);
     assert_eq!(
@@ -186,7 +190,7 @@ fn directories_should_be_skipped_symlinks_listed_with_their_own_size_and_odd_nam
     );
     assert!(rows.rows.iter().any(|r| r.name == "line\nbreak"));
     assert!(
-        rows.rows.iter().any(|r| r.name == raw),
+        !has_raw || rows.rows.iter().any(|r| r.name == raw),
         "invalid UTF-8 comes back as the raw OsString"
     );
     assert_eq!(rows.rows[0].name, "real.bin", "largest first");

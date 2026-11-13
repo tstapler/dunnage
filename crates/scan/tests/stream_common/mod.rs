@@ -188,5 +188,16 @@ impl Recorder {
 }
 
 pub fn thread_count() -> usize {
+    if !cfg!(target_os = "linux") {
+        // macOS has no /proc: `ps -M` prints one line per thread, after one header line
+        let out = std::process::Command::new("ps")
+            .args(["-M", "-p", &std::process::id().to_string()])
+            .output()
+            .unwrap();
+        return String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .count()
+            .saturating_sub(1);
+    }
     std::fs::read_dir("/proc/self/task").unwrap().count()
 }

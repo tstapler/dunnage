@@ -85,6 +85,10 @@ fn assert_gate_refused(ex: &Ex, ran: &Ran) {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_apply_should_delete_only_the_reviewed_directories_in_the_documented_order_When_nothing_changed(
 ) {
     let ex = Ex::new();
@@ -295,6 +299,10 @@ fn grew_too_much_should_refuse_more_than_ten_percent_or_one_gib_and_nothing_less
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn apply_should_delete_When_the_tree_grew_by_less_than_the_bound() {
     let ex = Ex::new();
     let (a, _) = two_marks(&ex);
@@ -373,6 +381,10 @@ fn symlink_swap_case(after_gate: bool) {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_apply_should_skip_an_item_that_became_a_symlink_to_a_directory_that_must_stay() {
     symlink_swap_case(true);
 }
@@ -623,6 +635,10 @@ fn safety_apply_should_skip_an_item_that_is_now_inside_the_tools_own_state_M5_ag
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_apply_should_leave_an_intent_with_a_result_and_a_run_end_When_the_abort_is_raised_inside_the_second_item(
 ) {
     let ex = Ex::new();
@@ -743,6 +759,10 @@ fn the_explorer_apply_should_share_named_steps_with_the_cleaner_and_keep_their_r
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn apply_should_send_progress_item_and_done_messages_in_order_to_the_loop() {
     use dunnage_core::explore::msg::{DeleteItemOutcome, DeleteMsg, DeleteSummary};
     let ex = Ex::new();
@@ -817,6 +837,10 @@ fn explorer_run_refuse_should_send_the_text_to_the_loop() {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn apply_should_leave_no_measured_bytes_on_a_skipped_item_and_some_on_a_removed_one() {
     let ex = Ex::new();
     let (a, b) = two_marks(&ex);
@@ -863,6 +887,10 @@ fn apply_should_record_the_reviewed_scan_roots_in_run_start() {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn apply_should_report_interrupted_When_the_abort_stops_the_last_item_part_way() {
     let ex = Ex::new();
     let only = ex.tree("app/only", 6, 300);
@@ -901,6 +929,10 @@ fn apply_should_report_interrupted_When_the_abort_stops_the_last_item_part_way()
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn apply_should_not_report_interrupted_When_the_abort_arrives_after_the_last_item() {
     let ex = Ex::new();
     let only = ex.tree("app/only", 2, 300);

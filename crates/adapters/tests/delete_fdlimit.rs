@@ -107,6 +107,10 @@ fn run_in_child() {
 #[test]
 fn ten_thousand_levels_should_delete_with_soft_nofile_256_and_never_hold_more_than_max_open_levels_plus_16_descriptors(
 ) {
+    if !cfg!(target_os = "linux") {
+        eprintln!("SKIP: 10 000 nested levels take about 16 minutes on APFS (965 s measured on a macos-15 runner): Linux only");
+        return;
+    }
     if std::env::var_os(CHILD_ENV).is_some() {
         run_in_child();
         return;

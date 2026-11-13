@@ -268,6 +268,10 @@ fn fixture() -> (Arc<Ex>, PathBuf) {
 // ----- the cases -----
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_an_explorer_delete_of_a_throwaway_directory_removes_exactly_that_directory_and_writes_the_audit(
 ) {
     let (ex, dist) = fixture();
@@ -319,6 +323,10 @@ fn safety_an_explorer_delete_of_a_throwaway_directory_removes_exactly_that_direc
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_a_wrong_count_at_the_prompt_deletes_nothing_in_the_fixture() {
     let (ex, dist) = fixture();
     let before = manifest(&ex.code);
@@ -467,6 +475,10 @@ fn safety_in_a_gate_d_build_the_real_review_opens_the_prompt_and_a_cancel_delete
 
 #[cfg(feature = "gate-d")]
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_in_a_gate_d_build_the_prompt_shows_the_real_count_and_total() {
     let (ex, _dist) = fixture();
     let keys = vec![

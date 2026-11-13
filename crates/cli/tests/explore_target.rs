@@ -107,6 +107,10 @@ fn cand(ex: &Ex, p: &Path) -> Candidate {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_target_should_remove_a_reviewed_directory_and_nothing_beside_it() {
     let ex = Ex::new();
     let a = ex.tree("app/dist", 3, 4000);
@@ -163,6 +167,10 @@ fn safety_target_should_refuse_the_item_and_delete_nothing_When_the_root_mount_i
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_target_should_report_changed_since_the_plan_When_the_directory_is_swapped_after_the_guard(
 ) {
     // Between the guard and the delete: another inode, a symlink, a plain file.
@@ -200,6 +208,10 @@ fn safety_target_should_report_changed_since_the_plan_When_the_directory_is_swap
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_target_should_refuse_an_opened_directory_that_is_home_or_an_ancestor_by_identity() {
     let ex = Ex::new();
     let a = ex.tree("app/dist", 2, 100);
@@ -246,6 +258,10 @@ fn safety_target_should_not_enter_a_subdirectory_the_engine_sees_on_another_moun
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn target_should_give_the_same_result_for_nested_roots_in_either_order() {
     let mut results: Vec<(u64, Vec<PathBuf>)> = Vec::new();
     for order in [0, 1] {
@@ -338,6 +354,10 @@ fn target_should_name_its_selector_and_discover_the_reviewed_marks_that_still_ex
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn target_should_call_a_vanished_or_replaced_path_changed_since_the_plan_and_an_unreadable_one_protected(
 ) {
     use std::os::unix::fs::PermissionsExt;
@@ -391,6 +411,10 @@ fn is_root() -> bool {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_target_should_report_changed_since_the_plan_When_the_directory_vanishes_after_the_guard()
 {
     let ex = Ex::new();

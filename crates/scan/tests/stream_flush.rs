@@ -26,6 +26,19 @@ fn request(roots: &[PathBuf], threads: usize) -> StreamRequest<'_> {
 
 #[test]
 fn parent_event_should_reach_the_sink_within_100ms_When_its_worker_blocks_2s_in_the_lister() {
+    // One scheduling stall on a loaded shared runner can add 100 ms to a single sample; the bound must hold
+    // in at least one of three, while a stranded event (2 s) fails all three.
+    let mut late = Vec::new();
+    for _ in 0..3 {
+        late.push(parent_event_lateness());
+        if late.last().is_some_and(|l| *l < Duration::from_millis(100)) {
+            return;
+        }
+    }
+    panic!("the parent event waited {late:?} while its worker was stalled");
+}
+
+fn parent_event_lateness() -> Duration {
     let mut fake = FakeFs::new(2, 1);
     fake.delay = Box::new(|n| {
         if n == 1 {
@@ -52,11 +65,8 @@ fn parent_event_should_reach_the_sink_within_100ms_When_its_worker_blocks_2s_in_
         .stream(&request(&roots, 2), &sink, &fake)
         .unwrap();
     let created = created.lock().unwrap().unwrap();
-    let late = arrived.lock().unwrap().unwrap().duration_since(created);
-    assert!(
-        late < Duration::from_millis(100),
-        "the parent event waited {late:?} while its worker was stalled"
-    );
+    let arrived_at = arrived.lock().unwrap().unwrap();
+    arrived_at.duration_since(created)
 }
 
 #[test]

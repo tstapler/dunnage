@@ -24,7 +24,8 @@ const SYSTEM_PREFIXES: [&str; 9] = [
     "/dev",
     "/bin",
 ];
-const SYSTEM_EXACT: [&str; 2] = ["/etc/ld.so.cache", "/etc/ld.so.preload"];
+// /etc/localtime: the local-time zone lookup; present on hosted runners, a read of a system file and not of the home.
+const SYSTEM_EXACT: [&str; 3] = ["/etc/ld.so.cache", "/etc/ld.so.preload", "/etc/localtime"];
 
 fn skip_without_strace() -> bool {
     if strace_available() {
@@ -53,6 +54,7 @@ fn fixture_path(fx: &Fixture) -> std::ffi::OsString {
     let bin = fx.root().join("bin");
     std::fs::create_dir_all(&bin).unwrap();
     common::docker_down_shim(&bin);
+    common::tool_shims(&bin);
     std::env::join_paths([bin, PathBuf::from("/usr/bin"), PathBuf::from("/bin")]).unwrap()
 }
 

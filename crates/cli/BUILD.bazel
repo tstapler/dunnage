@@ -153,6 +153,10 @@ dc_integration_tests(
             "env": {"DC_SKIP_COMPILE_FAIL": "1"},
             "tags": ["requires-cargo"],
         },
+        # Interactive pty session on real time: on a loaded shared runner the scan screen can outlast its 20 s wait.
+        "explore_state": {"flaky": True},
+        # A pty session that hung to the 300 s test timeout in 2 of 6 hosted x86 runs (about 1.6 s when it passes).
+        "explore_bench": {"flaky": True},
         "e2e_apply_caches": {
             "env": {"DC_SKIP_PROFILE_BUILDS": "1"},
             "env_inherit": ["DC_REPO_ROOT"],

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use dunnage_adapters::settle::settle;
 use dunnage_adapters::space_meter::SysfsAllocSource;
@@ -77,9 +77,9 @@ fn meter(f: &Fixture) -> RealSpaceMeter {
 #[test]
 fn settle_should_return_without_waiting_for_timeout_When_two_samples_equal() {
     let f = fixture("btrfs", 100);
-    let started = Instant::now();
     let st = meter(&f).settle(&f.root, Duration::from_secs(30));
-    assert!(started.elapsed() < Duration::from_secs(5));
+    // `waited_ms` starts after the filesystem sync, whose duration on a shared runner is not this test's business
+    assert!(st.waited_ms < 5_000, "polled for {} ms", st.waited_ms);
     assert!(st.stable);
     assert_eq!(st.samples, 2);
     assert_eq!(st.data_bytes_used, Some(100));
@@ -105,15 +105,15 @@ fn settle_should_return_without_waiting_for_timeout_When_two_samples_equal() {
 
 #[test]
 fn settle_should_return_last_value_and_note_did_not_stabilise_When_counter_keeps_falling() {
-    // samples 100, 90, 80, ... never two equal
-    let next = Cell::new(100_u64);
+    // samples 1000000, 999990, ... never two equal (room for the 80 samples a 400 ms window takes)
+    let next = Cell::new(1_000_000_u64);
     let st = settle(
         || {},
         || {
             next.set(next.get() - 10);
             Some(next.get() + 10)
         },
-        Duration::from_millis(40),
+        Duration::from_millis(400), // wide enough that a loaded runner's coarse sleeps still give 3 samples
         Duration::from_millis(5),
     );
     assert!(!st.stable, "the summary labels this provisional");

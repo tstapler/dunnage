@@ -394,7 +394,7 @@ fn fake_git(dir: &Path) {
     // reports its pid and process group, blocks for 2 s, then prints its own outcome
     std::fs::write(
         &script,
-        "#!/bin/sh\ncd \"$(dirname \"$0\")\"\necho \"pid=$$ pgrp=$(cut -d' ' -f5 /proc/$$/stat)\" > started.tmp\nmv started.tmp started\nsleep 2\ntouch done\n",
+        "#!/bin/sh\ncd \"$(dirname \"$0\")\"\necho \"pid=$$ pgrp=$(ps -o pgid= -p $$ | tr -d ' ')\" > started.tmp\nmv started.tmp started\nsleep 2\ntouch done\n",
     )
     .unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();

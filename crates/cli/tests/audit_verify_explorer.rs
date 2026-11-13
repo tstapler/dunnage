@@ -398,6 +398,10 @@ fn audit_verify_should_keep_the_cleaner_run_rules_When_a_log_mixes_both_kinds() 
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn safety_audit_verify_should_read_back_a_real_explorer_run_written_by_the_real_audit_sink_as_clean(
 ) {
     let ex = Ex::new();
