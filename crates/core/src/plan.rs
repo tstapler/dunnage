@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use crate::candidate::{Candidate, Locator};
 use crate::delete_types::{FileKind, StatInfo};
+use crate::ids::BirthTime;
 use crate::kind::SelectorId;
 use crate::outcome::SkipReason;
 use crate::plan_state::{ItemKey, SaveOutcome, SavedPlan, SavedSelection};
@@ -281,15 +282,20 @@ impl Fnv {
     }
 }
 
-/// What `lstat` said a marked path is at plan time (Story 6.6.2, UX-T34): the device, the inode and the file
-/// type. A directory removed and recreated under the same name has another inode, so a plan reviewed for the
-/// old one cannot authorise deleting the new one. Sizes and times are left out on purpose: they drift between
-/// the review and the delete and would make every plan-id stale.
+/// What `lstat` said a marked path is at plan time (Story 6.6.2, UX-T34): the device, the inode, the file
+/// type and the birth time. A directory removed and recreated under the same name has another inode, or on
+/// ext4 often the same one with another birth time, so a plan reviewed for the old one cannot authorise
+/// deleting the new one. Sizes and modification times are left out on purpose: they drift between the review
+/// and the delete and would make every plan-id stale. A birth time never changes in place.
+///
+/// `btime` is `None` where the filesystem reports none; then `(dev, ino, kind)` is all that binds the item
+/// (see [`ItemIdentity::still_matches`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ItemIdentity {
     pub dev: u64,
     pub ino: u64,
     pub kind: FileKind,
+    pub btime: Option<BirthTime>,
 }
 
 impl ItemIdentity {
@@ -298,7 +304,23 @@ impl ItemIdentity {
             dev: st.ident.dev,
             ino: st.ident.ino,
             kind: st.kind,
+            btime: st.btime,
         }
+    }
+
+    /// Whether `fresh` (read now) is the object this plan item was reviewed for. `dev`, `ino` and `kind` must
+    /// be equal; the birth times must be equal when both sides report one. If either side has none (a
+    /// filesystem or platform without it, or a read path that does not fetch it) only `(dev, ino, kind)` is
+    /// compared, which is the check before birth times were added. A one-sided `None` therefore never refuses
+    /// and never lets a differing pair of birth times through.
+    pub fn still_matches(&self, fresh: &ItemIdentity) -> bool {
+        self.dev == fresh.dev
+            && self.ino == fresh.ino
+            && self.kind == fresh.kind
+            && match (self.btime, fresh.btime) {
+                (Some(a), Some(b)) => a == b,
+                _ => true,
+            }
     }
 
     fn kind_tag(self) -> u8 {
@@ -353,6 +375,13 @@ impl PlanId {
             h.feed(&id.dev.to_le_bytes());
             h.feed(&id.ino.to_le_bytes());
             h.feed(&[id.kind_tag()]);
+            // Nothing is fed without a birth time, so an item on a filesystem that reports none keeps the
+            // plan id it had before birth times were hashed.
+            if let Some(b) = id.btime {
+                h.feed(&[0xb7]);
+                h.feed(&b.secs.to_le_bytes());
+                h.feed(&b.nsec.to_le_bytes());
+            }
         }
         h.feed(&[0xff]);
         for r in roots {

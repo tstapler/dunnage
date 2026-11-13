@@ -67,6 +67,7 @@ fn planned(target: &str) -> ItemIdentity {
         dev: i.dev,
         ino: i.ino,
         kind: FileKind::Dir,
+        btime: None,
     }
 }
 

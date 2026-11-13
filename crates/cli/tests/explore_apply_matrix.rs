@@ -164,6 +164,7 @@ fn fake_dir_id() -> ItemIdentity {
         dev: 1,
         ino: 1,
         kind: FileKind::Dir,
+        btime: None,
     }
 }
 

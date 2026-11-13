@@ -405,8 +405,10 @@ fn recreated_case(after_gate: bool) {
         std::fs::remove_dir_all(&victim).unwrap();
         std::fs::create_dir_all(&decoy).unwrap();
         std::fs::write(decoy.join("f0"), [0u8; 10]).unwrap();
-        // ext4 reuses a freed inode number at once: park directories that got the old number until the
-        // new victim gets a different one (the engine's identity is (dev, ino)).
+        // ext4 reuses a freed inode number at once, and the birth time only differs once the kernel's coarse
+        // clock ticks (a few ms): park directories that got the old number until the new victim gets a
+        // different one, so this test stays deterministic (the birth-time check has its own tests in
+        // explore_target.rs and item_identity_btime.rs).
         for n in 0..10_000 {
             std::fs::create_dir(&victim).unwrap();
             if std::fs::metadata(&victim).unwrap().ino() != old_ino {
@@ -968,6 +970,7 @@ fn fake_id() -> dunnage_core::plan::ItemIdentity {
         dev: 1,
         ino: 1,
         kind: dunnage_core::FileKind::Dir,
+        btime: None,
     }
 }
 

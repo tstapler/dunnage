@@ -159,7 +159,7 @@ impl<D: DirOps> ExplorerSelectionTarget<D> {
                 SkipReason::ProtectedPath
             }
         })?;
-        if ItemIdentity::of(&st) != planned {
+        if !planned.still_matches(&ItemIdentity::of(&st)) {
             return Err(SkipReason::IdentityChanged);
         }
         let (mounts, mount_points) = mount_facts(env.probe);
@@ -210,7 +210,7 @@ impl<D: DirOps> ExplorerSelectionTarget<D> {
                 failure(DeleteError::Io(e.raw_os_error().unwrap_or(libc::EIO)))
             }
         })?;
-        if ItemIdentity::of(&entry) != planned {
+        if !planned.still_matches(&ItemIdentity::of(&entry)) {
             return Err(failure(DeleteError::IdentityMismatch));
         }
         // The opened directory (not the name) is what must not be `$HOME` or an ancestor of it, whatever
@@ -224,7 +224,7 @@ impl<D: DirOps> ExplorerSelectionTarget<D> {
             .fstat(&dir)
             .map_err(|e| failure(crate::dirops::map_open_error(&e)))?;
         drop(dir);
-        if ItemIdentity::of(&opened) != planned {
+        if !planned.still_matches(&ItemIdentity::of(&opened)) {
             return Err(failure(DeleteError::IdentityMismatch));
         }
         if self.roots.in_home_chain(opened.ident) {

@@ -8,7 +8,9 @@ use std::os::fd::OwnedFd;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Component, Path, PathBuf};
 
-use dunnage_core::{ApplyToken, DeleteError, DirEntryInfo, FileKind, Identity, StatInfo};
+use dunnage_core::{
+    ApplyToken, BirthTime, DeleteError, DirEntryInfo, FileKind, Identity, StatInfo,
+};
 use rustix::fs::{AtFlags, FileType, Mode, OFlags};
 
 /// Max subdirectory names `delete_tree` buffers per open level; non-directories are unlinked as they stream.
@@ -256,6 +258,7 @@ fn from_stat(st: &rustix::fs::Stat) -> StatInfo {
         mtime_secs: st.st_mtime as i64,
         mtime_nsec: st.st_mtime_nsec as u32,
         mnt_id: None,
+        btime: None,
     }
 }
 
@@ -268,7 +271,7 @@ const FSTAT_FLAGS: AtFlags = AtFlags::empty();
 #[cfg(target_os = "linux")]
 fn stat_info(fd: &OwnedFd, name: &OsStr, flags: AtFlags) -> io::Result<StatInfo> {
     use rustix::fs::StatxFlags;
-    let mask = StatxFlags::BASIC_STATS | StatxFlags::MNT_ID;
+    let mask = StatxFlags::BASIC_STATS | StatxFlags::MNT_ID | StatxFlags::BTIME;
     match rustix::fs::statx(fd, name, flags, mask) {
         Ok(sx) => Ok(StatInfo {
             ident: Identity {
@@ -285,6 +288,10 @@ fn stat_info(fd: &OwnedFd, name: &OsStr, flags: AtFlags) -> io::Result<StatInfo>
             mtime_secs: sx.stx_mtime.tv_sec,
             mtime_nsec: sx.stx_mtime.tv_nsec,
             mnt_id: (sx.stx_mask & StatxFlags::MNT_ID.bits() != 0).then_some(sx.stx_mnt_id),
+            btime: (sx.stx_mask & StatxFlags::BTIME.bits() != 0).then_some(BirthTime {
+                secs: sx.stx_btime.tv_sec,
+                nsec: sx.stx_btime.tv_nsec,
+            }),
         }),
         Err(rustix::io::Errno::NOSYS | rustix::io::Errno::INVAL) => plain_stat(fd, name, flags),
         Err(e) => Err(errno(e)),

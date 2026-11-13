@@ -65,6 +65,7 @@ impl Fs for RealFs {
             mtime_secs: m.mtime(),
             mtime_nsec: u32::try_from(m.mtime_nsec()).unwrap_or(0),
             mnt_id: dunnage_adapters::mount_id_of(path),
+            btime: dunnage_core::BirthTime::of(&m),
         })
     }
 
