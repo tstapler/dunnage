@@ -148,6 +148,8 @@ jobs:
         run: scripts/check-case-table.sh --selftest
       - name: case table
         run: scripts/check-case-table.sh
+      - name: parity matrix selftest
+        run: scripts/check-parity-matrix.sh --selftest
       - name: test authorship selftest
         run: scripts/check-test-authorship.sh --selftest
       - name: test authorship
