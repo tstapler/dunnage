@@ -100,15 +100,36 @@ impl Owner {
         })
     }
 
-    pub fn apply(self, path: &Path) -> io::Result<()> {
-        std::os::unix::fs::chown(path, Some(self.uid), Some(self.gid))
+    /// Chowns the open file itself (`fchown`), never a path a user could swap for a symlink.
+    pub fn apply_fd(self, file: &File) -> io::Result<()> {
+        std::os::unix::fs::fchown(file, Some(self.uid), Some(self.gid))
     }
 }
 
-pub fn chown_if(owner: Option<Owner>, path: &Path) {
+pub fn chown_fd_if(owner: Option<Owner>, file: &File) {
     if let Some(o) = owner {
-        let _ = o.apply(path);
+        let _ = o.apply_fd(file);
     }
+}
+
+/// Opens `path` with `O_NOFOLLOW`. The state directory is user-owned while a sudo run is root, so a symlink
+/// planted at a state file would otherwise make root create, append to or truncate its target.
+pub fn open_nofollow(opts: &mut OpenOptions, path: &Path) -> io::Result<File> {
+    opts.custom_flags(rustix::fs::OFlags::NOFOLLOW.bits() as i32)
+        .open(path)
+        .map_err(|e| {
+            if e.raw_os_error() == Some(rustix::io::Errno::LOOP.raw_os_error()) {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!(
+                        "refusing to open {}: it is a symbolic link (remove it and run again)",
+                        path.display()
+                    ),
+                )
+            } else {
+                e
+            }
+        })
 }
 
 /// What opening the state directory did.
@@ -135,8 +156,8 @@ impl StateDir {
         let owner = Owner::for_euid(euid, dir);
         let existed = dir.is_dir();
         fs::create_dir_all(dir)?;
-        if !existed {
-            chown_if(owner, dir);
+        if let (false, Some(o)) = (existed, owner) {
+            let _ = std::os::unix::fs::lchown(dir, Some(o.uid), Some(o.gid));
         }
         let sd = StateDir {
             paths: StatePaths {
@@ -148,16 +169,13 @@ impl StateDir {
         for r in [sd.paths.audit_reserve(), sd.paths.last_plan_reserve()] {
             let full_size = fs::metadata(&r).is_ok_and(|m| m.len() >= RESERVE_BYTES);
             if !full_size && avail(dir).is_ok_and(|a| a >= RESERVE_RECREATE_MIN_AVAIL) {
-                match create_reserve(&r) {
+                match create_reserve(&r, owner) {
                     Ok(()) => {
-                        chown_if(owner, &r);
                         init.reserves_created = true;
                     }
                     Err(_) => {
                         // A partial reserve is cut to nothing, never left as a half-size file.
-                        let _ = OpenOptions::new()
-                            .write(true)
-                            .open(&r)
+                        let _ = open_nofollow(OpenOptions::new().write(true), &r)
                             .and_then(|f| f.set_len(0));
                     }
                 }
@@ -174,13 +192,16 @@ impl StateDir {
 }
 
 /// 1 MiB of real zeros (not a hole), so btrfs allocates the space.
-fn create_reserve(path: &Path) -> io::Result<()> {
-    let mut f = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(PRIVATE)
-        .open(path)?;
+fn create_reserve(path: &Path, owner: Option<Owner>) -> io::Result<()> {
+    let mut f = open_nofollow(
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(PRIVATE),
+        path,
+    )?;
+    chown_fd_if(owner, &f);
     let chunk = vec![0u8; 64 * 1024];
     for _ in 0..(RESERVE_BYTES / chunk.len() as u64) {
         f.write_all(&chunk)?;
@@ -190,7 +211,7 @@ fn create_reserve(path: &Path) -> io::Result<()> {
 
 /// Gives the space of a reserve back (truncate to zero). `Ok(false)` when there is nothing to release.
 pub fn release_reserve(path: &Path) -> io::Result<bool> {
-    let f = match OpenOptions::new().write(true).open(path) {
+    let f = match open_nofollow(OpenOptions::new().write(true), path) {
         Ok(f) => f,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(false),
         Err(e) => return Err(e),
@@ -261,14 +282,16 @@ impl RealPlanStore {
     }
 
     fn lock(&self) -> Option<File> {
-        let f = OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .mode(PRIVATE)
-            .open(self.dir.paths.last_plan_lock())
-            .ok()?;
-        chown_if(self.dir.owner, &self.dir.paths.last_plan_lock());
+        let f = open_nofollow(
+            OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .write(true)
+                .mode(PRIVATE),
+            &self.dir.paths.last_plan_lock(),
+        )
+        .ok()?;
+        chown_fd_if(self.dir.owner, &f);
         let start = Instant::now();
         loop {
             match flock(&f, FlockOperation::NonBlockingLockExclusive) {
@@ -284,23 +307,22 @@ impl RealPlanStore {
     fn write_once(&self, bytes: &[u8]) -> io::Result<()> {
         let tmp = self.dir.paths.dir.join("last_plan.tmp");
         let res = (|| {
-            let mut f = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .mode(PRIVATE)
-                .open(&tmp)?;
+            let mut f = open_nofollow(
+                OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .mode(PRIVATE),
+                &tmp,
+            )?;
+            chown_fd_if(self.dir.owner, &f);
             f.write_all(bytes)?;
             f.sync_data()?;
-            chown_if(self.dir.owner, &tmp);
             fs::rename(&tmp, self.dir.paths.last_plan())
         })();
         if res.is_err() {
             // Emptied, not removed: the next save truncates it anyway, and it holds no space meanwhile.
-            let _ = OpenOptions::new()
-                .write(true)
-                .open(&tmp)
-                .and_then(|f| f.set_len(0));
+            let _ = open_nofollow(OpenOptions::new().write(true), &tmp).and_then(|f| f.set_len(0));
         }
         res
     }
@@ -397,12 +419,11 @@ pub fn append_outcome(
     if fs::metadata(&path).is_ok_and(|m| m.len() >= OUTCOME_ROTATE_BYTES) {
         fs::rename(&path, paths.dir.join("outcome.jsonl.1"))?;
     }
-    let mut f = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .mode(PRIVATE)
-        .open(&path)?;
-    chown_if(owner, &path);
+    let mut f = open_nofollow(
+        OpenOptions::new().create(true).append(true).mode(PRIVATE),
+        &path,
+    )?;
+    chown_fd_if(owner, &f);
     f.write_all(s.as_bytes())
 }
 
