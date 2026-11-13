@@ -21,6 +21,7 @@ safety_apply_should_leave_the_tree_unchanged_When_the_audit_log_cannot_be_writte
 safety_apply_should_stop_after_the_first_item_and_keep_the_second_When_an_intent_cannot_be_written   # 6.6.3b
 safety_apply_should_skip_an_item_that_became_a_symlink_to_a_directory_that_must_stay   # 6.6.3b
 safety_apply_should_skip_an_item_removed_and_recreated_with_a_new_inode   # 6.6.3b
+safety_target_should_skip_and_delete_nothing_When_dev_ino_and_kind_match_but_the_birth_time_differs   # birth time in the plan identity (inode reuse)
 safety_apply_should_skip_every_item_below_a_parent_that_was_swapped_for_a_symlink   # 6.6.3b
 safety_apply_should_skip_every_item_When_the_scan_root_was_replaced_by_a_new_directory   # 6.6.3b
 safety_apply_should_skip_every_item_When_the_scan_root_became_a_symlink   # 6.6.3b
