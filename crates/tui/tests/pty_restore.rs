@@ -411,11 +411,19 @@ fn sigterm_mid_delete_waits_for_the_abort_restores_and_exits_143() {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn sighup_mid_delete_waits_for_the_abort_restores_and_exits_143() {
     delete_case("d-hup", |p| p.kill("HUP"), 143);
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn sigquit_mid_delete_waits_for_the_abort_restores_and_exits_143() {
     delete_case("d-quit", |p| p.kill("QUIT"), 143);
 }
@@ -430,6 +438,10 @@ fn sigint_mid_delete_waits_for_the_abort_restores_and_exits_130() {
 }
 
 #[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
 fn the_ctrl_c_key_mid_delete_waits_for_the_abort_restores_and_exits_130() {
     delete_case("d-ctrlc", |p| p.send(&[0x03]), 130);
 }
