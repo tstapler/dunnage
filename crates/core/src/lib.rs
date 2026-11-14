@@ -54,8 +54,9 @@ pub use cache_targets::{
 #[cfg(feature = "test-support")]
 pub use candidate::FixtureFacts;
 pub use candidate::{
-    BtrfsFacts, BuildDirFacts, BuildDirFlavor, CacheFacts, Candidate, DockerFacts, ExplorerFacts,
-    KindFacts, Locator, SteamFacts, WorktreeFacts, CANDIDATE_SCHEMA,
+    BtrfsFacts, BuildDirFacts, BuildDirFlavor, CacheFacts, Candidate, CargoHomeArea,
+    CargoHomeFacts, CargoPart, CargoPartFacts, DockerFacts, ExplorerFacts, KindFacts, Locator,
+    SteamFacts, WorktreeFacts, CANDIDATE_SCHEMA,
 };
 pub use delete_types::{
     first_line_capped, AbortFlag, AllowedTarget, DeleteError, DeleteFailure, DeletePolicy,
