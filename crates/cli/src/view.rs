@@ -428,6 +428,7 @@ pub fn selection_over(base: &Selection, ids: &[SelectorId]) -> Selection {
     s.only.clone_from(&base.only);
     if has(SelectorId::BuildDirs) {
         s.keep_newest = base.keep_newest;
+        s.cargo_profiles.clone_from(&base.cargo_profiles);
     }
     if has(SelectorId::DockerVolumes) {
         s.docker_volumes = base.docker_volumes;
