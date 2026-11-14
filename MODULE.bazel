@@ -6,7 +6,7 @@ Cargo.toml / Cargo.lock stay the dependency source of truth: crate_universe read
 
 module(
     name = "dunnage",
-    version = "0.2.0",
+    version = "0.2.1",
 )
 
 # Versions verified on the Bazel Central Registry on 2026-11-11:
