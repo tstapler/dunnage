@@ -16,6 +16,7 @@ pub mod docker;
 pub mod escape;
 pub mod executor;
 pub mod explore;
+pub mod explorer_floor;
 pub mod explorer_plan;
 pub mod flavor;
 pub mod floor_rule;
