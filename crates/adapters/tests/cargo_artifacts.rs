@@ -608,7 +608,8 @@ fn guard_before_delete_should_skip_with_identity_changed_When_the_part_was_repla
     let cands = tgt.discover(&env, &sel());
     let inc = part(&cands, &t.join("debug/incremental"));
 
-    fs::remove_dir_all(t.join("debug/incremental")).unwrap();
+    // the old directory stays (moved aside) so the new one cannot get its inode back
+    fs::rename(t.join("debug/incremental"), t.join("debug/incremental.old")).unwrap();
     fs::create_dir_all(t.join("debug/incremental/other")).unwrap();
     age_tree(&t.join("debug/incremental"), days(40));
 
