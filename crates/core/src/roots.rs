@@ -170,6 +170,9 @@ pub struct RootSet {
     root_idents: Vec<RootIdentity>,
     cache_paths: Vec<PathBuf>,
     steam_libraries: Vec<SteamLibraryRoot>,
+    /// `CARGO_HOME` when it names a directory strictly below `$HOME` (default `~/.cargo`); `None` otherwise,
+    /// and then the `cargo-home` kind has no root.
+    cargo_home: Option<PathBuf>,
 }
 
 /// Absolute, no `.` or `..`, no empty component, no trailing `/` (except `/` itself). The string-level rule of
@@ -216,6 +219,16 @@ fn pattern_matches(p: NamePattern, rel: &Path) -> bool {
         NamePattern::AgentWorktree => name.strip_prefix("agent-").is_some_and(|s| !s.is_empty()),
         NamePattern::SteamAppId => one_below && name.bytes().all(|b| b.is_ascii_digit()),
         NamePattern::SteamInstallDir => one_below && !name.starts_with('.'),
+        NamePattern::CargoHomeEntry => rel.iter().count() == 2 && !name.starts_with('.'),
+        NamePattern::CargoTargetPart => {
+            let comps: Vec<&std::ffi::OsStr> = rel.iter().collect();
+            let n = comps.len();
+            let target_at = |back: usize| n > back && comps[n - 1 - back] == "target";
+            matches!(
+                name,
+                "incremental" | ".fingerprint" | "deps" | "build" | "examples"
+            ) && (target_at(2) || target_at(3))
+        }
     }
 }
 
@@ -318,6 +331,7 @@ impl RootSet {
             }
         }
         let cache_paths = CACHE_PATHS.iter().map(|p| home.join(p)).collect();
+        let cargo_home = Some(home.join(".cargo"));
         Ok(RootSet {
             home,
             home_id,
@@ -326,7 +340,26 @@ impl RootSet {
             root_idents,
             cache_paths,
             steam_libraries: Vec::new(),
+            cargo_home,
         })
+    }
+
+    /// Points the `cargo-home` kind at `CARGO_HOME`. Accepted only when it is lexically clean and strictly
+    /// below `$HOME` (like a tool-reported cache dir); anything else leaves the kind with no root, so a
+    /// `CARGO_HOME=/` or `CARGO_HOME=$HOME` can never widen what may be deleted. `None` restores `~/.cargo`.
+    #[must_use]
+    pub fn with_cargo_home(mut self, reported: Option<&Path>) -> RootSet {
+        self.cargo_home = match reported {
+            None => Some(self.home.join(".cargo")),
+            Some(p) if lexically_clean(p) && strictly_below(&self.home, p) => Some(p.to_path_buf()),
+            Some(_) => None,
+        };
+        self
+    }
+
+    /// The directory the `cargo-home` kind works below.
+    pub fn cargo_home(&self) -> Option<&Path> {
+        self.cargo_home.as_deref()
     }
 
     #[must_use]
@@ -429,6 +462,16 @@ impl RootSet {
                 .collect(),
             Kind::NodeModules => within(&self.scan_roots, NamePattern::NodeModules),
             Kind::CargoTarget => within(&self.scan_roots, NamePattern::CargoTarget),
+            Kind::CargoArtifact => within(&self.scan_roots, NamePattern::CargoTargetPart),
+            Kind::CargoHome => self
+                .cargo_home
+                .iter()
+                .flat_map(|ch| [ch.join("registry").join("src"), ch.join("git").join("checkouts")])
+                .map(|root| AllowedTarget::Within {
+                    root,
+                    name: NamePattern::CargoHomeEntry,
+                })
+                .collect(),
             Kind::Worktree => within(&self.scan_roots, NamePattern::AgentWorktree),
             Kind::SteamPrefix => steam("compatdata", NamePattern::SteamAppId),
             Kind::SteamShaderCache => steam("shadercache", NamePattern::SteamAppId),

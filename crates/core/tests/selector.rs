@@ -15,7 +15,7 @@ use dunnage_core::selector::{
 };
 use dunnage_core::{SelectorId, SkipReason};
 
-const ALL_BUILT: [SelectorId; 10] = SelectorId::ALL;
+const ALL_BUILT: [SelectorId; 11] = SelectorId::ALL;
 
 fn parse(s: &str) -> Result<KindSelector, SelectorError> {
     KindSelector::parse(s, &ALL_BUILT)

@@ -146,6 +146,8 @@ pub enum NamePattern {
     AgentWorktree,
     SteamAppId,
     SteamInstallDir,
+    CargoTargetPart,
+    CargoHomeEntry,
 }
 
 /// Everything rule F and the descent need; see `DeletePolicy::validate` in `floor_rule.rs`.

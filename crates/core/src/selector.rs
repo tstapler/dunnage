@@ -15,6 +15,8 @@ use crate::shell_quote::shell_quote;
 pub const BUILD_DIR_FLOOR_SECS: u64 = 60 * 60;
 /// A worktree is never removed below this age (`WORKTREE_MIN_AGE`, Story 3.1.2).
 pub const WORKTREE_FLOOR_SECS: u64 = 24 * 60 * 60;
+/// A `CARGO_HOME` entry is never removed below this age, whatever `--min-age` says.
+pub const CARGO_HOME_FLOOR_SECS: u64 = 24 * 60 * 60;
 const DAY: u64 = 86_400;
 /// `--only` limits (Story 6.4.2): distinct values, bytes per value, and the quoted text of all of them.
 pub const ONLY_MAX_VALUES: usize = 20;
@@ -210,7 +212,10 @@ impl KindSelector {
 pub fn default_min_age_secs(id: SelectorId) -> Option<u64> {
     match id {
         SelectorId::Worktrees | SelectorId::BuildDirs => Some(14 * DAY),
-        SelectorId::DockerImages | SelectorId::DockerVolumes | SelectorId::Steam => Some(30 * DAY),
+        SelectorId::CargoHome
+        | SelectorId::DockerImages
+        | SelectorId::DockerVolumes
+        | SelectorId::Steam => Some(30 * DAY),
         SelectorId::Caches
         | SelectorId::CacheApt
         | SelectorId::Docker
@@ -226,6 +231,7 @@ fn floor_secs(id: SelectorId) -> u64 {
     match id {
         SelectorId::BuildDirs => BUILD_DIR_FLOOR_SECS,
         SelectorId::Worktrees => WORKTREE_FLOOR_SECS,
+        SelectorId::CargoHome => CARGO_HOME_FLOOR_SECS,
         _ => 0,
     }
 }
@@ -292,6 +298,9 @@ pub struct Selection {
     pub min_age_secs: Option<u64>,
     pub min_size_bytes: Option<u64>,
     pub keep_newest: Option<u32>,
+    /// `--cargo-profile NAME` (repeatable): only the cargo profile directories with these names (`debug`,
+    /// `release`, the last component of `<triple>/debug`) are offered their parts. Empty offers every profile.
+    pub cargo_profiles: Vec<String>,
     pub docker_volumes: Option<DockerVolumes>,
     pub volumes: Vec<String>,
     pub steam_saves: Option<Discard>,
@@ -390,6 +399,7 @@ impl Selection {
             min_age_secs: None,
             min_size_bytes: None,
             keep_newest: None,
+            cargo_profiles: Vec::new(),
             docker_volumes: None,
             volumes: Vec::new(),
             steam_saves: None,
@@ -444,6 +454,11 @@ impl Selection {
             (
                 self.keep_newest.is_some(),
                 "--keep-newest",
+                SelectorId::BuildDirs,
+            ),
+            (
+                !self.cargo_profiles.is_empty(),
+                "--cargo-profile",
                 SelectorId::BuildDirs,
             ),
         ];
@@ -552,6 +567,15 @@ impl Selection {
         }
         if let Some(n) = self.keep_newest {
             out.push(format!("--keep-newest {n}"));
+        }
+        let mut profiles: Vec<&String> = self.cargo_profiles.iter().collect();
+        profiles.sort();
+        profiles.dedup();
+        for p in profiles {
+            out.push(format!(
+                "--cargo-profile {}",
+                shell_quote(OsStr::new(p), false)
+            ));
         }
         match self.docker_volumes {
             Some(DockerVolumes::Anonymous) => out.push("--docker-volumes anonymous".into()),

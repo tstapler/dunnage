@@ -110,6 +110,25 @@ fn sample_facts() -> Vec<(KindFacts, SelectorId, Kind)> {
             Kind::SteamRemnant,
         ),
         (
+            KindFacts::CargoPart(CargoPartFacts {
+                part: CargoPart::Incremental,
+                profile: "debug".into(),
+                project: "/home/u/code/app".into(),
+                age_secs: 0,
+            }),
+            SelectorId::BuildDirs,
+            Kind::CargoArtifact,
+        ),
+        (
+            KindFacts::CargoHome(CargoHomeFacts {
+                area: CargoHomeArea::RegistrySrc,
+                source: "index.crates.io-6f17d22bba15001f".into(),
+                age_secs: 0,
+            }),
+            SelectorId::CargoHome,
+            Kind::CargoHome,
+        ),
+        (
             KindFacts::Btrfs(BtrfsFacts::Balance { usage_pct: 5 }),
             SelectorId::Btrfs,
             Kind::BtrfsBalance,
@@ -202,6 +221,7 @@ fn selector_of_should_map_every_facts_variant_to_its_kinds_id_and_only_build_dir
             ("cache-apt", Risk::Safe),
             ("worktrees", Risk::Guarded),
             ("build-dirs", Risk::Destructive),
+            ("cargo-home", Risk::Guarded),
             ("docker", Risk::Guarded),
             ("docker-images", Risk::Guarded),
             ("docker-volumes", Risk::Destructive),
