@@ -1,0 +1,6 @@
+# The cargo-aware kinds (cargo-artifact inside build-dirs, and cargo-home): always active.
+safety_cargo_artifact_running_cargo_never_deleted  # a part of a target with a running cargo/rustc (or an unknown run state): skipped at plan time and before the delete
+safety_cargo_artifact_symlink_swap_leaves_target_alone  # a part swapped for a link after planning: refused, the link target untouched
+safety_cargo_artifact_profile_swapped_for_a_symlink_leaves_the_link_target_alone  # a profile swapped for a link after planning: refused, nothing below the link touched
+safety_cargo_home_running_build_never_deleted  # a CARGO_HOME entry that a process uses (or whose state is unknown): skipped at plan time and before the delete
+safety_cargo_home_symlink_swap_leaves_target_alone  # an entry or its index directory swapped for a link: refused, the link target untouched
