@@ -26,6 +26,9 @@ enum Rule {
     ToolOwned(String),
     UnderRoots(Vec<String>),
     UnderLibrary(Vec<String>),
+    /// Strictly below `$HOME`, with at least one directory above the pattern (`CARGO_HOME` is moveable but
+    /// never `$HOME` itself) and no `.git` component.
+    UnderHome(Vec<String>),
 }
 
 /// The parsed `ci/allowed-roots.txt`.
@@ -60,6 +63,7 @@ impl AllowedTable {
                 "tool-owned" => Rule::ToolOwned(value),
                 "under-roots" => Rule::UnderRoots(segments(&value)),
                 "under-library" => Rule::UnderLibrary(segments(&value)),
+                "under-home" => Rule::UnderHome(segments(&value)),
                 _ => return Err(bad()),
             };
             t.rules.entry(kind.to_string()).or_default().push(rule);
@@ -293,6 +297,17 @@ fn matches_under(pat: &[String], roots: &[Vec<u8>], p: &[&[u8]]) -> bool {
     })
 }
 
+fn matches_home(pat: &[String], home: &[&[u8]], p: &[&[u8]]) -> bool {
+    under(p, home).is_some_and(|rel| {
+        rel.len() > pat.len()
+            && rel.iter().all(|c| *c != b".git")
+            && rel[rel.len() - pat.len()..]
+                .iter()
+                .zip(pat)
+                .all(|(c, s)| seg_matches(s, c))
+    })
+}
+
 fn matches_library(pat: &[String], libraries: &[Vec<u8>], p: &[&[u8]]) -> bool {
     libraries.iter().any(|l| {
         components(l)
@@ -341,6 +356,7 @@ fn judge(kind: &str, path: &[u8], inp: &VerifyInputs, rec: &Recorded) -> Verdict
             }),
             Rule::UnderRoots(pat) => matches_under(pat, &roots, &p),
             Rule::UnderLibrary(pat) => matches_library(pat, &rec.steam_libraries, &p),
+            Rule::UnderHome(pat) => matches_home(pat, &home, &p),
         };
         if ok {
             return Verdict::Inside;

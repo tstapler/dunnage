@@ -8,6 +8,8 @@
 #   <kind> tool-owned <name>    a tool-reported directory: strictly inside HOME, at least two levels below it, last name <name>
 #   <kind> under-roots <pat>    strictly below one of the roots and its trailing components match <pat> ("*" ends a prefix glob)
 #   <kind> under-library <pat>  <library>/<pat>, one component per segment; the library comes from Steam's own library list
+#   <kind> under-home <pat>     strictly below HOME, at least one directory above the trailing components <pat> (CARGO_HOME
+#                               may be moved anywhere below HOME), no .git component
 roots default ~/code ~/dotfiles ~/Programming
 cache exact ~/.npm/_cacache
 cache exact ~/.gradle/caches
@@ -24,6 +26,18 @@ cache tool-owned go-build
 cache tool-owned pip
 node-modules under-roots node_modules
 cargo-target under-roots target
+cargo-artifact under-roots target/*/incremental
+cargo-artifact under-roots target/*/.fingerprint
+cargo-artifact under-roots target/*/deps
+cargo-artifact under-roots target/*/build
+cargo-artifact under-roots target/*/examples
+cargo-artifact under-roots target/*/*/incremental
+cargo-artifact under-roots target/*/*/.fingerprint
+cargo-artifact under-roots target/*/*/deps
+cargo-artifact under-roots target/*/*/build
+cargo-artifact under-roots target/*/*/examples
+cargo-home under-home registry/src/*/*
+cargo-home under-home git/checkouts/*/*
 worktree under-roots .claude/worktrees/agent-*
 steam-prefix under-library steamapps/compatdata/*
 steam-shader-cache under-library steamapps/shadercache/*
