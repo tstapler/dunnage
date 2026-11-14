@@ -41,6 +41,6 @@ rustix = { workspace = true, features = ["termios"] }
 
 [dev-dependencies]
 tempfile = "3"
-expectrl = "0.7"
+expectrl = "0.9"
 dunnage-core = { path = "../core", features = ["test-support"] }
 dunnage-adapters = { path = "../adapters", features = ["test-support"] }
