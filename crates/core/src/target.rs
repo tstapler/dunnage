@@ -195,7 +195,8 @@ pub fn kind_order(kind: Kind) -> u8 {
     match kind {
         Kind::Cache => 0,
         Kind::Worktree => 1,
-        Kind::NodeModules | Kind::CargoTarget => 2,
+        Kind::NodeModules | Kind::CargoTarget | Kind::CargoArtifact => 2,
+        Kind::CargoHome => 2,
         Kind::SteamPrefix | Kind::SteamShaderCache | Kind::SteamRemnant => 3,
         Kind::DockerImage | Kind::DockerBuildCache | Kind::DockerVolume => 4,
         Kind::BtrfsBalance | Kind::BtrfsTrim => 5,

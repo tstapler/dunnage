@@ -200,7 +200,7 @@ fn json_should_emit_exactly_one_document_for_plan_apply_status_kinds_including_f
             "yes".into()
         }
     }));
-    assert_eq!(k["kinds"].as_array().unwrap().len(), 10);
+    assert_eq!(k["kinds"].as_array().unwrap().len(), 11);
     let steam = k["kinds"]
         .as_array()
         .unwrap()

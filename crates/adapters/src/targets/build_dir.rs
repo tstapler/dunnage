@@ -25,9 +25,10 @@ use dunnage_core::targets::build_dir::{
     DETAIL_NO_LOCKFILE, FLOOR_RAISED_NOTE,
 };
 use dunnage_core::{
-    AbortFlag, Allowed, AllowedTarget, ApplyToken, BuildDirFlavor, Candidate, CandidateId,
-    DeleteError, DeleteFailure, DeletePolicy, FileKind, Freed, Identity, Kind, KindFacts, Locator,
-    NamePattern, RootDev, SelectorId, SkipReason, StatInfo,
+    AbortFlag, AllocatedBytes, Allowed, AllowedTarget, ApplyToken, BuildDirFlavor, Candidate,
+    CandidateId, CargoPart, CargoPartFacts, DeleteError, DeleteFailure, DeletePolicy, FileKind,
+    Freed, Identity, Kind, KindFacts, Locator, NamePattern, RootDev, SelectorId, SkipReason,
+    StatInfo,
 };
 use dunnage_scan::classify::classify_path;
 use dunnage_scan::scan::BuildKind;
@@ -40,6 +41,7 @@ use crate::discover_build::{
 use crate::mtime_probe::{
     probe_newest_mtime, to_system_time, unix_secs, NewestStore, ProbeTarget, Recency,
 };
+use crate::targets::cargo_parts::{find_stale_parts, recheck_cargo_part, PartPath};
 
 const LOCKFILES: [&str; 4] = [
     "package-lock.json",
@@ -55,7 +57,7 @@ pub struct BuildRecheck {
     pub newest_mtime: Option<i64>,
 }
 
-fn skip(r: SkipReason) -> BuildRecheck {
+pub(crate) fn skip(r: SkipReason) -> BuildRecheck {
     BuildRecheck {
         guard: BuildGuard::Skip {
             reason: r,
@@ -65,7 +67,7 @@ fn skip(r: SkipReason) -> BuildRecheck {
     }
 }
 
-fn skip_with(r: SkipReason, detail: &str) -> BuildRecheck {
+pub(crate) fn skip_with(r: SkipReason, detail: &str) -> BuildRecheck {
     BuildRecheck {
         guard: BuildGuard::Skip {
             reason: r,
@@ -174,19 +176,18 @@ pub struct RecheckEnv<'a, D> {
 }
 
 /// What a fresh look at one build dir found, before any age or reproducibility rule.
-struct Gathered {
-    st: StatInfo,
-    root_dev: RootDev,
-    path_facts: Facts,
-    marker: bool,
+pub(crate) struct Gathered {
+    pub(crate) st: StatInfo,
+    pub(crate) root_dev: RootDev,
+    pub(crate) path_facts: Facts,
 }
 
 /// Opens the scan root and the parent without following links, `fstatat`s the entry itself and builds the
 /// `Facts` of `decide_path_common`. The mount table is read here: when it cannot be read, no path can be
 /// shown to be clear of a mount point, so the answer is `Skip(MountPoint)` and never "no mount points".
-fn gather<D: DirOps>(
+pub(crate) fn gather<D: DirOps>(
     env: &RecheckEnv<'_, D>,
-    flavor: BuildDirFlavor,
+    kind: Kind,
     path: &Path,
 ) -> Result<Gathered, BuildRecheck> {
     let Some(root) = env
@@ -228,7 +229,7 @@ fn gather<D: DirOps>(
         return Err(skip_with(SkipReason::MountPoint, DETAIL_MOUNTS_UNREADABLE));
     };
     let path_facts = Facts {
-        kind: kind_of(flavor),
+        kind,
         path: path.to_path_buf(),
         ident: st.ident,
         is_symlink: st.kind == FileKind::Symlink || symlink_between(root, path),
@@ -239,7 +240,6 @@ fn gather<D: DirOps>(
         st,
         root_dev,
         path_facts,
-        marker: marker_present(path, flavor),
     })
 }
 
@@ -261,11 +261,11 @@ pub fn recheck_build_dir<D: DirOps>(
         st,
         root_dev,
         path_facts,
-        marker,
-    } = match gather(env, flavor, path) {
+    } = match gather(env, kind_of(flavor), path) {
         Ok(g) => g,
         Err(r) => return r,
     };
+    let marker = marker_present(path, flavor);
     let own = (st.mtime_secs, st.mtime_nsec);
     let (eff, _) = effective_min_age(min_age);
     let floor_secs = i64::try_from(eff.as_secs()).unwrap_or(i64::MAX);
@@ -352,6 +352,21 @@ fn flavor_of(c: &Candidate) -> Option<BuildDirFlavor> {
     }
 }
 
+/// What this target removes for `c`: a whole `node_modules`/`target`, or one part of a cargo target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Item {
+    Dir(BuildDirFlavor),
+    CargoPart,
+}
+
+fn item_of(c: &Candidate) -> Option<Item> {
+    match c.facts() {
+        KindFacts::BuildDir(f) => Some(Item::Dir(f.flavor)),
+        KindFacts::CargoPart(_) => Some(Item::CargoPart),
+        _ => None,
+    }
+}
+
 fn marker_name(f: BuildDirFlavor) -> &'static str {
     match f {
         BuildDirFlavor::NodeModules => "package.json",
@@ -388,6 +403,11 @@ pub struct BuildDirTarget<D: DirOps> {
     state: Mutex<Discovered>,
     /// The `Allowed` of an item whose pre-delete guard just passed, taken by the `execute` that follows.
     verified: Mutex<HashMap<CandidateId, Allowed>>,
+    /// One lock per cargo `target/`. A part's re-check reads its sibling parts to judge the profile's activity,
+    /// a sibling that is half removed shows the time of its last unlink, and the worker removing it holds
+    /// open descriptors inside `target/` that the run-state probe would take for a running build (it scans
+    /// this process too). Removals, re-checks and run-state probes of one target therefore never overlap.
+    profile_locks: Mutex<HashMap<PathBuf, std::sync::Arc<Mutex<()>>>>,
 }
 
 pub(crate) fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -401,7 +421,15 @@ impl<D: DirOps> BuildDirTarget<D> {
             ops,
             state: Mutex::new(Discovered::default()),
             verified: Mutex::new(HashMap::new()),
+            profile_locks: Mutex::new(HashMap::new()),
         }
+    }
+
+    fn profile_lock(&self, path: &Path) -> Option<std::sync::Arc<Mutex<()>>> {
+        let dir = PartPath::parse(path)?.target.to_path_buf();
+        Some(std::sync::Arc::clone(
+            lock(&self.profile_locks).entry(dir).or_default(),
+        ))
     }
 
     fn ranked(items: &[crate::discover_build::BuildItem]) -> Vec<ClusterInput> {
@@ -434,7 +462,7 @@ impl<D: DirOps> BuildDirTarget<D> {
         env: &Env,
         min_age: Duration,
     ) -> Result<Allowed, (SkipReason, Option<String>)> {
-        let (Some(flavor), Locator::Path(path)) = (flavor_of(c), c.locator()) else {
+        let (Some(item), Locator::Path(path)) = (item_of(c), c.locator()) else {
             return Err((SkipReason::OutsideRoot, None));
         };
         let renv = RecheckEnv {
@@ -442,15 +470,23 @@ impl<D: DirOps> BuildDirTarget<D> {
             roots: &self.roots,
             probe: env.probe,
         };
-        let r = recheck_build_dir(
-            &renv,
-            flavor,
-            path,
-            c.ident(),
-            env.clock.now_epoch(),
-            min_age,
-            &mut NewestStore::in_memory(),
-        );
+        let now = env.clock.now_epoch();
+        let r = match item {
+            Item::Dir(flavor) => recheck_build_dir(
+                &renv,
+                flavor,
+                path,
+                c.ident(),
+                now,
+                min_age,
+                &mut NewestStore::in_memory(),
+            ),
+            Item::CargoPart => {
+                let gate = self.profile_lock(path);
+                let _held = gate.as_deref().map(lock);
+                recheck_cargo_part(&renv, path, c.ident(), now, min_age)
+            }
+        };
         match r.guard {
             BuildGuard::Allow(a) => Ok(a),
             BuildGuard::Skip { reason, detail } => Err((reason, detail)),
@@ -461,14 +497,96 @@ impl<D: DirOps> BuildDirTarget<D> {
         lock(&self.state).min_age
     }
 
+    /// The idle parts of each cargo `target` in `targets`, as `cargo-artifact` candidates appended to `out`.
+    /// `--max-seconds` bounds this walk like the scan; a cut-off marks the discovery partial.
+    fn add_cargo_parts(
+        &self,
+        env: &Env,
+        selection: &Selection,
+        targets: &[PathBuf],
+        st: &mut Discovered,
+        out: &mut Vec<Candidate>,
+    ) {
+        let started = std::time::Instant::now();
+        let deadline = selection.scan.deadline_secs().map(Duration::from_secs);
+        let (eff, _) = effective_min_age(st.min_age);
+        let floor_secs = i64::try_from(eff.as_secs()).unwrap_or(i64::MAX);
+        let now = env.clock.now_epoch();
+        for target in targets {
+            if deadline.is_some_and(|d| started.elapsed() > d) {
+                st.partial = selection.scan.deadline_secs();
+                break;
+            }
+            let Some(root) = self.roots.root_of(target) else {
+                continue;
+            };
+            let Ok(root_md) = std::fs::metadata(root) else {
+                continue;
+            };
+            let root_dev = RootDev(root_meta_dev(&root_md));
+            let project = target.parent().unwrap_or(target.as_path()).to_path_buf();
+            let found = find_stale_parts(
+                &self.ops,
+                target,
+                root_dev,
+                now,
+                floor_secs,
+                &selection.cargo_profiles,
+            );
+            for p in found {
+                let c = Candidate::new(
+                    Locator::Path(p.path),
+                    KindFacts::CargoPart(CargoPartFacts {
+                        part: p.part,
+                        profile: p.profile,
+                        project: project.clone(),
+                        age_secs: u64::try_from(now.saturating_sub(p.activity)).unwrap_or(0),
+                    }),
+                    AllocatedBytes(p.bytes.0),
+                    Some(p.activity),
+                    p.ident,
+                );
+                st.entries.insert(c.id(), Entry::default());
+                out.push(c);
+            }
+        }
+    }
+
+    /// `Running` or `Unknown` of anything that uses the item: the whole dir, or a part's profile and target
+    /// (cargo's `.cargo-lock` sits in the profile, its processes keep files open anywhere below `target/`).
+    fn in_use(&self, probe: &dyn SystemProbe, item: Item, path: &Path) -> Option<SkipReason> {
+        match item {
+            Item::Dir(_) => run_state_skip(probe.run_state(path)),
+            Item::CargoPart => {
+                let pp = PartPath::parse(path)?;
+                let gate = self.profile_lock(path);
+                let _held = gate.as_deref().map(lock);
+                let skips: Vec<Option<SkipReason>> = [pp.profile_dir, pp.target]
+                    .into_iter()
+                    .map(|d| run_state_skip(probe.run_state(d)))
+                    .collect();
+                skips
+                    .iter()
+                    .find(|r| **r == Some(SkipReason::RunningBuild))
+                    .or_else(|| skips.iter().find(|r| r.is_some()))
+                    .copied()
+                    .flatten()
+            }
+        }
+    }
+
     fn remove(
         &self,
         allowed: &Allowed,
-        flavor: BuildDirFlavor,
+        item: Item,
         abort: &AbortFlag,
         proof: &ApplyToken,
     ) -> Result<Freed, DeleteFailure> {
         let path = allowed.path();
+        let gate = (item == Item::CargoPart)
+            .then(|| self.profile_lock(path))
+            .flatten();
+        let _held = gate.as_deref().map(lock);
         let base = self
             .roots
             .scan_roots()
@@ -501,13 +619,20 @@ impl<D: DirOps> BuildDirTarget<D> {
             scan_roots: self.roots.scan_roots().to_vec(),
             allowed: AllowedTarget::Within {
                 root: base.clone(),
-                name: match flavor {
-                    BuildDirFlavor::NodeModules => NamePattern::NodeModules,
-                    BuildDirFlavor::CargoTarget => NamePattern::CargoTarget,
+                name: match item {
+                    Item::Dir(BuildDirFlavor::NodeModules) => NamePattern::NodeModules,
+                    Item::Dir(BuildDirFlavor::CargoTarget) => NamePattern::CargoTarget,
+                    Item::CargoPart => NamePattern::CargoTargetPart,
                 },
             },
             target: path.to_path_buf(),
-            require_sibling_any: vec![OsString::from(marker_name(flavor))],
+            require_sibling_any: match item {
+                Item::Dir(flavor) => vec![OsString::from(marker_name(flavor))],
+                Item::CargoPart => CargoPart::ALL
+                    .iter()
+                    .map(|p| OsString::from(p.dir_name()))
+                    .collect(),
+            },
             max_depth: 256,
             restore_owner_write: true,
         };
@@ -591,6 +716,8 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
             }
         }
         let mut out = Vec::with_capacity(found.items.len());
+        // Cargo targets too young to remove whole: their idle parts are offered instead.
+        let mut too_young_targets: Vec<PathBuf> = Vec::new();
         for ((item, placement), input) in found.items.into_iter().zip(placed).zip(&inputs) {
             let c = item.candidate;
             let size = input
@@ -601,6 +728,13 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
                 skip: None,
                 duplicates: size,
             };
+            if let (BuildVerdict::Skip(SkipReason::TooRecent), Some(BuildDirFlavor::CargoTarget)) =
+                (&item.verdict, flavor_of(&c))
+            {
+                if let Locator::Path(p) = c.locator() {
+                    too_young_targets.push(p.clone());
+                }
+            }
             match (item.verdict, placement) {
                 (BuildVerdict::Skip(r), _) => entry.skip = Some((r, item.note)),
                 (BuildVerdict::Will(_), Placement::Kept { of }) => {
@@ -610,6 +744,9 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
             }
             st.entries.insert(c.id(), entry);
             out.push(c);
+        }
+        if st.selected {
+            self.add_cargo_parts(env, selection, &too_young_targets, &mut st, &mut out);
         }
         *lock(&self.state) = st;
         out
@@ -626,7 +763,7 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
         if let Some((r, _)) = skip {
             return Guarded::Skip(r);
         }
-        let (Some(flavor), Locator::Path(path)) = (flavor_of(c), c.locator()) else {
+        let (Some(item), Locator::Path(path)) = (item_of(c), c.locator()) else {
             return Guarded::Skip(SkipReason::OutsideRoot);
         };
         // Cheap probes only, and only for items the plan would remove: the tree walk and the other fresh
@@ -634,7 +771,7 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
         if !selected {
             return Guarded::Allow;
         }
-        if flavor == BuildDirFlavor::NodeModules {
+        if item == Item::Dir(BuildDirFlavor::NodeModules) {
             let why = match node_modules_reproducible(path) {
                 Reproducibility::LinkedOutside => Some(DETAIL_LINKED_OUTSIDE),
                 Reproducibility::NoLockfile => Some(DETAIL_NO_LOCKFILE),
@@ -648,7 +785,7 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
                 return Guarded::Skip(SkipReason::NotReproducible);
             }
         }
-        match run_state_skip(env.probe.run_state(path)) {
+        match self.in_use(env.probe, item, path) {
             Some(r) => Guarded::Skip(r),
             None => Guarded::Allow,
         }
@@ -666,7 +803,10 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
             Ok(a) => a,
             Err((r, _)) => return Guarded::Skip(r),
         };
-        if let Some(r) = run_state_skip(env.probe.run_state(allowed.path())) {
+        let Some(item) = item_of(c) else {
+            return Guarded::Skip(SkipReason::OutsideRoot);
+        };
+        if let Some(r) = self.in_use(env.probe, item, allowed.path()) {
             return Guarded::Skip(r);
         }
         lock(&self.verified).insert(c.id(), allowed);
@@ -679,7 +819,7 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
         env: &Env,
         proof: &ApplyToken,
     ) -> Result<Freed, DeleteFailure> {
-        let Some(flavor) = flavor_of(c) else {
+        let Some(item) = item_of(c) else {
             return Err(failure(DeleteError::Refused));
         };
         let parked = lock(&self.verified).remove(&c.id());
@@ -687,7 +827,7 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
             Some(a) => a,
             None => match self.recheck(c, env, self.min_age()) {
                 Ok(a) => {
-                    if let Some(r) = run_state_skip(env.probe.run_state(a.path())) {
+                    if let Some(r) = self.in_use(env.probe, item, a.path()) {
                         return Err(failure(delete_error_of(r)));
                     }
                     a
@@ -697,7 +837,7 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
                 Err((r, _)) => return Err(failure(delete_error_of(r))),
             },
         };
-        self.remove(&allowed, flavor, env.guard.abort_flag(), proof)
+        self.remove(&allowed, item, env.guard.abort_flag(), proof)
     }
 
     fn detail(&self, c: &Candidate) -> Option<String> {

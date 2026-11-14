@@ -12,6 +12,11 @@ pub enum Kind {
     Worktree,
     NodeModules,
     CargoTarget,
+    /// A directory inside a cargo target (`incremental/`, a stale profile's `deps/`, ...): the finer-grained
+    /// offer for a target that is still too young to remove whole.
+    CargoArtifact,
+    /// An aged unpacked crate or git checkout below `CARGO_HOME`.
+    CargoHome,
     DockerImage,
     DockerBuildCache,
     DockerVolume,
@@ -30,11 +35,13 @@ pub enum Kind {
 }
 
 impl Kind {
-    pub const ALL: [Kind; 12] = [
+    pub const ALL: [Kind; 14] = [
         Kind::Cache,
         Kind::Worktree,
         Kind::NodeModules,
         Kind::CargoTarget,
+        Kind::CargoArtifact,
+        Kind::CargoHome,
         Kind::DockerImage,
         Kind::DockerBuildCache,
         Kind::DockerVolume,
@@ -52,6 +59,8 @@ impl Kind {
             Kind::Worktree => "worktree",
             Kind::NodeModules => "node-modules",
             Kind::CargoTarget => "cargo-target",
+            Kind::CargoArtifact => "cargo-artifact",
+            Kind::CargoHome => "cargo-home",
             Kind::DockerImage => "docker-image",
             Kind::DockerBuildCache => "docker-build-cache",
             Kind::DockerVolume => "docker-volume",
@@ -71,7 +80,8 @@ impl Kind {
         match self {
             Kind::Cache => "caches",
             Kind::Worktree => "worktrees",
-            Kind::NodeModules | Kind::CargoTarget => "build-dirs",
+            Kind::NodeModules | Kind::CargoTarget | Kind::CargoArtifact => "build-dirs",
+            Kind::CargoHome => "cargo-home",
             Kind::DockerImage | Kind::DockerBuildCache | Kind::DockerVolume => "docker",
             Kind::SteamPrefix | Kind::SteamShaderCache | Kind::SteamRemnant => "steam",
             Kind::BtrfsBalance | Kind::BtrfsTrim => "btrfs",
@@ -86,6 +96,7 @@ impl Kind {
         match self {
             Kind::Cache => Risk::Safe,
             Kind::Worktree
+            | Kind::CargoHome
             | Kind::DockerImage
             | Kind::DockerBuildCache
             | Kind::SteamRemnant
@@ -93,6 +104,7 @@ impl Kind {
             | Kind::BtrfsTrim => Risk::Guarded,
             Kind::NodeModules
             | Kind::CargoTarget
+            | Kind::CargoArtifact
             | Kind::DockerVolume
             | Kind::SteamPrefix
             | Kind::SteamShaderCache
@@ -121,6 +133,8 @@ pub enum SelectorId {
     CacheApt,
     Worktrees,
     BuildDirs,
+    /// Aged unpacked crates and git checkouts below `CARGO_HOME` (`~/.cargo`).
+    CargoHome,
     Docker,
     DockerImages,
     DockerVolumes,
@@ -136,11 +150,12 @@ pub enum SelectorId {
 }
 
 impl SelectorId {
-    pub const ALL: [SelectorId; 10] = [
+    pub const ALL: [SelectorId; 11] = [
         SelectorId::Caches,
         SelectorId::CacheApt,
         SelectorId::Worktrees,
         SelectorId::BuildDirs,
+        SelectorId::CargoHome,
         SelectorId::Docker,
         SelectorId::DockerImages,
         SelectorId::DockerVolumes,
@@ -163,6 +178,7 @@ impl SelectorId {
             SelectorId::CacheApt => "cache-apt",
             SelectorId::Worktrees => "worktrees",
             SelectorId::BuildDirs => "build-dirs",
+            SelectorId::CargoHome => "cargo-home",
             SelectorId::Docker => "docker",
             SelectorId::DockerImages => "docker-images",
             SelectorId::DockerVolumes => "docker-volumes",
@@ -181,7 +197,8 @@ impl SelectorId {
         SelectorId::Caches => "npm, go, gradle, pip, cargo, playwright",
         SelectorId::CacheApt => "/var/cache/apt",
         SelectorId::Worktrees => ".claude/worktrees/agent-*",
-        SelectorId::BuildDirs => "node_modules, cargo target",
+        SelectorId::BuildDirs => "node_modules, cargo target (and its incremental/stale parts)",
+        SelectorId::CargoHome => "old unpacked crates and git checkouts in CARGO_HOME (~/.cargo)",
         SelectorId::Docker => "dangling images, build cache",
         SelectorId::DockerImages => "unused tagged images pulled from a registry (locally built ones are skipped, LocalOnlyImage)",
         SelectorId::DockerVolumes => "unreferenced volumes (--docker-volumes anonymous|named)",
@@ -199,7 +216,8 @@ impl SelectorId {
         match self {
             SelectorId::Caches | SelectorId::CacheApt => &[Kind::Cache],
             SelectorId::Worktrees => &[Kind::Worktree],
-            SelectorId::BuildDirs => &[Kind::NodeModules, Kind::CargoTarget],
+            SelectorId::BuildDirs => &[Kind::NodeModules, Kind::CargoTarget, Kind::CargoArtifact],
+            SelectorId::CargoHome => &[Kind::CargoHome],
             SelectorId::Docker => &[Kind::DockerImage, Kind::DockerBuildCache],
             SelectorId::DockerImages => &[Kind::DockerImage],
             SelectorId::DockerVolumes => &[Kind::DockerVolume],
@@ -243,7 +261,8 @@ pub fn selector_of(facts: &KindFacts) -> SelectorId {
             }
         }
         KindFacts::Worktree(_) => SelectorId::Worktrees,
-        KindFacts::BuildDir(_) => SelectorId::BuildDirs,
+        KindFacts::BuildDir(_) | KindFacts::CargoPart(_) => SelectorId::BuildDirs,
+        KindFacts::CargoHome(_) => SelectorId::CargoHome,
         KindFacts::Docker(DockerFacts::DanglingImage { .. } | DockerFacts::BuildCache) => {
             SelectorId::Docker
         }

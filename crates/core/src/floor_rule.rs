@@ -60,7 +60,20 @@ fn matches_pattern(pattern: NamePattern, base: &OsStr) -> bool {
         NamePattern::AgentWorktree => b.starts_with(b"agent-") && b.len() > b"agent-".len(),
         NamePattern::SteamAppId => !b.is_empty() && b.iter().all(u8::is_ascii_digit),
         NamePattern::SteamInstallDir => !b.is_empty() && b[0] != b'.',
+        NamePattern::CargoTargetPart => matches!(
+            b,
+            b"incremental" | b".fingerprint" | b"deps" | b"build" | b"examples"
+        ),
+        NamePattern::CargoHomeEntry => !b.is_empty() && b[0] != b'.',
     }
+}
+
+/// `<project>/target/<profile>/<part>` or `<project>/target/<triple>/<profile>/<part>`: the part's
+/// grandparent (or great-grandparent) is named `target`.
+fn in_cargo_target(target: &Path) -> bool {
+    let named_target = |p: Option<&Path>| p.and_then(Path::file_name) == Some(OsStr::new("target"));
+    let gp = target.parent().and_then(Path::parent);
+    named_target(gp) || named_target(gp.and_then(Path::parent))
 }
 
 impl DeletePolicy {
@@ -136,6 +149,10 @@ impl DeletePolicy {
                     .is_ok_and(|rel| rel.components().all(|c| c.as_os_str() != ".git"));
                 let shape = match pattern {
                     NamePattern::SteamInstallDir => depth == Some(1),
+                    NamePattern::CargoHomeEntry => depth == Some(2),
+                    NamePattern::CargoTargetPart => {
+                        depth.is_some_and(|d| d >= 3) && in_cargo_target(target)
+                    }
                     _ => depth.is_some_and(|d| d >= 1),
                 };
                 shape && no_git && matches_pattern(*pattern, name)

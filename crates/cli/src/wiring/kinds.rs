@@ -18,6 +18,7 @@ use dunnage_core::SelectorId;
 
 mod btrfs;
 mod build_dirs;
+mod cargo_home;
 mod docker;
 mod docker_images;
 mod docker_volumes;
@@ -126,6 +127,7 @@ impl KindRegistry {
         );
         worktrees::register(&mut reg, ctx);
         build_dirs::register(&mut reg, ctx);
+        cargo_home::register(&mut reg, ctx);
         docker::register(&mut reg, ctx);
         docker_images::register(&mut reg, ctx);
         docker_volumes::register(&mut reg, ctx);

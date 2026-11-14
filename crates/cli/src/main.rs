@@ -135,7 +135,8 @@ fn resolve_roots(cli: &Cli, base: &Dirs) -> Result<RootSet, i32> {
         &real_canon,
         &|p| dunnage_core::ports::Fs::fs_type(&dunnage_cli::wiring::env::RealFs, p),
     ) {
-        Ok(r) if cleaner => Ok(with_steam_libraries(r, base)),
+        Ok(r) if cleaner => Ok(with_steam_libraries(r, base)
+            .with_cargo_home(dunnage_cli::wiring::dirs::cargo_home_env().as_deref())),
         Ok(r) => Ok(r),
         Err(e) if cleaner => Err(root_failure(cli, &e)),
         Err(_) => Err(EXIT_USAGE),

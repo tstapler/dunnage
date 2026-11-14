@@ -42,6 +42,82 @@ pub enum BuildDirFlavor {
     CargoTarget,
 }
 
+/// The directories inside a cargo profile directory (`target/debug`, `target/<triple>/release`) that the
+/// cleaner removes whole. Cargo creates exactly these names; nothing else inside a profile is offered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CargoPart {
+    Incremental,
+    Fingerprint,
+    Deps,
+    Build,
+    Examples,
+}
+
+impl CargoPart {
+    pub const ALL: [CargoPart; 5] = [
+        CargoPart::Incremental,
+        CargoPart::Fingerprint,
+        CargoPart::Deps,
+        CargoPart::Build,
+        CargoPart::Examples,
+    ];
+
+    /// The directory name cargo uses.
+    pub fn dir_name(self) -> &'static str {
+        match self {
+            CargoPart::Incremental => "incremental",
+            CargoPart::Fingerprint => ".fingerprint",
+            CargoPart::Deps => "deps",
+            CargoPart::Build => "build",
+            CargoPart::Examples => "examples",
+        }
+    }
+
+    pub fn from_dir_name(name: &str) -> Option<CargoPart> {
+        CargoPart::ALL.into_iter().find(|p| p.dir_name() == name)
+    }
+
+    /// Whether the part's age is judged by the whole profile's last activity (`.fingerprint` is touched by
+    /// every build, so a `deps/` that no build rewrote is not stale while builds still run). Only
+    /// `incremental/` is judged by its own contents: rustc rewrites it on every build and recreating it is
+    /// the cheapest rebuild.
+    pub fn follows_profile(self) -> bool {
+        self != CargoPart::Incremental
+    }
+}
+
+/// One directory inside a cargo target (`cargo-artifact`): which part, of which profile, of which project.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CargoPartFacts {
+    pub part: CargoPart,
+    /// The profile directory relative to `target/`: `debug`, `release`, or `<triple>/debug` when built with
+    /// `--target`.
+    pub profile: String,
+    /// The directory that holds `Cargo.toml` and `target/`.
+    pub project: PathBuf,
+    /// Seconds since the last activity that decides staleness, at discovery.
+    pub age_secs: u64,
+}
+
+/// Where in `CARGO_HOME` a [`CargoHomeFacts`] entry lives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CargoHomeArea {
+    /// `registry/src/<index>/<crate>-<version>`: an unpacked crate, re-extracted from `registry/cache`.
+    RegistrySrc,
+    /// `git/checkouts/<repo>-<hash>/<rev>`: a working tree, re-checked-out from `git/db`.
+    GitCheckout,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CargoHomeFacts {
+    pub area: CargoHomeArea,
+    /// The registry index or git repository directory the entry sits below.
+    pub source: String,
+    pub age_secs: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorktreeFacts {
     pub main_repo: PathBuf,
@@ -104,6 +180,8 @@ pub struct FixtureFacts {
 pub enum KindFacts {
     Worktree(WorktreeFacts),
     BuildDir(BuildDirFacts),
+    CargoPart(CargoPartFacts),
+    CargoHome(CargoHomeFacts),
     Cache(CacheFacts),
     Docker(DockerFacts),
     Steam(SteamFacts),
@@ -121,6 +199,8 @@ impl KindFacts {
                 BuildDirFlavor::NodeModules => Kind::NodeModules,
                 BuildDirFlavor::CargoTarget => Kind::CargoTarget,
             },
+            KindFacts::CargoPart(_) => Kind::CargoArtifact,
+            KindFacts::CargoHome(_) => Kind::CargoHome,
             KindFacts::Cache(_) => Kind::Cache,
             KindFacts::Docker(
                 DockerFacts::DanglingImage { .. } | DockerFacts::UnusedImage { .. },

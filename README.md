@@ -55,7 +55,7 @@ DRY RUN - nothing was deleted.
 ## Features
 
 - **Dry run by default.** A bare `dunnage` deletes nothing. Deleting needs `--apply`. There is no `--force`, no `--yes`, and no interactive "yes to all". `-n` and `--dry-run` are accepted as no-ops, and together with `--apply` they are a usage error (exit 64).
-- **Destructive kinds need a reviewed plan.** `build-dirs`, `docker-volumes`, `steam` and `--worktree-ignored discard` additionally require `--plan-id <id>`: the id of a dry run of the same selection, saved in the last 24 hours and equal to the id recomputed at apply time. A new, vanished or newly skipped item changes the id, so an apply can never delete something the dry run did not show. Risky kinds also have to be named in `--kinds`; there is no `all`.
+- **Destructive kinds need a reviewed plan.** `build-dirs` (cargo parts included), `docker-volumes`, `steam` and `--worktree-ignored discard` additionally require `--plan-id <id>`: the id of a dry run of the same selection, saved in the last 24 hours and equal to the id recomputed at apply time. A new, vanished or newly skipped item changes the id, so an apply can never delete something the dry run did not show. Risky kinds also have to be named in `--kinds`; there is no `all`.
 - **Per-item bytes freed, measured.** Each removed item reports the bytes it freed, and the summary compares their sum with the filesystem's own drop (btrfs `data` bytes_used, or `df` on other filesystems). The unattributed remainder is always printed, never hidden; reflinks and snapshots are the usual cause.
 - **A delete engine that refuses on doubt.** Deletion is file-descriptor relative and refuses symlinks, other filesystems and anything outside the per-kind allowed roots. Guards run again immediately before each delete, because scan results can be minutes old. A dirty or locked worktree, a running build or a referenced Docker volume is skipped and named, with the next command to run.
 - **Checked independently.** The delete engine and its path guards are tested by tests written separately from the code, including adversarial path cases; `dunnage audit verify` re-checks every logged deletion against a separate, reviewed table of allowed roots and exits non-zero if any deletion falls outside it. <!-- TODO: link the adversarial test suite and ci/allowed-roots.txt once they are public. -->
@@ -87,12 +87,22 @@ Tiers decide the gate: **safe** kinds run on `--apply` alone, **guarded** kinds 
 | `caches` | safe | Linux, macOS | npm, Go build, Gradle, pip, cargo registry, Playwright browsers; Homebrew, Xcode, JetBrains on macOS | measured bytes include `go clean -cache` and `pip cache purge` |
 | `cache-apt` | safe | Linux | `/var/cache/apt` | needs root |
 | `worktrees` | guarded | any | stale agent worktrees (`.claude/worktrees/agent-*`) | removed with `git worktree remove`, never `rm -rf`; clean, unlocked, older than 14 days |
-| `build-dirs` | destructive | any | `node_modules` (next to `package.json`), cargo `target` (next to `Cargo.toml`) | keeps the newest duplicates; 60-minute floor; skips running builds |
+| `build-dirs` | destructive | any | `node_modules` (next to `package.json`), cargo `target` (next to `Cargo.toml`), and the idle parts of a cargo `target` that is too young to remove whole (see below) | keeps the newest duplicates; 60-minute floor; skips running builds |
+| `cargo-home` | guarded | any | unpacked crates (`registry/src/<index>/<crate>`) and git checkouts (`git/checkouts/<repo>/<rev>`) in `CARGO_HOME` (default `~/.cargo`; must be below `$HOME`) | `--min-age` default 30 days, never below 24 hours; cargo re-extracts them from `registry/cache` and `git/db`, which this kind never touches; skips a symlinked `CARGO_HOME` |
 | `docker` | guarded | any with Docker | dangling images, build cache | skipped if the daemon is down |
 | `docker-images` | guarded | any with Docker | unused tagged images pulled from a registry | locally built images are skipped |
 | `docker-volumes` | destructive | any with Docker | unreferenced volumes | anonymous and named volumes each need their own opt-in flag; never `docker system prune` |
 | `steam` | destructive | Linux | orphaned Proton prefixes, shader caches, uninstalled-game remnants | prefixes holding saves are protected by default |
 | `btrfs`, `btrfs-trim` | guarded | Linux, btrfs | balance, fstrim | need root; reported separately from freed bytes |
+
+### Cargo targets, finer than the whole directory
+
+A cargo `target/` is recognised by cargo's own `CACHEDIR.TAG` (or `.rustc_info.json`) next to a `Cargo.toml`. When the whole directory is too young for `--min-age` (a project you still build in `release`, say), `build-dirs` offers the idle parts instead, per profile (`debug`, `release`, custom profiles, and `<triple>/<profile>` after `cargo build --target`), as `cargo-artifact` items:
+
+- `incremental/`, judged by its own newest file;
+- `.fingerprint/`, `deps/`, `build/` and `examples/`, offered together once nothing in the profile has been touched for the age floor. A build that finds everything fresh rewrites only `.fingerprint/*/invoked.timestamp`, so an old `deps/` of a profile that still builds is not offered.
+
+`--cargo-profile debug` (repeatable) offers only the profiles with that name, to drop `debug` and keep `release`. Access time is never used, because `relatime` and `noatime` mounts make it say nothing about use. A target with a running cargo or rustc (a process inside it, or a held `.cargo-lock`) is skipped, a symlinked `target`, profile or part is never followed, and the tool only removes whole part directories, never single files. `registry/cache/*.crate` files are therefore left to the `caches` kind.
 
 Not cleaned by design: Maven's local repository, source files, `.git`, lockfiles, anything outside the allowed roots. Not supported: Windows, remote machines, cloud storage. <!-- TODO: confirm this table against `dunnage kinds` output at release; kinds not built yet print "not available in this build". -->
 
@@ -170,7 +180,7 @@ Different tools answer different questions. `dunnage` is a cleaner for developer
 | [ncdu](https://dev.yorhel.nl/ncdu), [gdu](https://github.com/dundee/gdu), [dua](https://github.com/Byron/dua-cli) | Disk-usage analysers with an interactive terminal UI; gdu and dua can delete from the UI, ncdu has a `--enable-delete` option | Finding what uses space; gdu has `--exclusive-size` for reflinks on btrfs/XFS | Analysers first; dunnage knows what is a cache, worktree or build dir. The dunnage storage explorer is planned, not built; use these today for browsing |
 | [`docker system prune`](https://docs.docker.com/reference/cli/docker/system/prune/) | Removes unused containers, networks, images and build cache, optionally volumes | The Docker part of `docker`, `docker-images`, `docker-volumes` | Docker-only; prompts unless `-f`. dunnage lists before deleting, checks volume references and age, and never calls `docker system prune` |
 | [kondo](https://github.com/tbillington/kondo), [npkill](https://github.com/voidcosmos/npkill) | Clean build artefacts from projects (kondo: 20+ project types; npkill: `node_modules`) | `build-dirs` | Per-project tools with their own conventions (npkill has `--dry-run`). dunnage adds the shared plan/apply gate, audit log and measured bytes, and covers more than build dirs |
-| [cargo-sweep](https://github.com/holmgr/cargo-sweep) | Cargo subcommand that deletes old or unused build artefacts from `target/` (by age, toolchain or size; has `--dry-run`) | cargo `target` | Finer-grained inside `target/` (dunnage removes the whole directory). Its README currently lists it as unmaintained and points to cargo-clean-all |
+| [cargo-sweep](https://github.com/holmgr/cargo-sweep) | Cargo subcommand that deletes old or unused build artefacts from `target/` (by age, toolchain or size; has `--dry-run`) | cargo `target` | File-level inside `target/`; dunnage removes whole part directories (`incremental/`, a stale profile's `deps/`) or the whole `target/`. Its README currently lists it as unmaintained and points to cargo-clean-all |
 
 If you only need to look at disk usage, ncdu, gdu or dua are the better tool. If you only clean one ecosystem and are happy with it, the per-ecosystem tools are simpler.
 

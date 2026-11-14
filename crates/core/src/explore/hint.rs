@@ -15,6 +15,7 @@ use dunnage_scan::scan::BuildKind;
 use super::msg::{ClassifyFacts, Hint, NoReason, Tier};
 use super::rows::Badge;
 use super::tree::{ExploreTree, Inside, NodeId};
+use crate::candidate::CargoPart;
 use crate::delete_types::AllowedTarget;
 use crate::ids::AppId;
 use crate::kind::{Kind, Risk, SelectorId};
@@ -45,7 +46,8 @@ fn selector_of_kind(kind: Kind) -> Option<SelectorId> {
     Some(match kind {
         Kind::Cache => SelectorId::Caches,
         Kind::Worktree => SelectorId::Worktrees,
-        Kind::NodeModules | Kind::CargoTarget => SelectorId::BuildDirs,
+        Kind::CargoHome => SelectorId::CargoHome,
+        Kind::NodeModules | Kind::CargoTarget | Kind::CargoArtifact => SelectorId::BuildDirs,
         Kind::SteamPrefix | Kind::SteamShaderCache | Kind::SteamRemnant => SelectorId::Steam,
         _ => return None,
     })
@@ -74,6 +76,14 @@ pub fn shape_of(path: &Path, parent: ParentFacts, facts: &ClassifyFacts) -> Opti
         });
     }
     let dir = ancestor_name(path, 1);
+    // `registry/src/<index>/<crate>` and `git/checkouts/<repo>/<rev>`: the place is decided by `under_allowed_root`
+    if (ancestor_name(path, 2) == Some(OsStr::new("src"))
+        && ancestor_name(path, 3) == Some(OsStr::new("registry")))
+        || (ancestor_name(path, 2) == Some(OsStr::new("checkouts"))
+            && ancestor_name(path, 3) == Some(OsStr::new("git")))
+    {
+        return Some(Kind::CargoHome);
+    }
     if name
         .as_bytes()
         .strip_prefix(b"agent-")
@@ -99,6 +109,10 @@ pub fn shape_of(path: &Path, parent: ParentFacts, facts: &ClassifyFacts) -> Opti
 fn under_allowed_root(roots: &RootSet, kind: Kind, path: &Path) -> bool {
     if !lexically_clean(path) {
         return false;
+    }
+    if kind == Kind::CargoHome {
+        // exactly two levels below `registry/src` or `git/checkouts`: the engine's own test
+        return roots.admits(kind, path);
     }
     roots.allowed(kind).iter().any(|t| match t {
         AllowedTarget::Exact(p) => p == path,
@@ -200,6 +214,8 @@ pub fn kind_hint(
         }
         // The engine lists worktrees through `git worktree list`, which the explorer does not run.
         Kind::Worktree => shape,
+        // The engine lists a cargo-home entry only when it is old enough, which the explorer does not know.
+        Kind::CargoHome => shape,
         _ => match steam_verdict(kind, path.file_name().unwrap_or_default(), facts) {
             SteamVerdict::Unknown => shape,
             SteamVerdict::NotAnItem => Hint::No(NoReason::NotShape),
@@ -207,6 +223,44 @@ pub fn kind_hint(
             SteamVerdict::Orphan => yes,
         },
     }
+}
+
+/// The cargo target a part-named node sits in: `<target>/<profile>/<part>` or `<target>/<triple>/<profile>/<part>`,
+/// where `<target>` is a build dir by [`classify_dir`] with its own parent's marker flags.
+fn cargo_target_of(tree: &ExploreTree, id: NodeId) -> Option<NodeId> {
+    let name = tree.path_of(id).file_name()?.to_str()?.to_string();
+    CargoPart::from_dir_name(&name)?;
+    let profile = tree.parent(id)?;
+    let above = tree.parent(profile)?;
+    [above, tree.parent(above)?].into_iter().find(|n| {
+        let Some(p) = tree.parent(*n) else {
+            return false;
+        };
+        let facts = ParentFacts {
+            has_package_json: tree.has_package_json(p),
+            has_cargo_toml: tree.has_cargo_toml(p),
+        };
+        tree.path_of(*n)
+            .file_name()
+            .is_some_and(|nm| classify_dir(nm, facts) == Some(BuildKind::CargoTarget))
+    })
+}
+
+/// A part of a cargo target is at most a possible `build-dirs` item: the engine offers it only when its
+/// profile has been idle, which the explorer cannot tell. `None` when the node is not part-shaped, so the
+/// ordinary rules decide.
+fn cargo_part_hint(tree: &ExploreTree, id: NodeId, path: &Path, roots: &RootSet) -> Option<Hint> {
+    let target = cargo_target_of(tree, id)?;
+    if !roots.admits(Kind::CargoArtifact, path) {
+        return Some(Hint::No(NoReason::OutsideRoot));
+    }
+    if tree.inside_special(target) == Inside::Yes {
+        return Some(Hint::No(NoReason::InsideBuildOrGit));
+    }
+    Some(Hint::Shape {
+        selector: SelectorId::BuildDirs,
+        tier: Tier::of(Kind::CargoArtifact.risk()),
+    })
 }
 
 /// The hint of one tree node: the parent's marker flags and the ancestor context come from the tree.
@@ -220,6 +274,9 @@ pub fn hint_of_node(
     facts: &ClassifyFacts,
 ) -> Hint {
     let path = tree.path_of(id);
+    if let Some(h) = cargo_part_hint(tree, id, &path, roots) {
+        return h;
+    }
     let inside = tree.inside_special(id);
     let Some(p) = tree.parent(id) else {
         let assumed = ParentFacts {
