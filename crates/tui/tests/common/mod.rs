@@ -379,6 +379,8 @@ pub struct FakeEvents {
     pub time: Time,
     queue: VecDeque<(u64, Input)>,
     pub polls: Arc<Mutex<Vec<(Duration, u64, usize)>>>,
+    /// One entry per delivered input: `(clock ms, frames drawn, polls so far)` when the loop read it.
+    pub reads: Arc<Mutex<Vec<(u64, usize, usize)>>>,
     flushes: Arc<std::sync::atomic::AtomicUsize>,
     safety: u64,
     /// `(index in the script, text)`: that input is delivered only once the last frame shows the text (or, with a
@@ -398,6 +400,7 @@ impl FakeEvents {
             time,
             queue: script.into(),
             polls: Arc::new(Mutex::new(Vec::new())),
+            reads: Arc::new(Mutex::new(Vec::new())),
             flushes,
             safety: 0,
             gates: Vec::new(),
@@ -469,6 +472,12 @@ impl EventSource for FakeEvents {
     }
 
     fn read(&mut self) -> io::Result<Input> {
+        let polls = self.polls.lock().unwrap().len();
+        self.reads.lock().unwrap().push((
+            self.time.now(),
+            self.flushes.load(Ordering::SeqCst),
+            polls,
+        ));
         self.taken += 1;
         Ok(self.queue.pop_front().unwrap().1)
     }
@@ -715,6 +724,8 @@ pub struct Outcome {
     pub exit: ExplorerExit,
     pub screen: String,
     pub polls: Vec<(Duration, u64, usize)>,
+    /// See [`FakeEvents::reads`].
+    pub reads: Vec<(u64, usize, usize)>,
     pub log: Vec<&'static str>,
     pub frames: usize,
     pub elapsed_ms: u64,
@@ -730,6 +741,7 @@ pub fn run(r: Run) -> Outcome {
     let mut events =
         FakeEvents::new(r.time.clone(), r.script, Arc::clone(&flushes)).gated(r.gates, frame);
     let polls = Arc::clone(&events.polls);
+    let reads = Arc::clone(&events.reads);
     let queries = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let mut sizer = FakeSize(Arc::new(Mutex::new(r.resize_to)), Arc::clone(&queries));
     let mut guard = FakeRestore {
@@ -767,10 +779,12 @@ pub fn run(r: Run) -> Outcome {
     let elapsed_ms = r.time.now() - started;
     let screen = buffer_text(term.backend().inner().inner.buffer());
     let polls = polls.lock().unwrap().clone();
+    let reads = reads.lock().unwrap().clone();
     Outcome {
         exit,
         screen,
         polls,
+        reads,
         log: r.log.get(),
         frames: flushes.load(Ordering::SeqCst),
         elapsed_ms,
