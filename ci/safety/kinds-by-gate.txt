@@ -16,6 +16,7 @@ caches A B
 cache-apt A B
 worktrees C C
 build-dirs C C
+cargo-home C C
 docker D D
 docker-images D D
 docker-volumes D D
