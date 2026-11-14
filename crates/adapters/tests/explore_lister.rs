@@ -90,6 +90,7 @@ fn triples(rows: &FileRows) -> Vec<(String, u64, u64)> {
 #[test]
 fn the_5000_largest_of_20000_files_should_come_back_with_the_totals_of_the_rest_in_bounded_memory()
 {
+    let _turn = turn();
     let d = tempfile::tempdir().unwrap();
     many_files(d.path(), 20_000);
     let (want, want_count, want_bytes) = oracle(d.path(), 5_000);
