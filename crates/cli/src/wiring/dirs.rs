@@ -154,6 +154,15 @@ pub fn resolve_real_dirs() -> Result<Dirs, DirsError> {
     resolve_dirs(&process_env, &real_canon)
 }
 
+/// `CARGO_HOME` as the environment gives it, for `RootSet::with_cargo_home`: unset or empty is `None` (the
+/// default `~/.cargo`). It is not canonicalised: a link anywhere on the way is refused by the `cargo-home`
+/// target, not followed.
+pub fn cargo_home_env() -> Option<std::path::PathBuf> {
+    std::env::var_os("CARGO_HOME")
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from)
+}
+
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,

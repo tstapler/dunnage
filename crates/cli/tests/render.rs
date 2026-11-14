@@ -85,7 +85,7 @@ fn kinds_table_should_list_every_selector_with_its_available_cell() {
         }
     });
     let out = render_kinds(&rows, &pipe(80));
-    assert_eq!(out.lines().count(), 11);
+    assert_eq!(out.lines().count(), 12);
     assert!(out.lines().next().unwrap().starts_with("ID"));
     assert!(out.lines().any(|l| l.starts_with("steam")
         && l.contains("not available in this build")

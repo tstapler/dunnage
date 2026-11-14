@@ -478,9 +478,9 @@ fn kinds_should_list_every_selector_with_availability_and_exit_0() {
     }
     let json = f.fixture_cmd().args(["kinds", "--json"]).output().unwrap();
     let d: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
-    // The ten selectors plus the test-only `fixture-destructive`, which a `test-support` build lists under
+    // The eleven selectors plus the test-only `fixture-destructive`, which a `test-support` build lists under
     // `DC_TEST_ROOT` (Story 2.3.4).
-    assert_eq!(d["kinds"].as_array().unwrap().len(), 11);
+    assert_eq!(d["kinds"].as_array().unwrap().len(), 12);
     assert!(row("fixture-destructive").contains("destructive"));
 }
 

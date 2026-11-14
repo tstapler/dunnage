@@ -84,6 +84,10 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub keep_newest: Option<u32>,
 
+    /// Offer only the parts of cargo profiles with this name, e.g. debug, to keep release (repeatable; needs build-dirs)
+    #[arg(long, value_name = "NAME")]
+    pub cargo_profile: Vec<String>,
+
     /// Worker threads for deletes
     #[arg(long, value_name = "N", default_value_t = dunnage_core::executor::DEFAULT_JOBS)]
     pub jobs: usize,
@@ -661,6 +665,7 @@ impl Cli {
         }
         sel.min_size_bytes = self.min_size;
         sel.keep_newest = self.keep_newest;
+        sel.cargo_profiles.clone_from(&self.cargo_profile);
         sel.docker_volumes = self.docker_volumes.map(|v| match v {
             VolumeClass::Anonymous => DockerVolumes::Anonymous,
             VolumeClass::Named => DockerVolumes::Named,
