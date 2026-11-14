@@ -595,6 +595,9 @@ pub struct StartRec {
 pub struct ControlSource {
     pub starts: Mutex<Vec<StartRec>>,
     pub prefill: Mutex<Vec<ScanMsg>>,
+    /// Sent into the channel of every start, before `start` returns: a scan that has answered by the time
+    /// the loop's next iteration drains, with no feeder thread to race the clock.
+    pub answer_every_start: Mutex<Option<ScanMsg>>,
 }
 
 impl ControlSource {
@@ -611,6 +614,9 @@ impl ScanSource for ControlSource {
     fn start(&self, roots: &[PathBuf], opts: &ScanOpts) -> ScanHandle {
         let (tx, rx) = channel();
         for m in std::mem::take(&mut *self.prefill.lock().unwrap()) {
+            tx.send(m).unwrap();
+        }
+        if let Some(m) = self.answer_every_start.lock().unwrap().clone() {
             tx.send(m).unwrap();
         }
         let cancel = Arc::new(AtomicBool::new(false));

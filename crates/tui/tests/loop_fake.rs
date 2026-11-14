@@ -670,37 +670,26 @@ fn a_fifth_nested_scan_gives_the_footer_four_nested_scans() {
         dev: 7,
     };
     let root = dir_ev(0, NO_PARENT, "/h/code/app", stats(0, 1, 4096, 0), 1, 0);
-    let r = Run::virtual_time(vec![]);
-    let batch = ScanMsg::Batch {
-        generation: 0,
-        mode: ScanMode::Fresh,
-        events: vec![root, boundary],
-    };
-    // each pushed root answers with the same shape
-    let source = Arc::clone(&r.source);
-    let feeder = std::thread::spawn(move || {
-        let mut fed = 0;
-        loop {
-            let n = source.count();
-            while fed < n {
-                source.send(fed, batch.clone());
-                fed += 1;
-            }
-            if n >= 5 {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(1));
-        }
-    });
-    let mut r = r;
-    r.time = Time::Real(Arc::new(dunnage_tui::event_loop::SystemClock::default()));
-    r.script = (0..6)
-        .flat_map(|i| [(300 + i * 300, ch('j')), (330 + i * 300, key(Key::Enter))])
-        .chain([(2_500, ch('q'))])
-        .collect();
+    // Every start (the original and each pushed root) answers with the same shape before `start` returns, and
+    // the virtual clock moves only while the loop waits: the next iteration drains and draws the batch before
+    // the next `j` is read, whatever the machine's timer lateness.
+    let r = Run::virtual_time(
+        (0..6)
+            .flat_map(|i| [(300 + i * 300, ch('j')), (330 + i * 300, key(Key::Enter))])
+            .chain([(2_500, ch('q'))])
+            .collect(),
+    );
+    r.source
+        .answer_every_start
+        .lock()
+        .unwrap()
+        .replace(ScanMsg::Batch {
+            generation: 0,
+            mode: ScanMode::Fresh,
+            events: vec![root, boundary],
+        });
     let src2 = Arc::clone(&r.source);
     let out = run(r);
-    feeder.join().ok();
     assert_eq!(
         src2.count(),
         5,
