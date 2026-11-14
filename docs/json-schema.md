@@ -43,6 +43,11 @@ document adds `freed_bytes` and a `summary` object.
 `next[]`: `{command, plan_id, explain}`. `plan_id` is set exactly when the command carries `--plan-id`; a command
 that echoes `--only` carries it last, shell-quoted.
 
+A cargo-aware item has `kind` `cargo-artifact` (family and selector `build-dirs`, tier `destructive`; `path` is the
+part directory below `target/<profile>/`) or `cargo-home` (family and selector `cargo-home`, tier `guarded`). Both are
+new values of an existing field, so the schema version stays `1`. `--cargo-profile NAME` is echoed in the `Next:`
+command and is bound into the plan id like the other selection flags.
+
 ## `status` and `kinds`
 
 `status` is a superset of the old `metascope status --json`: `fs` (the `/sys/fs/btrfs/<uuid>` directory, null off btrfs),
