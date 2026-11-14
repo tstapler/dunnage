@@ -246,10 +246,6 @@ struct Builder<'a> {
     candidates: Vec<SelectorId>,
 }
 
-fn is_yes(tree: &ExploreTree, roots: &RootSet, facts: &ClassifyFacts, id: NodeId) -> bool {
-    matches!(hint_of_node(tree, id, roots, facts), Hint::Yes { .. })
-}
-
 impl Builder<'_> {
     fn badge(&self, id: NodeId) -> Badge {
         hint_of_node(&self.s.tree, id, &self.env.classify, &self.env.facts).badge()
@@ -290,19 +286,33 @@ impl Builder<'_> {
                 Hint::No(_) => {
                     let (roots, facts) = (&self.env.classify, &self.env.facts);
                     let found: std::cell::Cell<Option<SelectorId>> = std::cell::Cell::new(None);
+                    let possible_home = std::cell::Cell::new(false);
                     let n = dunnage_core::explore::refusal::count_items_below(tree, id, &|c| {
-                        let y = is_yes(tree, roots, facts, c);
-                        if y && found.get().is_none() {
-                            if let Hint::Yes { selector, .. } = hint_of_node(tree, c, roots, facts)
-                            {
-                                found.set(Some(selector));
+                        match hint_of_node(tree, c, roots, facts) {
+                            Hint::Yes { selector, .. } => {
+                                if found.get().is_none() {
+                                    found.set(Some(selector));
+                                }
+                                true
                             }
+                            // The explorer cannot tell a cargo-home entry's age, so it is never certain, but a
+                            // directory that holds some is worth a dry run of the kind.
+                            Hint::Shape {
+                                selector: SelectorId::CargoHome,
+                                ..
+                            } => {
+                                possible_home.set(true);
+                                false
+                            }
+                            _ => false,
                         }
-                        y
                     });
                     if let (true, Some(sel)) = (n > 0, found.get()) {
                         words.push(format!("{} inside", sel.id()));
                         self.candidates.push(sel);
+                    } else if possible_home.get() {
+                        words.push(format!("{}? inside", SelectorId::CargoHome.id()));
+                        self.candidates.push(SelectorId::CargoHome);
                     }
                 }
             }
