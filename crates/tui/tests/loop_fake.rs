@@ -75,20 +75,16 @@ fn scan_driven_redraws_are_at_most_four_a_second_and_keys_are_handled_while_batc
         out.frames
     );
     assert!(out.frames >= 6, "{} frames", out.frames);
-    // every key press is followed by a frame before the loop waits again (one loop iteration). Checked on Linux
-    // only: on macos-15 runners the frame after the key at 1 000 or 1 500 ms went missing in every run of this test
-    // (five runs, exclusive and retried), and the cause is not established; the other assertions here still run.
-    for t in [1_000u64, 1_500]
-        .into_iter()
-        .filter(|_| cfg!(target_os = "linux"))
-    {
-        let before = out.polls.iter().rev().find(|p| p.1 < t).map_or(0, |p| p.2);
-        let after = out
-            .polls
+    // every key press is followed by a frame before the loop waits again (one loop iteration). Not a time window:
+    // on macos-15 a 50 ms poll can return 100-200 ms late, so the first poll after the key's time + 60 ms was the
+    // same iteration's drain poll, before its frame (the frame came at the next poll).
+    for (key, at) in out.reads.iter().take(2).enumerate() {
+        let (_, frames_at_read, polls_at_read) = *at;
+        let waited_without_a_frame = out.polls[polls_at_read..]
             .iter()
-            .find(|p| p.1 > t + 60)
-            .map_or(usize::MAX, |p| p.2);
-        assert!(after > before, "no frame after the key at {t} ms");
+            .find(|p| p.2 > frames_at_read || !p.0.is_zero())
+            .is_none_or(|p| p.2 <= frames_at_read);
+        assert!(!waited_without_a_frame, "no frame after key {key}");
     }
     // the cursor moved down twice while batches were arriving and keeps its row through the re-sorts
     let at: Vec<usize> = out
@@ -446,6 +442,9 @@ fn a_finished_plan_shows_the_preview_with_no_next_line_and_esc_returns_to_the_li
     let mut r = with_kids();
     r.time = Time::Real(Arc::new(dunnage_tui::event_loop::SystemClock::default()));
     r.script = vec![(100, ch(' ')), (200, ch('p')), (600, ch('q'))];
+    // `q` waits for a frame that shows the preview: a wall-clock 600 ms is not enough on a runner whose 50 ms
+    // sleeps take 100-200 ms (see below), and then `q` arrives before the planner thread's answer is drawn.
+    r.gates = vec![(2, "PLAN PREVIEW")];
     let open = run(r);
     assert!(
         open.screen.contains("PLAN PREVIEW - nothing is deleted."),
@@ -464,6 +463,10 @@ fn a_finished_plan_shows_the_preview_with_no_next_line_and_esc_returns_to_the_li
         (900, ch('x')),
         (1000, ch('q')),
     ];
+    // Each key waits for the frame its predecessor causes. Without the gates, a loop that wakes late (macos-15:
+    // a 50 ms poll took 100-200 ms) finds `x` and `q` both due in one iteration, handles both and exits before a
+    // frame shows the cleared marks.
+    r.gates = vec![(2, "PLAN PREVIEW"), (3, "!PLAN PREVIEW"), (4, "marks: 0")];
     let out = run(r);
     assert_eq!(out.exit.code, 0);
     assert!(
