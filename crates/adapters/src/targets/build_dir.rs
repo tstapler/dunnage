@@ -403,9 +403,10 @@ pub struct BuildDirTarget<D: DirOps> {
     state: Mutex<Discovered>,
     /// The `Allowed` of an item whose pre-delete guard just passed, taken by the `execute` that follows.
     verified: Mutex<HashMap<CandidateId, Allowed>>,
-    /// One lock per cargo profile directory. A part's re-check reads its sibling parts to judge the profile's
-    /// activity, and a sibling that is half removed shows the time of its last unlink; removals and re-checks
-    /// of one profile therefore never overlap.
+    /// One lock per cargo `target/`. A part's re-check reads its sibling parts to judge the profile's activity,
+    /// a sibling that is half removed shows the time of its last unlink, and the worker removing it holds
+    /// open descriptors inside `target/` that the run-state probe would take for a running build (it scans
+    /// this process too). Removals, re-checks and run-state probes of one target therefore never overlap.
     profile_locks: Mutex<HashMap<PathBuf, std::sync::Arc<Mutex<()>>>>,
 }
 
@@ -425,7 +426,7 @@ impl<D: DirOps> BuildDirTarget<D> {
     }
 
     fn profile_lock(&self, path: &Path) -> Option<std::sync::Arc<Mutex<()>>> {
-        let dir = PartPath::parse(path)?.profile_dir.to_path_buf();
+        let dir = PartPath::parse(path)?.target.to_path_buf();
         Some(std::sync::Arc::clone(
             lock(&self.profile_locks).entry(dir).or_default(),
         ))
@@ -553,11 +554,13 @@ impl<D: DirOps> BuildDirTarget<D> {
 
     /// `Running` or `Unknown` of anything that uses the item: the whole dir, or a part's profile and target
     /// (cargo's `.cargo-lock` sits in the profile, its processes keep files open anywhere below `target/`).
-    fn in_use(probe: &dyn SystemProbe, item: Item, path: &Path) -> Option<SkipReason> {
+    fn in_use(&self, probe: &dyn SystemProbe, item: Item, path: &Path) -> Option<SkipReason> {
         match item {
             Item::Dir(_) => run_state_skip(probe.run_state(path)),
             Item::CargoPart => {
                 let pp = PartPath::parse(path)?;
+                let gate = self.profile_lock(path);
+                let _held = gate.as_deref().map(lock);
                 let skips: Vec<Option<SkipReason>> = [pp.profile_dir, pp.target]
                     .into_iter()
                     .map(|d| run_state_skip(probe.run_state(d)))
@@ -782,7 +785,7 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
                 return Guarded::Skip(SkipReason::NotReproducible);
             }
         }
-        match Self::in_use(env.probe, item, path) {
+        match self.in_use(env.probe, item, path) {
             Some(r) => Guarded::Skip(r),
             None => Guarded::Allow,
         }
@@ -803,7 +806,7 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
         let Some(item) = item_of(c) else {
             return Guarded::Skip(SkipReason::OutsideRoot);
         };
-        if let Some(r) = Self::in_use(env.probe, item, allowed.path()) {
+        if let Some(r) = self.in_use(env.probe, item, allowed.path()) {
             return Guarded::Skip(r);
         }
         lock(&self.verified).insert(c.id(), allowed);
@@ -824,7 +827,7 @@ impl<D: DirOps + 'static> Target for BuildDirTarget<D> {
             Some(a) => a,
             None => match self.recheck(c, env, self.min_age()) {
                 Ok(a) => {
-                    if let Some(r) = Self::in_use(env.probe, item, a.path()) {
+                    if let Some(r) = self.in_use(env.probe, item, a.path()) {
                         return Err(failure(delete_error_of(r)));
                     }
                     a

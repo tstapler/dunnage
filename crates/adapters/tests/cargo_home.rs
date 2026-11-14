@@ -403,7 +403,8 @@ fn guard_before_delete_should_skip_with_identity_changed_When_the_entry_was_recr
     let cands = t.discover(&env, &sel());
     let c = find(&cands, &d);
 
-    fs::remove_dir_all(&d).unwrap();
+    // moved aside, not deleted, so the new directory cannot get the old inode back
+    fs::rename(&d, d.with_file_name("serde-1.0.200.old")).unwrap();
     let again = crate_dir(&ch, "serde-1.0.200", days(60));
     assert_eq!(again, d);
 
