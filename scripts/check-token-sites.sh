@@ -28,7 +28,7 @@ SECCOMP_TEST=crates/adapters/tests/delete_aa_mutants.rs
 SECCOMP_LIBC_OK='^(prctl|PR_SET_NO_NEW_PRIVS|PR_SET_SECCOMP|SECCOMP_MODE_FILTER|sock_filter|sock_fprog|SYS_statx|E[A-Z0-9]+)$'
 # DeletePolicy literals (Task 6.6.5k, review N1; ADR-006 A1): the core definition files (roots.rs builds the configured AllowedTarget lists), the four cleaner targets that
 # build real policies, and tests (compiled only under cfg(test); they cannot reach the binary)
-POLICY_OK='^(crates/core/src/(delete_types|floor_rule|roots)\.rs:|crates/adapters/src/(steam/target|targets/(fixture_kind|cache|build_dir))\.rs:|crates/[^/]+/tests/)'
+POLICY_OK='^(crates/core/src/(delete_types|floor_rule|roots)\.rs:|crates/adapters/src/(steam/target|targets/(fixture_kind|cache|build_dir|cargo_home))\.rs:|crates/[^/]+/tests/)'
 FORGE_OK='^crates/scan/src/btrfs_tree\.rs:[0-9]+:from_raw_parts$'
 
 SELF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")
