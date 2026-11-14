@@ -88,13 +88,17 @@ fn child_signal_mid_apply() {
     let confirmed = ex.confirmed(&[a.clone(), b.clone(), c.clone()]);
     let hits = Arc::new(AtomicUsize::new(0));
     let sig = sig.clone();
+    let base = ex.base.clone();
     let ops = |_: &dunnage_core::ApplyToken| {
         let hits = Arc::clone(&hits);
+        let base = base.clone();
         FaultDirOps::wrap(RealDirOps::confined_to(&ex.base))
             .hook(Event::BeforeUnlinkat, {
                 let sig = sig.clone();
                 move |ctx| {
-                    let in_b2 = ctx.base_abs.to_string_lossy().contains("b2")
+                    // Relative to the fixture: the random tempdir name can itself contain "b2".
+                    let under = ctx.base_abs.strip_prefix(&base).unwrap_or(&ctx.base_abs);
+                    let in_b2 = under.to_string_lossy().contains("b2")
                         || ctx.rel_path.to_string_lossy().contains("b2");
                     if in_b2 && hits.fetch_add(1, Ordering::SeqCst) == 1 {
                         // Delivered to this process; the handler only stores into atomics.
