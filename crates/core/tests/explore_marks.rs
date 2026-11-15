@@ -14,6 +14,7 @@ use dunnage_core::explore::marks::{Mark, Marks, MARK_LIMIT};
 use dunnage_core::explore::msg::{MarkRefusal, NodeEvent, ScanMode, NO_PARENT};
 use dunnage_core::explore::tree::{ExploreTree, NodeId};
 use dunnage_core::explore::view::{Badge, Sort, ViewState};
+use dunnage_core::explorer_floor::FloorReason;
 use dunnage_scan::estimate::Stats;
 use dunnage_scan::index::DirInfo;
 
@@ -165,16 +166,18 @@ fn space_marks_the_row_the_cursor_stays_and_a_plain_directory_is_markable() {
 fn a_refusal_of_mark_check_shows_its_catalogue_text_and_marks_nothing() {
     let t = tree_with(4);
     let mut cx = Ctx::new();
-    cx.refused = vec![(PathBuf::from("/r/c01"), MarkRefusal::OutsideRoot)];
+    cx.refused = vec![(
+        PathBuf::from("/r/c01"),
+        MarkRefusal::Floor(FloorReason::System),
+    )];
     let mut st = cx.open(&t);
     goto(&mut st, "c01/");
     let o = cx.key(&mut st, &t, Key::Char(' '));
     let m = o.message.unwrap();
-    assert!(
-        m.starts_with("/r/c01 is outside the folders the cleaner may touch (/r, /q)."),
-        "{m}"
+    assert_eq!(
+        m,
+        "/r/c01: a system directory is never deleted from here. The explorer never deletes it; mark a folder inside it instead."
     );
-    assert!(m.contains("add its parent to 'roots' in /etc/dc/config.toml and run explore again"));
     assert!(st.marks.is_empty());
 }
 
@@ -685,10 +688,8 @@ mod real_check {
         let err = marks.add_checked(m("/r/extra".into()), &env).unwrap_err();
         assert_eq!(err, MarkRefusal::LimitReached);
         assert_eq!(marks.len(), LIMIT);
-        let err = marks
-            .add_checked(m("/elsewhere/a".into()), &env)
-            .unwrap_err();
-        assert_eq!(err, MarkRefusal::OutsideRoot);
+        let err = marks.add_checked(m("/etc/a".into()), &env).unwrap_err();
+        assert_eq!(err, MarkRefusal::Floor(FloorReason::System));
         let cx = RefusalCtx {
             path: Path::new("/r/extra"),
             roots: &roots,

@@ -346,7 +346,7 @@ pub fn kind_line(hint: Hint, shape: Option<Kind>) -> String {
         ),
         Hint::No(NoReason::NotShape) => "not a cleaner item: deleted here as a plain path".into(),
         Hint::No(NoReason::OutsideRoot) => format!(
-            "{} shape, outside the cleaner's folders: not markable",
+            "{} shape, outside the cleaner's folders: deleted here as a plain path",
             shape.map_or("cleaner", Kind::family)
         ),
         Hint::No(NoReason::InstalledSteamGame) => {

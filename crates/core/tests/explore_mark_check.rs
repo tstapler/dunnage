@@ -14,6 +14,7 @@ use dunnage_core::explore::mark_check::{
 };
 use dunnage_core::explore::marks::{Mark, Marks, MARK_LIMIT};
 use dunnage_core::explore::msg::MarkRefusal;
+use dunnage_core::explorer_floor::{explorer_floor, FloorReason};
 use dunnage_core::roots::{strictly_below, RootSet};
 use dunnage_core::{
     AllowedTarget, DeleteError, DeletePolicy, Dirs, Identity, Kind, RootDev, SkipReason,
@@ -65,6 +66,14 @@ impl MarkFacts for Fake {
     }
 }
 
+/// A mount table with the root filesystem only: every path has an anchor, none holds a mount point.
+fn root_mount() -> MountTable {
+    MountTable::new(vec![MarkMount {
+        point: "/".into(),
+        source: "/dev/sda1".into(),
+    }])
+}
+
 struct World {
     roots: Vec<PathBuf>,
     home: PathBuf,
@@ -77,7 +86,7 @@ fn world(home: &str, roots: &[&str]) -> World {
     World {
         roots: roots.iter().map(PathBuf::from).collect(),
         home: home.into(),
-        mounts: MountTable::default(),
+        mounts: root_mount(),
         own: OwnState::new(
             &Dirs {
                 home: home.into(),
@@ -122,21 +131,58 @@ fn mark(p: &str) -> Mark {
 // ---- M1 ----------------------------------------------------------------------------------------------
 
 #[test]
-fn m1_should_admit_only_strict_descendants_of_a_root_When_checked() {
+fn m1_should_admit_any_folder_off_the_floor_inside_the_roots_or_outside_them_When_checked() {
     let w = world("/home/u", &["/home/u/code"]);
-    assert!(w.check("/home/u/code/app/dist.old").is_ok());
+    for p in [
+        "/home/u/code/app/dist.old",
+        "/home/u/Documents/x",
+        "/data/x",
+        "/srv/data/old",
+        "/var/tmp/x",
+    ] {
+        assert!(w.check(p).is_ok(), "{p}");
+    }
+    // Rule F, a scan root and the `.git` refusal keep the reason they always had.
     for p in [
         "/home/u/code",
         "/home/u",
-        "/home/u/Documents/x",
-        "/data/x",
         "/",
+        "/home/u/Documents",
+        "/home/u/code/a/.git",
+    ] {
+        assert_eq!(w.refusal(p), Some(PROTECTED), "{p}");
+    }
+    // The new floor says why.
+    for (p, why) in [
+        ("/etc/x", FloorReason::System),
+        ("/usr/local/share", FloorReason::System),
+        ("/tmp", FloorReason::TopLevel),
+        ("/var/lib/x", FloorReason::VarState),
+        ("/home/other", FloorReason::AccountHome),
+        ("/home/u/.ssh/keys", FloorReason::Secrets),
+        ("/home/u/.config/1Password/x", FloorReason::Secrets),
+    ] {
+        assert_eq!(w.refusal(p), Some(MarkRefusal::Floor(why)), "{p}");
+    }
+    for p in [
         "/home/u/code/../.ssh",
         "relative/path",
         "/home/u/code/app/",
+        "/srv//x",
     ] {
         assert_eq!(w.refusal(p), Some(MarkRefusal::OutsideRoot), "{p}");
     }
+}
+
+#[test]
+fn m3_should_refuse_a_path_no_mount_point_or_scan_root_holds_When_the_mount_table_is_empty() {
+    let mut w = world("/home/u", &["/home/u/code"]);
+    w.mounts = MountTable::default();
+    assert!(
+        w.check("/home/u/code/app").is_ok(),
+        "a scan root is an anchor"
+    );
+    assert_eq!(w.refusal("/srv/data/old"), Some(MarkRefusal::NoMountTable));
 }
 
 #[test]
@@ -175,8 +221,8 @@ fn m1_should_ignore_the_explore_path_and_see_only_the_roots_resolve_returned_Whe
     for explore_path in ["/", "/home"] {
         let _ = explore_path; // the PATH never reaches mark_check
         assert!(w.check("/home/u/work/app/node_modules").is_ok());
-        assert_eq!(w.refusal("/home/u/other"), Some(MarkRefusal::OutsideRoot));
-        assert_eq!(w.refusal("/home"), Some(MarkRefusal::OutsideRoot));
+        assert_eq!(w.refusal("/home/u/other"), Some(PROTECTED));
+        assert_eq!(w.refusal("/home"), Some(PROTECTED));
     }
 }
 
@@ -192,7 +238,7 @@ fn m2_should_refuse_home_its_ancestors_and_anything_under_two_components_below_h
         assert_eq!(w.refusal(p), Some(PROTECTED), "{p}");
     }
     assert!(w.check("/home/u/Documents/x").is_ok()); // two components below home: rule F lets it through
-    assert_eq!(w.refusal("/"), Some(MarkRefusal::OutsideRoot));
+    assert_eq!(w.refusal("/"), Some(PROTECTED));
     assert!(w.check("/opt/app/node_modules").is_ok());
 }
 
@@ -383,7 +429,17 @@ fn m4_should_refuse_a_symlink_row_and_a_path_with_a_symlinked_component() {
 
 #[test]
 fn m5_should_refuse_every_file_of_the_tools_own_state_its_directories_ancestors_and_the_binary() {
-    let w = world("/home/u", &["/"]);
+    let mut w = world("/home/u", &["/"]);
+    // A binary under /usr is on the floor first; this test is about the own-state rule, so put it elsewhere.
+    w.own = OwnState::new(
+        &Dirs {
+            home: "/home/u".into(),
+            state: "/home/u/.local/state".into(),
+            cache: "/home/u/.cache".into(),
+            config: "/home/u/.config".into(),
+        },
+        "/opt/dunnage/bin/dunnage".into(),
+    );
     let state = "/home/u/.local/state/dunnage";
     let cache = "/home/u/.cache/dunnage";
     let config = "/home/u/.config/dunnage";
@@ -410,7 +466,7 @@ fn m5_should_refuse_every_file_of_the_tools_own_state_its_directories_ancestors_
             cache,
             config,
             "/home/u/.local/state",
-            "/usr/local/bin/dunnage",
+            "/opt/dunnage/bin/dunnage",
         ]
         .map(String::from),
     );
@@ -438,8 +494,8 @@ fn m5_should_follow_a_relocated_state_directory_and_refuse_a_root_that_holds_it(
         w.refusal("/mnt/big/xdg-state/dunnage/audit.jsonl"),
         Some(MarkRefusal::OwnState)
     );
-    // The root that contains the state is refused by M1 (and would be by M5).
-    assert_eq!(w.refusal("/mnt/big"), Some(MarkRefusal::OutsideRoot));
+    // The root that contains the state is refused as a scan root (and would be by M5).
+    assert_eq!(w.refusal("/mnt/big"), Some(PROTECTED));
     assert_eq!(w.refusal("/mnt/big/xdg-state"), Some(MarkRefusal::OwnState));
     assert!(w.check("/mnt/big/projects").is_ok());
 }
@@ -535,8 +591,11 @@ fn m8_should_refuse_a_long_path_the_21st_mark_and_a_quoted_only_text_over_24_kib
 fn the_first_rule_that_applies_should_win_in_the_order_m1_to_m8() {
     let mut w = world("/home/u", &["/home/u/code"]);
     w.facts.scanning.insert("/home/u/code/.git".into());
-    // M1 before everything.
-    assert_eq!(w.refusal("/elsewhere/.git"), Some(MarkRefusal::OutsideRoot));
+    // M1 before everything: an unclean path is refused before any fact is read.
+    assert_eq!(
+        w.refusal("/elsewhere/../.git"),
+        Some(MarkRefusal::OutsideRoot)
+    );
     // M2 (.git) before M7.
     assert_eq!(w.refusal("/home/u/code/.git"), Some(PROTECTED));
     // M3 before M4: a mount point that is also a link is a mount point.
@@ -556,7 +615,12 @@ fn the_first_rule_that_applies_should_win_in_the_order_m1_to_m8() {
 #[test]
 fn mark_check_should_call_the_engines_own_functions_not_copies() {
     let src = include_str!("../src/explore/mark_check.rs");
-    for call in ["floor_protected(", "strictly_below(", "protected_position("] {
+    for call in [
+        "floor_protected(",
+        "strictly_below(",
+        "protected_position(",
+        "explorer_floor(",
+    ] {
         assert!(src.contains(call), "mark_check.rs must call {call}");
     }
     // ... and the engine side uses the same functions.
@@ -567,8 +631,10 @@ fn mark_check_should_call_the_engines_own_functions_not_copies() {
     );
     let roots = include_str!("../src/roots.rs");
     assert!(roots.contains("strictly_below(root, path)"));
+    assert!(roots.contains("explorer_floor(path, &self.home)"));
     let guard = include_str!("../src/guard.rs");
     assert!(guard.contains("protected_position(path, roots.scan_roots())"));
+    assert!(guard.contains("explorer_floor(path, roots.home())"));
 }
 
 fn comp() -> impl Strategy<Value = &'static str> {
@@ -651,8 +717,9 @@ proptest! {
         }
     }
 
-    /// M2 and the engine's rule F give equal answers: for a path M1 admits, the explorer refuses it with
-    /// `ProtectedPath` exactly when `DeletePolicy::validate` does (for an allowed target equal to the path).
+    /// M2 and the engine's rule F give equal answers: for a path on the floor for a rule-F reason, the explorer
+    /// refuses it with `ProtectedPath` exactly when `DeletePolicy::validate` does; any other floor reason is
+    /// refused on the screen too; a path off the floor is refused only by a rule that needs facts (a scan root).
     #[test]
     fn m2_should_equal_the_engines_floor_rule_When_paths_roots_and_homes_are_random(
         path in abs_path(7), home in abs_path(5), r1 in abs_path(4), r2 in abs_path(4),
@@ -661,9 +728,8 @@ proptest! {
         let roots = vec![r1, r2];
         let mut w = world(home.to_str().unwrap(), &[]);
         w.roots = roots.clone();
-        let m1_admits = roots.iter().any(|r| strictly_below(r, &path));
+        let floor = explorer_floor(&path, &home);
         let got = w.check(path.to_str().unwrap());
-        let git = path.components().any(|c| c.as_os_str() == ".git");
         let policy = DeletePolicy {
             root_dev: RootDev(1),
             root_mnt: None,
@@ -677,27 +743,29 @@ proptest! {
             restore_owner_write: false,
         };
         let engine = policy.validate(path.file_name().unwrap());
-        if !m1_admits {
-            prop_assert_eq!(got.err(), Some(MarkRefusal::OutsideRoot));
-        } else if git {
-            prop_assert_eq!(got.err(), Some(PROTECTED));
-        } else {
-            let engine_protected = matches!(engine, Err(DeleteError::ProtectedPath));
-            prop_assert_eq!(got == Err(PROTECTED), engine_protected);
-            // Whatever the engine would accept as an Exact target, the explorer accepts too (no facts refuse).
-            if engine.is_ok() {
-                prop_assert!(got.is_ok());
+        let engine_protected = matches!(engine, Err(DeleteError::ProtectedPath));
+        match floor {
+            Some(FloorReason::Git) => prop_assert_eq!(got.err(), Some(PROTECTED)),
+            Some(FloorReason::Home | FloorReason::HomeAncestor | FloorReason::ShallowInHome) => {
+                prop_assert_eq!(got.err(), Some(PROTECTED));
+                prop_assert!(engine_protected);
+            }
+            Some(_) => prop_assert!(got.is_err()),
+            None => {
+                prop_assert_eq!(got == Err(PROTECTED), engine_protected);
+                // Whatever the engine would accept as an Exact target, the explorer accepts too (no facts refuse).
+                if engine.is_ok() {
+                    prop_assert!(got.is_ok());
+                }
             }
         }
     }
 
-    /// M1 is the oracle `RootSet::admits` is built on: for a name the kind accepts, both agree.
+    /// M1 and `RootSet::admits` for the explorer's kind are the one `explorer_floor`.
     #[test]
-    fn m1_should_equal_roots_admits_for_a_node_modules_name_When_roots_are_resolved(
-        base in abs_path(6), r1 in abs_path(4), r2 in abs_path(4),
+    fn m1_should_equal_roots_admits_for_the_explorer_kind_When_roots_are_resolved(
+        path in abs_path(6), r1 in abs_path(4), r2 in abs_path(4),
     ) {
-        let mut path = base;
-        path.push("node_modules");
         let flags = vec![r1.clone(), r2.clone()];
         let dirs = Dirs {
             home: "/zz/home".into(),
@@ -708,14 +776,13 @@ proptest! {
         let Ok(rs) = RootSet::resolve(&dirs, &flags, None, Path::new("/"), &identity_canon) else {
             return Ok(());
         };
-        let w = {
-            let mut w = world("/zz/home", &[]);
-            w.roots = rs.scan_roots().to_vec();
-            w
-        };
-        let admitted = rs.admits(Kind::NodeModules, &path);
-        let m1 = !matches!(w.check(path.to_str().unwrap()), Err(MarkRefusal::OutsideRoot));
-        prop_assert_eq!(admitted, m1);
+        let mut w = world("/zz/home", &[]);
+        w.roots = rs.scan_roots().to_vec();
+        let admitted = rs.admits(Kind::ExplorerSelection, &path);
+        prop_assert_eq!(admitted, explorer_floor(&path, rs.home()).is_none());
+        if !admitted {
+            prop_assert!(w.check(path.to_str().unwrap()).is_err(), "{path:?}");
+        }
     }
 }
 

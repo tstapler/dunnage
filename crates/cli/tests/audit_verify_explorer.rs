@@ -272,19 +272,19 @@ fn audit_verify_should_exit_2_When_a_refused_run_has_an_intent_or_an_unfinished_
 }
 
 #[test]
-fn audit_verify_should_exit_2_for_a_result_an_intent_or_a_partial_outside_the_roots_or_inside_own_state(
-) {
-    let outside = "/data/else/dir";
+fn audit_verify_should_exit_2_for_a_result_an_intent_or_a_partial_on_the_floor_or_inside_own_state()
+{
+    let outside = "/etc/ssh/keys";
     let state = "/home/u/.local/state/dunnage/keep";
     let one_below = "/home/u/code";
     let git = "/home/u/code/app/.git/hooks";
     let ancestor = "/home";
     for (path, needle) in [
-        (outside, "not strictly below a root"),
-        (state, "not strictly below a root"),
-        (one_below, "not strictly below a root"),
+        (outside, "hard floor"),
+        (state, "own state"),
+        (one_below, "directly inside your home"),
         (git, ".git"),
-        (ancestor, "not strictly below a root"),
+        (ancestor, "holds your home"),
         ("/home/u/code/../.ssh", "lexically clean"),
     ] {
         for shape in 0..3 {
@@ -303,6 +303,68 @@ fn audit_verify_should_exit_2_for_a_result_an_intent_or_a_partial_outside_the_ro
 }
 
 #[test]
+fn audit_verify_should_accept_an_explorer_deletion_outside_every_configured_root_When_it_is_off_the_floor(
+) {
+    for path in [
+        "/data/else/dir",
+        "/srv/data/old",
+        "/home/u/Documents/old",
+        "/var/tmp/build",
+    ] {
+        let log = [
+            start("r"),
+            confirm("r", 1, "1", &[path]),
+            intent("r", path),
+            removed("r", path),
+            end("r"),
+        ];
+        assert_clean(&log, path);
+    }
+}
+
+#[test]
+fn audit_verify_should_reject_every_floor_path_even_when_a_config_root_covers_it() {
+    let table = AllowedTable::embedded();
+    let roots = [PathBuf::from("/"), PathBuf::from("/home/u")];
+    for path in [
+        "/usr/lib/x",
+        "/etc/x",
+        "/boot/x",
+        "/var/lib/x",
+        "/tmp",
+        "/home/other",
+        "/home/u/.ssh/keys",
+        "/home/u/.gnupg/x",
+        "/home/u/.config/1Password/x",
+        "/srv/data/repo/.git/hooks",
+        "/",
+    ] {
+        let text = [
+            start("r"),
+            confirm("r", 1, "1", &[path]),
+            intent("r", path),
+            removed("r", path),
+            end("r"),
+        ]
+        .iter()
+        .map(Value::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+        let r = verify_audit_with(
+            text.as_bytes(),
+            &VerifyInputs {
+                table: &table,
+                home: Path::new(HOME),
+                config_roots: Some(&roots),
+            },
+            &VerifyExtras::default(),
+        )
+        .unwrap();
+        assert_eq!(r.exit_code(), 2, "{path}: {r:?}");
+    }
+}
+
+#[test]
 fn audit_verify_should_apply_rule_f_and_the_state_rule_even_when_a_config_root_covers_the_path() {
     let table = AllowedTable::embedded();
     let roots = [
@@ -314,10 +376,10 @@ fn audit_verify_should_apply_rule_f_and_the_state_rule_even_when_a_config_root_c
         own_dirs: vec![PathBuf::from("/home/u/.local/state/dunnage")],
     };
     for (path, needle) in [
-        ("/home/u/one", "fewer than 2 components"),
+        ("/home/u/one", "directly inside your home"),
         ("/home/u/.local/state/dunnage/audit.jsonl", "own state"),
         ("/home/u/.local/state", "own state"),
-        ("/home", "ancestor of $HOME"),
+        ("/home", "holds your home"),
     ] {
         let text = [
             start("r"),
@@ -368,11 +430,7 @@ fn audit_verify_should_judge_path_hex_of_intents_and_partials_as_it_does_for_res
         } else {
             vec![start("r"), confirm("r", 1, "1", &[&lossy]), pr, end("r")]
         };
-        assert_violation(
-            &log,
-            "non-UTF-8 outside the roots",
-            "not strictly below a root",
-        );
+        assert_violation(&log, "non-UTF-8 name", "clean UTF-8");
     }
     // A hex string that does not match the text is itself a violation.
     let mut bad = intent("r", "/home/u/code/app/dist");

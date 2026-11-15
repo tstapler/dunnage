@@ -7,6 +7,7 @@ use std::path::{Component, Path, PathBuf};
 use crate::allowed::{Allowed, ExplorerScope, ExplorerScopeWrongKind};
 use crate::delete_types::FileKind;
 use crate::delete_types::{AllowedTarget, DeleteError, DeletePolicy, NamePattern};
+use crate::explorer_floor::explorer_floor;
 use crate::ids::{Identity, RootDev};
 use crate::plan::ItemIdentity;
 use crate::roots::RootSet;
@@ -131,14 +132,7 @@ impl DeletePolicy {
 
         let permitted = match &self.allowed {
             AllowedTarget::Exact(p) => target == p,
-            AllowedTarget::BelowScanRoot(scope) => {
-                target == scope.path()
-                    && self
-                        .scan_roots
-                        .iter()
-                        .any(|r| components_below(target, r).is_some_and(|d| d >= 1))
-                    && !target.components().any(|c| c.as_os_str() == ".git")
-            }
+            AllowedTarget::BelowScanRoot(scope) => target == scope.path(),
             AllowedTarget::Within {
                 root,
                 name: pattern,
@@ -160,6 +154,12 @@ impl DeletePolicy {
         };
         if !permitted {
             return Err(DeleteError::OutsideScope);
+        }
+        // An explorer target may be anywhere except the floor (`explorer_floor`), not only below a scan root.
+        if matches!(self.allowed, AllowedTarget::BelowScanRoot(_))
+            && explorer_floor(target, &self.home).is_some()
+        {
+            return Err(DeleteError::ProtectedPath);
         }
 
         if too_shallow_below_home(target, &self.home) {
@@ -309,11 +309,11 @@ mod explorer_tests {
     fn validate_should_refuse_a_dot_git_component_anywhere_in_the_path() {
         assert_eq!(
             check("/home/u/code/app/.git"),
-            Err(DeleteError::OutsideScope)
+            Err(DeleteError::ProtectedPath)
         );
         assert_eq!(
             check("/home/u/code/.git/hooks"),
-            Err(DeleteError::OutsideScope)
+            Err(DeleteError::ProtectedPath)
         );
         assert_eq!(check("/home/u/code/.gitx"), Ok(()));
     }
@@ -327,10 +327,14 @@ mod explorer_tests {
     }
 
     #[test]
-    fn validate_should_refuse_a_path_outside_every_scan_root() {
-        assert_eq!(check("/home/u/other/app"), Err(DeleteError::OutsideScope));
-        assert_eq!(check("/home/u/codex/app"), Err(DeleteError::OutsideScope));
-        assert_eq!(check("/etc/app"), Err(DeleteError::OutsideScope));
+    fn validate_should_accept_a_path_outside_every_scan_root_and_refuse_the_floor() {
+        assert_eq!(check("/home/u/other/app"), Ok(()));
+        assert_eq!(check("/home/u/codex/app"), Ok(()));
+        assert_eq!(check("/srv/data/old"), Ok(()));
+        assert_eq!(check("/etc/app"), Err(DeleteError::ProtectedPath));
+        assert_eq!(check("/usr/lib/app"), Err(DeleteError::ProtectedPath));
+        assert_eq!(check("/home/u/.ssh/keys"), Err(DeleteError::ProtectedPath));
+        assert_eq!(check("/var/lib/app"), Err(DeleteError::ProtectedPath));
     }
 
     #[test]

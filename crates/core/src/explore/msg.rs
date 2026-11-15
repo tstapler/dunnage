@@ -205,7 +205,12 @@ pub enum Hint {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MarkRefusal {
     NotAnItem,
+    /// M1: not a clean absolute UTF-8 path.
     OutsideRoot,
+    /// M1: on the explorer's hard floor (`explorer_floor`).
+    Floor(crate::explorer_floor::FloorReason),
+    /// M3: the mount table could not be read, or lists nothing that holds the path: the filesystem is unknown.
+    NoMountTable,
     InsideBuildOrGit,
     SymlinkRow,
     ContainsItems(u32),

@@ -11,6 +11,7 @@ use dunnage_core::explore::refusal::{
     count_items_below, count_text, RefusalCtx, CONTAINS_CAP, MARK_LIMIT,
 };
 use dunnage_core::explore::tree::{ExploreTree, NodeId};
+use dunnage_core::explorer_floor::FloorReason;
 use dunnage_core::SkipReason;
 use dunnage_scan::index::DirInfo;
 
@@ -30,19 +31,23 @@ fn text(r: MarkRefusal, path: &Path, roots: &[PathBuf], real: Option<&Path>) -> 
 }
 
 #[test]
-fn outside_root_should_name_at_most_three_roots_then_plus_n_more_and_say_how_to_add_one() {
-    let p = Path::new("/data/x/node_modules");
+fn outside_root_should_say_the_path_is_not_plain_and_floor_should_give_its_reason() {
+    let p = Path::new("/data/x/../node_modules");
     let t = text(MarkRefusal::OutsideRoot, p, &roots(2), None);
     assert_eq!(
         t,
-        "/data/x/node_modules is outside the folders the cleaner may touch (/h/r0, /h/r1). \
-         The explorer never widens them; to include it add its parent to 'roots' in \
-         /h/.config/dunnage/config.toml and run explore again."
+        "/data/x/../node_modules is not a plain absolute UTF-8 path (no '.', '..', empty parts or \
+         trailing '/'), so the explorer cannot delete it. Mark a folder with a plain path instead."
     );
-    let t = text(MarkRefusal::OutsideRoot, p, &roots(5), None);
-    assert!(t.contains("(/h/r0, /h/r1, /h/r2, +2 more)"), "{t}");
-    let t = text(MarkRefusal::OutsideRoot, p, &roots(3), None);
-    assert!(t.contains("(/h/r0, /h/r1, /h/r2)"), "{t}");
+    let p = Path::new("/home/u/.ssh/keys");
+    let t = text(MarkRefusal::Floor(FloorReason::Secrets), p, &roots(2), None);
+    assert_eq!(
+        t,
+        "/home/u/.ssh/keys: keys and credentials (.ssh, .gnupg, 1Password and its agent socket) are never \
+         deleted. The explorer never deletes it; mark a folder inside it instead."
+    );
+    let t = text(MarkRefusal::NoMountTable, p, &[], None);
+    assert!(t.contains("the mount table could not be read"), "{t}");
 }
 
 #[test]
@@ -131,6 +136,8 @@ fn every_text_should_state_what_happened_and_end_with_a_next_action_or_a_period(
     let all = [
         MarkRefusal::NotAnItem,
         MarkRefusal::OutsideRoot,
+        MarkRefusal::Floor(FloorReason::System),
+        MarkRefusal::NoMountTable,
         MarkRefusal::InsideBuildOrGit,
         MarkRefusal::SymlinkRow,
         MarkRefusal::ContainsItems(3),
@@ -175,6 +182,8 @@ fn paths_in_texts_should_be_escaped() {
     for r in [
         MarkRefusal::NotAnItem,
         MarkRefusal::OutsideRoot,
+        MarkRefusal::Floor(FloorReason::Git),
+        MarkRefusal::NoMountTable,
         MarkRefusal::InsideBuildOrGit,
         MarkRefusal::SymlinkRow,
         MarkRefusal::ContainsItems(1),

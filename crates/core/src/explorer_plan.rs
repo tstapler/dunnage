@@ -15,6 +15,7 @@ use crate::explore::mark_check::{
 };
 use crate::explore::marks::Marks;
 use crate::explore::msg::MarkRefusal;
+use crate::explorer_floor::explorer_anchor;
 use crate::guard::{decide_path_common, Facts, GuardDecision};
 use crate::ids::{AllocatedBytes, RootDev};
 use crate::kind::Kind;
@@ -247,9 +248,22 @@ pub fn judge_fresh(
     mount_points: &[PathBuf],
     fc: &FreshCheck<'_>,
 ) -> FreshVerdict {
-    let root_dev = fc
-        .roots
-        .root_of(path)
+    let anchor = explorer_anchor(
+        path,
+        fc.roots.scan_roots(),
+        mount_points.iter().map(PathBuf::as_path),
+    );
+    // No anchor (no mount table): `mark_check` refuses below; the item's own device is only a placeholder.
+    if let Some(a) = anchor {
+        let pseudo = fc.fs.fs_type(a).and_then(crate::roots::pseudo_fs_name);
+        if pseudo.is_some() && !fc.roots.is_scan_root(a) {
+            return FreshVerdict {
+                allowed: Err(SkipReason::ProtectedPath),
+                note: None,
+            };
+        }
+    }
+    let root_dev = anchor
         .and_then(|r| fc.fs.lstat(r).ok())
         .map_or(RootDev(st.ident.dev), |s| RootDev(s.ident.dev));
     let facts = Facts {
@@ -360,6 +374,29 @@ fn shared_of(extents: &dyn ExtentProbe, path: &Path) -> Option<u64> {
         ),
         ExtentAttribution::Unavailable(_) => None,
     }
+}
+
+/// The mount points that hold a mark outside every scan root: where its delete starts (the anchor). Bound into
+/// the plan-id next to the scan roots, so a mount point replaced between the review and the apply changes it.
+pub fn extra_anchors<'a>(
+    roots: &RootSet,
+    marks: impl IntoIterator<Item = &'a Path>,
+    mount_points: &[PathBuf],
+) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    for m in marks {
+        let anchor = explorer_anchor(
+            m,
+            roots.scan_roots(),
+            mount_points.iter().map(PathBuf::as_path),
+        );
+        if let Some(a) = anchor.filter(|a| !roots.is_scan_root(a)) {
+            if !out.iter().any(|o| o == a) {
+                out.push(a.to_path_buf());
+            }
+        }
+    }
+    out
 }
 
 /// The mount table as `mark_check` reads it, and the plain list of mount points.
@@ -479,20 +516,22 @@ pub fn explorer_plan(
             )));
         }
     }
+    let mounts = mount_facts(ctx.probe);
     let mut root_stamps: Vec<RootIdentity> = Vec::new();
-    for r in ctx.roots.scan_roots() {
-        let ident = ctx.fs.lstat(r).map(|st| st.ident).map_err(|_| {
+    let anchors = ctx.roots.scan_roots().iter().cloned().chain(extra_anchors(
+        ctx.roots,
+        selection.only_sorted(),
+        &mounts.1,
+    ));
+    for r in anchors {
+        let ident = ctx.fs.lstat(&r).map(|st| st.ident).map_err(|_| {
             ExplorerPlanError::RootUnreadable(format!(
-                "error: the scan root {} cannot be read now. Nothing was deleted.",
+                "error: the folder {} the delete starts from cannot be read now. Nothing was deleted.",
                 escape_os(r.as_os_str(), false)
             ))
         })?;
-        root_stamps.push(RootIdentity {
-            path: r.clone(),
-            ident,
-        });
+        root_stamps.push(RootIdentity { path: r, ident });
     }
-    let mounts = mount_facts(ctx.probe);
     let mut rows: Vec<ExplorerRow> = Vec::new();
     let mut candidates: Vec<Candidate> = Vec::new();
     let mut guards: Vec<(PathBuf, Guarded)> = Vec::new();

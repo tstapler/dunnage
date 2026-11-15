@@ -194,8 +194,9 @@ Use --text with a screen reader.
 
 Browse where the disk space went. On a terminal this opens an interactive explorer; on a pipe, with
 --text or with --json it prints the same numbers as plain text or one JSON document. The scan stays on one
-filesystem (other filesystems show as 'x' rows). PATH only chooses what is displayed; items can be marked
-only below the folders the cleaner may touch (the 'roots' of config.toml).";
+filesystem (other filesystems show as 'x' rows). PATH only chooses what is displayed; any folder you may delete
+can be marked, except the hard floor (system folders, your home folder and the folders directly in it, ~/.ssh,
+~/.gnupg, 1Password, .git, mount points); a refusal says why.";
 
 const EXPLORE_AFTER_HELP: &str = "\
 Exit codes: 0 ok, 2 a PATH does not exist or is unreadable, 64 usage, 74 the terminal cannot be set up,
@@ -299,7 +300,7 @@ pub enum ExploreSortArg {
 pub struct ExploreArgs {
     /// Directories to show (default: /); same as repeated --root
     pub paths: Vec<PathBuf>,
-    /// Same as a PATH: what is displayed and scanned, never a folder the cleaner may touch
+    /// Same as a PATH: what is displayed and scanned; the cleaner's folders are the 'roots' of config.toml
     #[arg(long = "root", value_name = "PATH")]
     pub root: Vec<PathBuf>,
     /// Walker threads (default: the number of CPUs, at most 16)

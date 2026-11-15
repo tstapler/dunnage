@@ -145,10 +145,14 @@ fn explorer_plan_should_make_one_item_per_mark_and_run_the_guards_on_fresh_data_
 
 #[test]
 fn explorer_plan_should_refuse_each_rule_m1_to_m5_as_a_skip_row_When_the_mark_breaks_it() {
-    let w = World::with_roots(&["/home/u/code"])
-        .mounts(&[("/home/u/code/mnt", 2), ("/home/u/code/bound/inner", 1)]);
+    let w = World::with_roots(&["/home/u/code"]).mounts(&[
+        ("/", 1),
+        ("/home/u/code/mnt", 2),
+        ("/home/u/code/bound/inner", 1),
+    ]);
     w.fs.dir("/home/u/code/mnt", 0)
         .dir("/home/u/Documents/x", 10)
+        .dir("/home/u/.ssh/keys", 10)
         .dir("/home/u/code/app/.git/objects", 10)
         .dir("/home/u/code/real", 10)
         .symlink("/home/u/code/link")
@@ -171,6 +175,7 @@ fn explorer_plan_should_refuse_each_rule_m1_to_m5_as_a_skip_row_When_the_mark_br
     );
     let marks: Vec<PathBuf> = [
         "/home/u/Documents/x",
+        "/home/u/.ssh/keys",
         "/home/u/code/app/.git/objects",
         "/home/u/code/link",
         "/home/u/code/linked-parent/child",
@@ -191,9 +196,11 @@ fn explorer_plan_should_refuse_each_rule_m1_to_m5_as_a_skip_row_When_the_mark_br
             .unwrap()
             .planned
     };
+    // Outside every scan root is fine now (the mount "/" holds it); the floor is not.
+    assert_eq!(status("/home/u/Documents/x"), Planned::Will);
     assert_eq!(
-        status("/home/u/Documents/x"),
-        will_not(SkipReason::OutsideRoot)
+        status("/home/u/.ssh/keys"),
+        will_not(SkipReason::ProtectedPath)
     );
     assert_eq!(
         status("/home/u/code/app/.git/objects"),
@@ -211,7 +218,7 @@ fn explorer_plan_should_refuse_each_rule_m1_to_m5_as_a_skip_row_When_the_mark_br
     );
     assert_eq!(
         status("/home/u/.local/state/dunnage"),
-        will_not(SkipReason::OutsideRoot)
+        will_not(SkipReason::ProtectedPath)
     );
     assert_eq!(status("/home/u/code/ok"), Planned::Will);
     // A symlinked parent: refused (the file under it is not a symlink itself, M4 sees the parent).
@@ -219,7 +226,7 @@ fn explorer_plan_should_refuse_each_rule_m1_to_m5_as_a_skip_row_When_the_mark_br
         status("/home/u/code/linked-parent/child"),
         will_not(SkipReason::Symlink)
     );
-    assert_eq!(plan.will_count(), 1);
+    assert_eq!(plan.will_count(), 2); // `ok` and the folder outside the scan roots
 }
 
 struct SkipsEverything(&'static str);

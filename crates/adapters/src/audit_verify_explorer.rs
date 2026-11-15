@@ -4,30 +4,34 @@
 //! owner for no gain: the table lists the paths a cleaner kind may touch, and this kind's paths are
 //! arbitrary). A path of kind `explorer-selection` is inside only if it is
 //!
-//! - lexically clean and absolute,
-//! - strictly below a root of the reviewed table's defaults or the owner's `config.toml` (never a root the
-//!   run recorded about itself),
-//! - without a `.git` component,
-//! - not `$HOME` or an ancestor of it, and at least two components below `$HOME` when it is under it,
+//! - off the explorer's hard floor (`dunnage_core::explorer_floor`, the function the screen, the planner and
+//!   the engine call): lexically clean absolute UTF-8, no `.git` component, not `/`, a top-level directory, a
+//!   system tree, `/var` outside `tmp` and `cache`, `$HOME` or an ancestor, another account's home, fewer than
+//!   two components below `$HOME`, or a key or 1Password directory (or one that holds it),
 //! - not inside, equal to or above the tool's own state, cache or config directory (read at verify time).
+//!
+//! Unlike the cleaner kinds, being below a configured root is not required: an explorer delete may be anywhere
+//! the owner may delete off the floor.
 //!
 //! Per run: exactly one `explorer_confirm` whose `typed` equals `count` and whose item list has `count`
 //! entries; every `intent` and `result` names a listed path; a finished run has `intents + skips == count`; a
 //! refused run has no `intent`; an interrupted or unfinished run has `intents + skips <= count`.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::ffi::OsStr;
+use std::os::unix::ffi::OsStrExt;
+use std::path::{Path, PathBuf};
 
+use dunnage_core::explorer_floor::explorer_floor;
 use serde_json::Value;
 
 use crate::audit_verify::{
-    components, line_path, show, under, unhex, VerifyExtras, VerifyInputs, VerifyReport, Violation,
+    components, line_path, show, unhex, VerifyExtras, VerifyInputs, VerifyReport, Violation,
 };
 
 pub(crate) const KIND: &str = "explorer-selection";
 
-fn bytes_of(p: &std::path::Path) -> Vec<u8> {
-    use std::os::unix::ffi::OsStrExt;
+fn bytes_of(p: &Path) -> Vec<u8> {
     p.as_os_str().as_bytes().to_vec()
 }
 
@@ -41,30 +45,9 @@ pub(crate) fn judge(path: &[u8], inp: &VerifyInputs, extras: &VerifyExtras) -> O
     if p.iter().any(|c| *c == b".git") {
         return Some("a .git component: an explorer delete never enters a repository".into());
     }
-    let roots = inp.trusted_roots();
-    let below_a_root = roots.iter().any(|r| {
-        components(r)
-            .and_then(|root| under(&p, &root).map(|rel| !rel.is_empty()))
-            .unwrap_or(false)
-    });
-    if !below_a_root {
-        return Some(
-            "not strictly below a root of the reviewed table or your config; if intended, add the root to your config"
-                .into(),
-        );
-    }
-    let home_bytes = bytes_of(inp.home);
-    let home = components(&home_bytes).unwrap_or_default();
-    if p.starts_with(&home) {
-        let below_home = p.len() - home.len();
-        if below_home < 2 {
-            return Some(
-                "$HOME itself or fewer than 2 components below it: rule F of the delete engine"
-                    .into(),
-            );
-        }
-    } else if home.starts_with(&p) {
-        return Some("an ancestor of $HOME: rule F of the delete engine".into());
+    // The same function the screen, the planner and the engine call: no copy of the rule to drift.
+    if let Some(why) = explorer_floor(Path::new(OsStr::from_bytes(path)), inp.home) {
+        return Some(format!("on the explorer's hard floor: {}", why.text()));
     }
     for own in &extras.own_dirs {
         let own_bytes = bytes_of(own);
