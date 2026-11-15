@@ -4,9 +4,11 @@
 //! It has no discovery of its own: the marks are the items. Everything a delete trusts is read again at apply
 //! time and compared with what the owner reviewed:
 //!
-//! - the scan roots are the ones `RootSet::resolve_on` gave *now*; the longest root that holds the path is
-//!   used, and its `(dev, ino)` must equal the one in the reviewed plan (the open root is compared with the
-//!   *planned* identity, never with a fresh read of itself, which would be circular, review C8);
+//! - the directory the delete starts from is the longest scan root that holds the path, else the mount point
+//!   that does (`explorer_anchor`, from the mount table read now); its `(dev, ino)` must equal the one in the
+//!   reviewed plan (the open directory is compared with the *planned* identity, never with a fresh read of
+//!   itself, which would be circular, review C8). A path may be anywhere off the explorer's floor;
+//!   `explorer_floor` is checked again by the guard and by the engine's `validate`;
 //! - rules M1 to M5 run again against fresh `lstat` and mount data (`judge_fresh`), and the `DeletePolicy` is
 //!   built only from the resulting `Allowed` witness (`DeletePolicy::for_allowed_roots`);
 //! - the parent chain is opened fd by fd from the root with `O_NOFOLLOW`, the final entry is `fstat`ed and
@@ -24,11 +26,12 @@ use std::sync::Mutex;
 use dunnage_core::delete_types::FileKind;
 use dunnage_core::explore::confirm::ReviewedItem;
 use dunnage_core::explore::mark_check::OwnState;
+use dunnage_core::explorer_floor::explorer_anchor;
 use dunnage_core::explorer_plan::{judge_fresh, mount_facts, FreshCheck};
 use dunnage_core::floor_rule::ForAllowedError;
 use dunnage_core::plan::ItemIdentity;
 use dunnage_core::ports::Env;
-use dunnage_core::roots::{strictly_below, RootIdentity, RootSet};
+use dunnage_core::roots::{RootIdentity, RootSet};
 use dunnage_core::selector::Selection;
 use dunnage_core::target::{Guarded, Target};
 use dunnage_core::{
@@ -112,34 +115,33 @@ impl<D: DirOps> ExplorerSelectionTarget<D> {
             .map(|i| i.identity)
     }
 
-    /// The longest scan root that holds `path` and the identity the plan recorded for it. `IdentityChanged`
-    /// when the root is not in the plan or the root now resolves to another directory.
-    fn root_of(&self, path: &Path) -> Result<(PathBuf, Identity), SkipReason> {
-        let Some(root) = self.roots.root_of(path) else {
-            // A planned root that held the path no longer resolves to a root (replaced by a symlink or moved):
-            // that is a change since the plan, not a path outside every root.
-            let was_planned = self
-                .reviewed_roots
-                .iter()
-                .any(|r| strictly_below(&r.path, path));
-            return Err(if was_planned {
-                SkipReason::IdentityChanged
-            } else {
-                SkipReason::OutsideRoot
-            });
+    /// The directory the delete of `path` starts from (the longest scan root that holds it, else the mount point
+    /// that does) and the identity the plan recorded for it. `IdentityChanged` when that directory is not in the
+    /// plan or now resolves to another directory; `OutsideRoot` when nothing holds the path (no mount table).
+    fn root_of(&self, path: &Path, env: &Env) -> Result<(PathBuf, Identity), SkipReason> {
+        let (_, mount_points) = mount_facts(env.probe);
+        let Some(root) = explorer_anchor(
+            path,
+            self.roots.scan_roots(),
+            mount_points.iter().map(PathBuf::as_path),
+        ) else {
+            return Err(SkipReason::OutsideRoot);
         };
         let planned = self
             .reviewed_roots
             .iter()
             .find(|r| r.path == root)
             .ok_or(SkipReason::IdentityChanged)?;
-        let fresh = self
-            .roots
-            .root_identities()
-            .iter()
-            .find(|r| r.path == root)
-            .ok_or(SkipReason::IdentityChanged)?;
-        if fresh.ident != planned.ident {
+        let fresh = match self.roots.root_identities().iter().find(|r| r.path == root) {
+            Some(r) => r.ident,
+            None => {
+                env.fs
+                    .lstat(root)
+                    .map_err(|_| SkipReason::IdentityChanged)?
+                    .ident
+            }
+        };
+        if fresh != planned.ident {
             return Err(SkipReason::IdentityChanged);
         }
         Ok((root.to_path_buf(), planned.ident))
@@ -151,7 +153,7 @@ impl<D: DirOps> ExplorerSelectionTarget<D> {
             return Err(SkipReason::OutsideRoot);
         };
         let planned = self.planned(path).ok_or(SkipReason::OutsideRoot)?;
-        self.root_of(path)?;
+        self.root_of(path, env)?;
         let st = env.fs.lstat(path).map_err(|e| {
             if e.kind() == io::ErrorKind::NotFound || e.raw_os_error() == Some(libc::ENOTDIR) {
                 SkipReason::IdentityChanged
@@ -174,12 +176,13 @@ impl<D: DirOps> ExplorerSelectionTarget<D> {
     fn remove(
         &self,
         allowed: &Allowed,
+        env: &Env,
         planned: ItemIdentity,
         abort: &AbortFlag,
         proof: &ApplyToken,
     ) -> Result<Freed, DeleteFailure> {
         let path = allowed.path();
-        let (base, base_id) = self.root_of(path).map_err(|_| {
+        let (base, base_id) = self.root_of(path, env).map_err(|_| {
             // The caller already checked the root; a change since then is a change.
             failure(DeleteError::IdentityMismatch)
         })?;
@@ -300,6 +303,6 @@ impl<D: DirOps + 'static> Target for ExplorerSelectionTarget<D> {
             .ok_or_else(|| failure(DeleteError::OutsideScope))?;
         // The run guard's flag is the one the signal handler sets, so a signal stops a large tree at its next
         // entry (review 2, N8).
-        self.remove(&allowed, planned, env.guard.abort_flag(), proof)
+        self.remove(&allowed, env, planned, env.guard.abort_flag(), proof)
     }
 }

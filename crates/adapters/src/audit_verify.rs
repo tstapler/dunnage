@@ -209,7 +209,8 @@ impl VerifyError {
 pub struct VerifyInputs<'a> {
     pub table: &'a AllowedTable,
     pub home: &'a Path,
-    /// `roots` of the owner's `config.toml`, read now.
+    /// `roots` of the owner's `config.toml`, read now. The cleaner kinds' rows are judged against the table's
+    /// defaults and these; the explorer kind no longer needs a root (it is judged by `explorer_floor`).
     pub config_roots: Option<&'a [PathBuf]>,
 }
 
@@ -218,24 +219,6 @@ pub struct VerifyInputs<'a> {
 #[derive(Debug, Clone, Default)]
 pub struct VerifyExtras {
     pub own_dirs: Vec<PathBuf>,
-}
-
-impl VerifyInputs<'_> {
-    /// The roots a deletion is judged against: the reviewed table's defaults (`~` expanded) plus the owner's
-    /// `config.toml`, never the roots the run recorded about itself.
-    pub(crate) fn trusted_roots(&self) -> Vec<Vec<u8>> {
-        let mut roots: Vec<Vec<u8>> = self
-            .table
-            .default_roots
-            .iter()
-            .map(|r| expand(r, self.home))
-            .collect();
-        if let Some(extra) = self.config_roots {
-            use std::os::unix::ffi::OsStrExt;
-            roots.extend(extra.iter().map(|r| r.as_os_str().as_bytes().to_vec()));
-        }
-        roots
-    }
 }
 
 pub(crate) fn show(bytes: &[u8]) -> String {

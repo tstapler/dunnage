@@ -1,10 +1,12 @@
 //! Mark rules M1 to M8 (Story 6.6.1; ADR-006 section 3): one pure check that decides whether a row may be
 //! marked. It reads no file and holds no `Fs`; the facts a rule needs arrive through [`MarkFacts`], the mount
-//! table and [`OwnState`]. The rules are the engine's own, not copies: M1 calls [`strictly_below`] (the
-//! function [`RootSet::admits`] is built on), M2 calls [`floor_protected`] (the function behind
+//! table and [`OwnState`]. The rules are the engine's own, not copies: M1 calls [`explorer_floor`] (the function
+//! behind [`RootSet::admits`], the guard and `DeletePolicy::validate`: a mark may be anywhere off that floor,
+//! inside the cleaner's roots or not), M2 calls [`floor_protected`] (the function behind
 //! `DeletePolicy::validate`) and the scan-root and `.git` refusals are `guard::protected_position` (the one
 //! function `decide_path_common` calls too), so the explorer cannot admit a path the engine's floor refuses.
-//! The device is compared with the ROOT's, as `decide_path_common` does (`Facts.root_dev`). Marks are
+//! The device is compared with the one of the directory the delete starts from (`explorer_anchor`: the scan
+//! root that holds the path, else its mount point), as `decide_path_common` does (`Facts.root_dev`). Marks are
 //! directories only (review C3).
 //!
 //! The first rule that applies wins, in the order M1, M2, M3, M4, M5, M6, M7, M8.
@@ -15,6 +17,7 @@ use super::marks::{Marks, MARK_LIMIT, PATH_MAX_BYTES};
 use super::msg::MarkRefusal;
 use crate::dirs::Dirs;
 use crate::escape::escape_os;
+use crate::explorer_floor::{explorer_anchor, explorer_floor, FloorReason};
 use crate::floor_rule::floor_protected;
 use crate::guard::protected_position;
 use crate::outcome::SkipReason;
@@ -44,6 +47,11 @@ impl MountTable {
     /// The entry mounted exactly at `path`.
     pub fn at(&self, path: &Path) -> Option<&MarkMount> {
         self.mounts.iter().find(|m| m.point == path)
+    }
+
+    /// Every mount point, in table order.
+    pub fn points(&self) -> impl Iterator<Item = &Path> + '_ {
+        self.mounts.iter().map(|m| m.point.as_path())
     }
 
     /// Entries strictly below `path`, at any depth, in table order.
@@ -162,9 +170,22 @@ pub struct MarkOk {
 /// Decides rules M1 to M8 for `path`. A path that is already marked passes (marking it again changes nothing).
 pub fn mark_check(path: &Path, ctx: &MarkCtx<'_>) -> Result<MarkOk, MarkRefusal> {
     let env = ctx.env;
-    // M1: strictly below one of the cleaner's roots.
-    if !lexically_clean(path) || !env.roots.iter().any(|r| strictly_below(r, path)) {
+    // M1: clean, and not on the explorer's hard floor (`explorer_floor`): any directory the owner may delete,
+    // inside the cleaner's roots or not.
+    if !lexically_clean(path) {
         return Err(MarkRefusal::OutsideRoot);
+    }
+    if let Some(why) = explorer_floor(path, env.home) {
+        // The reasons rule F and the `.git` refusal always had keep their catalogue reason; the rest are new.
+        return Err(match why {
+            FloorReason::NotClean => MarkRefusal::OutsideRoot,
+            FloorReason::FilesystemRoot
+            | FloorReason::Home
+            | FloorReason::HomeAncestor
+            | FloorReason::ShallowInHome
+            | FloorReason::Git => MarkRefusal::Engine(SkipReason::ProtectedPath),
+            other => MarkRefusal::Floor(other),
+        });
     }
     // M2: rule F, and the `.git` refusal of `decide_path_common`.
     if floor_protected(path, env.home, env.roots) || protected_position(path, env.roots) {
@@ -196,13 +217,12 @@ pub fn mark_check(path: &Path, ctx: &MarkCtx<'_>) -> Result<MarkOk, MarkRefusal>
 fn mount_rule(path: &Path, env: &MarkEnv<'_>) -> Result<Option<String>, MarkRefusal> {
     let facts = env.facts;
     let dev = facts.dev_of(path);
-    // The device of the longest scan root that holds the path: what the engine compares with (`root_dev`).
-    let root_dev = env
-        .roots
-        .iter()
-        .filter(|r| strictly_below(r, path))
-        .max_by_key(|r| r.components().count())
-        .and_then(|r| facts.dev_of(r));
+    // The device of the directory the delete walks down from (the longest scan root that holds the path, else
+    // the mount point that does): what the engine compares with (`root_dev`). Unknown means unsafe.
+    let Some(anchor) = explorer_anchor(path, env.roots, env.mounts.points()) else {
+        return Err(MarkRefusal::NoMountTable);
+    };
+    let root_dev = facts.dev_of(anchor);
     if facts.is_boundary(path) || env.mounts.at(path).is_some() {
         return Err(MarkRefusal::MountPoint);
     }

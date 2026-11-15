@@ -110,12 +110,16 @@ fn for_allowed_roots_should_read_home_home_id_and_scan_roots_from_the_root_set()
 }
 
 #[test]
-fn safety_for_allowed_roots_should_refuse_a_target_outside_the_real_roots_When_the_witness_came_from_a_wider_grant(
+fn safety_for_allowed_roots_should_accept_a_target_outside_the_real_roots_but_refuse_the_floor_When_the_witness_came_from_a_wider_grant(
 ) {
-    // The N4 trap: with loose `scan_roots = ["/"]` the policy would admit this; with the RootSet it cannot.
+    // The N4 trap, revised: the roots no longer bound an explorer target, the floor does. A target outside the
+    // scan roots validates; a floor path does not, whatever the loose parameters said.
     let r = roots("/home/u", &["/home/u/code"]);
     let p = build(&r, planned(TARGET)).unwrap();
-    assert_eq!(p.validate("dist".as_ref()), Err(DeleteError::OutsideScope));
+    assert_eq!(p.validate("dist".as_ref()), Ok(()));
+    let r = roots("/wide/app", &["/home/u/code"]);
+    let p = build(&r, planned(TARGET)).unwrap();
+    assert_eq!(p.validate("dist".as_ref()), Err(DeleteError::ProtectedPath));
 }
 
 #[test]

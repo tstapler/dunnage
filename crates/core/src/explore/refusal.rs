@@ -60,10 +60,16 @@ impl MarkRefusal {
                  Dry run without --only to list the items."
             ),
             MarkRefusal::OutsideRoot => format!(
-                "{path} is outside the folders the cleaner may touch ({}). The explorer never widens \
-                 them; to include it add its parent to 'roots' in {} and run explore again.",
-                roots_list(cx.roots, cx.tty),
-                esc(cx.config_path.as_os_str(), cx.tty)
+                "{path} is not a plain absolute UTF-8 path (no '.', '..', empty parts or trailing '/'), so the \
+                 explorer cannot delete it. Mark a folder with a plain path instead."
+            ),
+            MarkRefusal::Floor(why) => format!(
+                "{path}: {}. The explorer never deletes it; mark a folder inside it instead.",
+                why.text()
+            ),
+            MarkRefusal::NoMountTable => format!(
+                "{path}: the mount table could not be read, so the explorer cannot tell which filesystem \
+                 this folder is on and will not delete it. Mark a folder inside one of the cleaner's roots instead."
             ),
             MarkRefusal::InsideBuildOrGit => format!(
                 "{path} is inside a build directory or .git that the cleaner lists as one item. \

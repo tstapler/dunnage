@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use crate::audit_types::RunRoots;
 use crate::delete_types::{AllowedTarget, NamePattern};
 use crate::dirs::Dirs;
+use crate::explorer_floor::explorer_floor;
 use crate::ids::Identity;
 use crate::kind::Kind;
 use crate::outcome::SkipReason;
@@ -481,7 +482,7 @@ impl RootSet {
             | Kind::DockerVolume
             | Kind::BtrfsBalance
             | Kind::BtrfsTrim
-            // The explorer's marks are checked by `admits` (any path strictly below a scan root); the
+            // The explorer's marks are checked by `admits` (any path off the `explorer_floor`); the
             // frozen `NamePattern` has no "any name" pattern, so the apply path of Story 6.6.3 adds its own.
             | Kind::ExplorerSelection => Vec::new(),
             // The test-only target names its own `Exact` paths per item.
@@ -498,7 +499,7 @@ impl RootSet {
             return false;
         }
         if kind == Kind::ExplorerSelection {
-            return self.scan_roots.iter().any(|r| strictly_below(r, path));
+            return explorer_floor(path, &self.home).is_none();
         }
         self.allowed(kind).iter().any(|t| match t {
             AllowedTarget::Exact(p) => p == path,

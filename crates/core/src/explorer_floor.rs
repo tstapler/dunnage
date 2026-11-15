@@ -45,7 +45,7 @@ pub enum FloorReason {
     /// Inside, or equal to, a system directory (`/usr`, `/etc`, `/boot`, `/bin`, `/sbin`, `/lib*`, `/dev`,
     /// `/proc`, `/sys`, `/run`, `/System`, `/Library`).
     System,
-    /// Inside `/var` but not below `/var/tmp` or `/var/cache`, or one of those two themselves.
+    /// Inside `/var` but not below `/var/tmp`, `/var/cache` or `/var/folders` (macOS temp), or one of those three.
     VarState,
     /// Another account's home directory (`/home/<user>`, `/Users/<user>`, `/var/home/<user>`).
     AccountHome,
@@ -72,7 +72,7 @@ impl FloorReason {
             FloorReason::TopLevel => "a top-level directory of the filesystem is never deleted",
             FloorReason::System => "a system directory is never deleted from here",
             FloorReason::VarState => {
-                "only folders below /var/tmp and /var/cache can be deleted from /var"
+                "only folders below /var/tmp, /var/cache and /var/folders can be deleted from /var"
             }
             FloorReason::AccountHome => "a user's home directory is never deleted",
             FloorReason::Home => "your home directory is never deleted",
@@ -145,7 +145,8 @@ pub fn explorer_floor(path: &Path, home: &Path) -> Option<FloorReason> {
         if var_home && p.len() == 3 {
             return Some(FloorReason::AccountHome);
         }
-        let scratch = p.len() >= 3 && (eq_ci(p[1], "tmp") || eq_ci(p[1], "cache"));
+        // `folders` is macOS's per-user temp and cache area (`/var/folders/xx/<hash>/T`).
+        let scratch = p.len() >= 3 && ["tmp", "cache", "folders"].iter().any(|n| eq_ci(p[1], n));
         if !(scratch || var_home) {
             return Some(FloorReason::VarState);
         }
@@ -235,6 +236,7 @@ mod tests {
             "/var/tmp/x",
             "/var/cache/x",
             "/var/tmp/x/y",
+            "/private/var/folders/zz/abc/T/x",
             "/media/u/usb/dir",
             "/private/tmp/x",
             "/Volumes/Data/dir",
@@ -246,9 +248,7 @@ mod tests {
     #[test]
     fn explorer_floor_should_refuse_the_root_and_every_top_level_directory() {
         assert_eq!(floor("/"), Some(FloorReason::FilesystemRoot));
-        for p in [
-            "/var", "/tmp", "/srv", "/mnt", "/opt", "/Users", "/root",
-        ] {
+        for p in ["/var", "/tmp", "/srv", "/mnt", "/opt", "/Users", "/root"] {
             assert_eq!(floor(p), Some(FloorReason::TopLevel), "{p}");
         }
     }

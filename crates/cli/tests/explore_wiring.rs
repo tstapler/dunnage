@@ -153,9 +153,12 @@ fn a_real_mount_point_and_a_boundary_row_should_be_refused() {
             .unwrap()
             .contains(" /dev/shm ")
     {
+        // The floor (`/dev` is a system tree) answers before the mount rule; both refuse a mount point.
         assert_eq!(
             ask(&check, Path::new("/dev/shm"), &row(true, false)),
-            Err(MarkRefusal::MountPoint)
+            Err(MarkRefusal::Floor(
+                dunnage_core::explorer_floor::FloorReason::System
+            ))
         );
     }
     let code = fs::canonicalize(f.home()).unwrap().join("code");

@@ -431,7 +431,7 @@ fn marking_should_use_the_cleaners_roots_never_the_explore_path_and_the_home_def
     assert_eq!(h.badge(), Badge::None);
     assert_eq!(
         kind_line(h, shape_kind),
-        "build-dirs shape, outside the cleaner's folders: not markable"
+        "build-dirs shape, outside the cleaner's folders: deleted here as a plain path"
     );
     assert_eq!(
         r.scan_roots()

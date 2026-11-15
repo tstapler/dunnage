@@ -1005,3 +1005,102 @@ fn safety_apply_should_refuse_a_forged_set_over_the_mark_limits_or_with_one_mark
     }
     assert!(ex.audit.records().is_empty());
 }
+
+/// A directory that is outside the one configured scan root (`hhh/code`): `base/outside/<rel>`.
+fn outside_tree(ex: &Ex, rel: &str) -> PathBuf {
+    let d = ex.p("outside").join(rel);
+    std::fs::create_dir_all(d.join("sub")).unwrap();
+    std::fs::write(d.join("f"), vec![b'x'; 4000]).unwrap();
+    std::fs::write(d.join("sub/g"), vec![b'y'; 4000]).unwrap();
+    d
+}
+
+#[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
+fn safety_apply_should_delete_a_reviewed_directory_outside_every_scan_root_and_nothing_beside_it() {
+    let ex = Ex::new();
+    let a = outside_tree(&ex, "app/dist");
+    let keep = outside_tree(&ex, "app/keep");
+    let in_root = ex.tree("app/dist", 1, 100);
+    let (keep_before, root_before) = (manifest(&keep), manifest(&in_root));
+    let reviewed = ex.review(&[a.clone()]);
+    // The delete starts from the mount point that holds the folder, and the plan binds its identity.
+    assert!(
+        reviewed
+            .roots()
+            .iter()
+            .any(|r| a.starts_with(&r.path) && r.path != ex.code),
+        "{:?}",
+        reviewed.roots()
+    );
+    let ran = ex.run(Ex::confirm(reviewed), ex.confined_ops());
+    assert_eq!(ran.steps, ORDER);
+    assert_eq!(ran.report.exit, 0, "{:?}", ran.report);
+    assert!(!a.exists(), "the reviewed folder is gone");
+    assert_eq!(manifest(&keep), keep_before);
+    assert_eq!(manifest(&in_root), root_before);
+    assert_eq!(result_statuses(&ex), [Status::Removed]);
+}
+
+#[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
+fn safety_apply_should_skip_a_forged_floor_path_and_keep_everything_When_the_plan_lists_one() {
+    let ex = Ex::new();
+    let ssh = ex.home.join(".ssh/keys");
+    std::fs::create_dir_all(&ssh).unwrap();
+    std::fs::write(ssh.join("id"), b"key").unwrap();
+    let docs = ex.home.join("Documents");
+    std::fs::create_dir_all(docs.join("x")).unwrap();
+    let before = (manifest(&ssh), manifest(&docs));
+    for p in [ssh.clone(), docs.clone()] {
+        let ran = ex.run(
+            Ex::confirm(ex.forge(&[(p.clone(), None)])),
+            ex.confined_ops(),
+        );
+        assert_eq!(ran.report.exit, 0, "{p:?}: {:?}", ran.report);
+        assert!(
+            matches!(
+                result_statuses(&ex).last(),
+                Some(Status::Skipped(SkipReason::ProtectedPath))
+            ),
+            "{p:?}: {:?}",
+            result_statuses(&ex)
+        );
+    }
+    assert_eq!((manifest(&ssh), manifest(&docs)), before);
+}
+
+#[test]
+#[cfg_attr(
+    not(target_os = "linux"),
+    ignore = "explorer delete fails closed without the kernel mount id (statx STATX_MNT_ID): Linux only"
+)]
+fn safety_apply_should_skip_an_outside_root_directory_that_became_a_symlink_after_the_gate() {
+    let ex = Ex::new();
+    let a = outside_tree(&ex, "app/dist");
+    let precious = outside_tree(&ex, "precious");
+    let precious_before = manifest(&precious);
+    let confirmed = ex.confirmed(&[a.clone()]);
+    let (a2, p2) = (a.clone(), precious.clone());
+    run_swapped(
+        &ex,
+        confirmed,
+        move || {
+            std::fs::rename(&a2, a2.with_file_name("moved")).unwrap();
+            std::os::unix::fs::symlink(&p2, &a2).unwrap();
+        },
+        true,
+    );
+    assert_eq!(
+        result_statuses(&ex),
+        [Status::Skipped(SkipReason::IdentityChanged)]
+    );
+    assert_eq!(manifest(&precious), precious_before);
+    assert!(a.symlink_metadata().unwrap().file_type().is_symlink());
+}

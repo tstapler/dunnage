@@ -202,7 +202,18 @@ impl Ex {
             })
             .collect();
         let roots = self.roots();
-        let reviewed = ReviewedPlan::new(list, roots.root_identities().to_vec(), 0);
+        // As `p` would: the scan roots, and the mount point that holds each item outside them.
+        let mut stamped = roots.root_identities().to_vec();
+        let (_, mount_points) = dunnage_core::explorer_plan::mount_facts(&self.probe);
+        for a in dunnage_core::explorer_plan::extra_anchors(
+            &roots,
+            list.iter().map(|i| i.path.as_path()),
+            &mount_points,
+        ) {
+            let ident = dunnage_core::ports::Fs::lstat(&self.fs, &a).unwrap().ident;
+            stamped.push(dunnage_core::roots::RootIdentity { path: a, ident });
+        }
+        let reviewed = ReviewedPlan::new(list, stamped, 0);
         let sel = dunnage_core::selector::Selection::explorer(
             reviewed.items().iter().map(|i| i.path.clone()).collect(),
         );

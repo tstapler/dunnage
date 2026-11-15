@@ -36,11 +36,13 @@ use dunnage_core::audit_types::{ConfirmedItem, ExplorerConfirm};
 use dunnage_core::explore::confirm::{ConfirmedPlan, ReviewedPlan};
 use dunnage_core::explore::mark_check::OwnState;
 use dunnage_core::explore::msg::{DeleteItemOutcome, DeleteItemResult, DeleteMsg, DeleteSummary};
+use dunnage_core::explorer_floor::explorer_floor;
+use dunnage_core::explorer_plan::{extra_anchors, mount_facts};
 use dunnage_core::explorer_plan::{measure_attributed, TreeSizer};
 use dunnage_core::plan::{check_plan_id, ExplorerGateRefusal, ItemIdentity, PlanId};
 use dunnage_core::plan_state::{BuildInfo, SaveOutcome};
 use dunnage_core::ports::{Env, ExtentProbe};
-use dunnage_core::roots::{strictly_below, RootSet};
+use dunnage_core::roots::{strictly_below, RootIdentity, RootSet};
 use dunnage_core::selector::Selection;
 use dunnage_core::target::{Guarded, Target};
 use dunnage_core::{
@@ -424,17 +426,12 @@ fn sequence<D: DirOps + 'static>(
     }
 
     trace.push("remeasure");
-    // Only items strictly below a reviewed scan root are walked: a path the guards will refuse (a root, `$HOME`,
-    // `/`) must not cost a walk of the tree above it first.
+    // Only items off the floor are walked: a path the guards will refuse (`$HOME`, `/`, a system directory)
+    // must not cost a walk of the tree above it first.
     let now_bytes: u64 = reviewed
         .items()
         .iter()
-        .filter(|i| {
-            reviewed
-                .roots()
-                .iter()
-                .any(|r| strictly_below(&r.path, &i.path))
-        })
+        .filter(|i| explorer_floor(&i.path, &env.dirs.home).is_none())
         .map(|i| measure_attributed(&i.path, w.sizer, w.extents).unwrap_or(0))
         .sum();
     if grew_too_much(confirmed_bytes, now_bytes) {
@@ -582,10 +579,23 @@ fn fresh_plan_id<D: DirOps>(
         let st = env.fs.lstat(&item.path).ok()?;
         fresh.push((item.path.as_path(), ItemIdentity::of(&st)));
     }
-    let roots = match (w.resolve_roots)() {
-        Ok(set) => set.root_identities().to_vec(),
+    let mut roots = match (w.resolve_roots)() {
+        Ok(set) => {
+            let (_, mount_points) = mount_facts(env.probe);
+            let paths = reviewed.items().iter().map(|i| i.path.as_path());
+            let mut roots = set.root_identities().to_vec();
+            for anchor in extra_anchors(&set, paths, &mount_points) {
+                let ident = env.fs.lstat(&anchor).ok()?.ident;
+                roots.push(RootIdentity {
+                    path: anchor,
+                    ident,
+                });
+            }
+            roots
+        }
         Err(_) => reviewed.roots().to_vec(),
     };
+    roots.dedup_by(|a, b| a.path == b.path);
     Some(PlanId::for_explorer(fresh, &roots))
 }
 
