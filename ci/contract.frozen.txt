@@ -36,6 +36,8 @@ impl AbortFlag { pub fn new() -> AbortFlag; pub fn set(&self); pub fn is_set(&se
 // home, home_id and the scan roots come from the RootSet; the planned ItemIdentity must equal the witness's) is the constructor of that policy.
 // `delete_tree` refuses a BelowScanRoot policy whose scope identity differs from `expect` (IdentityMismatch). `DeletePolicy::for_allowed` is the earlier,
 // looser constructor, kept only until the pinned suites move to `for_allowed_roots`.
+// explore-mark-anywhere: `BelowScanRoot` no longer means below a scan root. `DeletePolicy::validate` accepts the one path of its scope
+// when it is off `dunnage_core::explorer_floor::explorer_floor` (system trees, $HOME and ancestors, secrets, `.git`, ...); no signature changes.
 
 // adapters::dirops
 pub const DELETE_BATCH: usize = 1024;   // max subdirectory names a delete_tree level buffers; non-directories are unlinked as they stream
