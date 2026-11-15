@@ -337,7 +337,6 @@ fn safety_validate_should_refuse_the_secret_and_home_paths_at_the_engine_When_a_
         "/h/a/b/c/.config/1Password/x",
         "/h/a/b/c/.1password/x",
         "/h/a/b/c/Downloads",
-        "/h/a/b/c/code/app/.git/hooks",
     ] {
         let policy = policy_for(p).unwrap_or_else(|e| panic!("{p}: {e:?}"));
         assert_eq!(

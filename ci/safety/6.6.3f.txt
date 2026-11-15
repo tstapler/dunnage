@@ -1,5 +1,5 @@
 # Task 6.6.3f (review 2 N3 and N4): blind-author guards for for_allowed_roots, the home chain and the expect tie. Always active.
-safety_for_allowed_roots_should_judge_by_the_root_set_not_by_the_witness_grant_When_the_grant_was_broader   # 6.6.3f: crates/core/tests/explorer_roots_contract.rs
+safety_for_allowed_roots_should_judge_by_the_root_sets_home_not_by_the_witness_grant_When_the_grant_was_broader   # 6.6.3f: crates/core/tests/explorer_roots_contract.rs
 safety_policy_should_not_inherit_home_or_roots_from_the_caller_When_the_root_set_differs   # 6.6.3f: crates/core/tests/explorer_roots_contract.rs
 safety_for_allowed_roots_should_return_changed_since_plan_When_the_planned_device_differs   # 6.6.3f: crates/core/tests/explorer_roots_contract.rs
 safety_for_allowed_roots_should_return_changed_since_plan_When_the_planned_inode_differs   # 6.6.3f: crates/core/tests/explorer_roots_contract.rs
