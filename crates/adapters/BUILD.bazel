@@ -82,11 +82,14 @@ dc_integration_tests(
         },
         # Pinned test files (ci/delete_adversarial.sha256) that read the Linux kernel mount id with
         # `expect("kernel reports mnt_id")` in their harness: macOS has none, and the explorer's delete fails closed
-        # without it. The pin forbids editing them, so these two run on Linux only.
+        # without it. The pin forbids editing them, so these run on Linux only (so does explorer_anywhere_adversarial, same harness).
         "explorer_target_adversarial": {
             "linux_only": "statx mount id",
         },
         "explorer_roots_adversarial": {
+            "linux_only": "statx mount id",
+        },
+        "explorer_anywhere_adversarial": {
             "linux_only": "statx mount id",
         },
         "explore_signals": {
