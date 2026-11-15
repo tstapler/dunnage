@@ -180,23 +180,24 @@ fn safety_below_scan_root_should_refuse_the_scan_root_itself_When_it_is_the_witn
 }
 
 #[test]
-fn safety_below_scan_root_should_refuse_When_the_path_is_not_below_any_root() {
-    assert_refused("/h/other/app", &["/h/code"], "/h");
-    assert_refused("/h/code/app", &[], "/h");
-    assert_refused("/srv/work/a", &["/srv/other"], "/h");
+fn safety_below_scan_root_should_accept_a_path_outside_every_root_When_it_is_not_on_the_floor() {
+    assert_accepted("/h/other/app", &["/h/code"], "/h");
+    assert_accepted("/h/code/app", &[], "/h");
+    assert_accepted("/srv/work/a", &["/srv/other"], "/h");
 }
 
 #[test]
-fn safety_below_scan_root_should_refuse_When_a_root_is_only_a_string_prefix_of_the_path() {
-    assert_refused("/h/code/app", &["/h/cod"], "/h");
-    assert_refused("/h/code/app/x", &["/h/code/ap"], "/h");
-    assert_refused("/srv/workshop/a", &["/srv/work"], "/h");
+fn safety_below_scan_root_should_not_treat_a_string_prefix_as_a_root_When_the_path_is_off_the_floor(
+) {
+    assert_accepted("/h/code/app", &["/h/cod"], "/h");
+    assert_accepted("/h/code/app/x", &["/h/code/ap"], "/h");
+    assert_accepted("/srv/workshop/a", &["/srv/work"], "/h");
 }
 
 #[test]
-fn safety_below_scan_root_should_refuse_When_the_path_is_an_ancestor_of_a_root() {
-    assert_refused("/h/code/app", &["/h/code/app/x"], "/h");
-    assert_refused("/srv/work", &["/srv/work/a/b"], "/h");
+fn safety_below_scan_root_should_accept_the_path_that_holds_a_root_When_it_is_off_the_floor() {
+    assert_accepted("/h/code/app", &["/h/code/app/x"], "/h");
+    assert_accepted("/srv/work", &["/srv/work/a/b"], "/h");
 }
 
 #[test]
@@ -251,8 +252,13 @@ fn safety_below_scan_root_should_refuse_with_protected_path_When_one_component_b
 #[test]
 fn safety_below_scan_root_should_accept_exactly_two_components_below_home_When_the_boundary_is_tested(
 ) {
-    assert_eq!(verdict("/h/.ssh/keys", &["/h/.ssh"], "/h"), Ok(()));
     assert_eq!(verdict("/h/.cache/x", &["/h/.cache"], "/h"), Ok(()));
+    assert_eq!(verdict("/h/work/x", &[], "/h"), Ok(()));
+    assert_eq!(
+        verdict("/h/.ssh/keys", &["/h/.ssh"], "/h"),
+        Err(DeleteError::ProtectedPath),
+        "two components below home, but a key directory"
+    );
     assert_eq!(
         verdict("/h/.ssh", &["/h"], "/h"),
         Err(DeleteError::ProtectedPath)
@@ -267,7 +273,7 @@ fn safety_below_scan_root_should_not_depend_on_root_list_order_When_roots_are_ne
         ("/h/code/other", true),
         ("/h/code/app/x/y", true),
         ("/h/code/ap", true),
-        ("/h/cod/app", false),
+        ("/h/cod/app", true),
     ];
     let roots = ["/h/code", "/h/code/app"];
     for (target, ok) in cases {
@@ -387,11 +393,15 @@ fn safety_guard_should_not_hand_out_a_witness_When_the_path_is_not_clean_and_abs
 }
 
 #[test]
-fn safety_guard_should_not_hand_out_a_witness_When_the_path_is_a_scan_root_or_not_below_one() {
+fn safety_guard_should_not_hand_out_a_witness_When_the_path_is_a_scan_root_or_on_the_floor() {
     let roots = permissive_roots(Path::new("/h"));
-    for t in ["/h", "/g/x", "/hh/x", "/"] {
+    for t in ["/h", "/", "/g", "/etc/x", "/usr/lib/x", "/home/other"] {
         let d = decide_path_common(&facts(Kind::ExplorerSelection, t), &roots);
         assert!(matches!(d, GuardDecision::Skip(_)), "{t} must be skipped");
+    }
+    for t in ["/g/x", "/hh/x"] {
+        let d = decide_path_common(&facts(Kind::ExplorerSelection, t), &roots);
+        assert!(matches!(d, GuardDecision::Allow(_)), "{t} is off the floor");
     }
 }
 

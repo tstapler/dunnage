@@ -194,36 +194,43 @@ fn for_allowed_roots_should_make_a_policy_from_the_root_set_When_the_plan_agrees
 }
 
 #[test]
-fn safety_for_allowed_roots_should_judge_by_the_root_set_not_by_the_witness_grant_When_the_grant_was_broader(
+fn safety_for_allowed_roots_should_judge_by_the_root_sets_home_not_by_the_witness_grant_When_the_grant_was_broader(
 ) {
-    // The witness was minted under a scope_dir that covers /h/a/b/c/code/.. (everything below /h); the RootSet
-    // under test has no scan root above `/h/a/b/c/code` and `/srv/work`, so the policy must refuse.
-    let target = "/h/other/x";
-    let id = ident_of(target);
-    let w = explorer_witness(target, id, "/h");
+    // The witness is minted under a decoy home where `.ssh` is not special; the RootSet under test has the
+    // real home, so the policy must still refuse the key directory (and a target outside the scan roots is
+    // fine: the floor, not the roots, bounds an explorer delete).
+    let key = "/h/a/b/c/.ssh/keys";
+    let id = ident_of(key);
+    let w = explorer_witness(key, id, "/h");
     let rs = roots();
     if let Ok(p) = build(&w, &rs, dir_planned(id)) {
         assert!(
-            p.validate(name_of(target)).is_err(),
-            "a target outside the RootSet's scan roots must not validate"
+            p.validate(name_of(key)).is_err(),
+            "a key directory must not validate against the real home"
         );
     }
+    let outside = "/h/other/x";
+    let id = ident_of(outside);
+    let w = explorer_witness(outside, id, "/h");
+    let p = build(&w, &rs, dir_planned(id)).expect("outside the scan roots, off the floor");
+    assert_eq!(p.validate(name_of(outside)), Ok(()));
 }
 
 #[test]
 fn safety_policy_should_not_inherit_home_or_roots_from_the_caller_When_the_root_set_differs() {
-    // Two RootSets, same witness: the policy follows the one passed in.
+    // Two RootSets, same witness: the policy follows the one passed in. Their homes differ: in the second,
+    // the target is an ancestor of `$HOME`, which only the RootSet knows.
     let target = "/srv/work/app";
     let id = ident_of(target);
     let w = explorer_witness(target, id, "/srv/work");
     let a = roots_with(HOME, &[WORK]);
-    let b = roots_with(HOME, &["/srv/elsewhere"]);
+    let b = roots_with("/srv/work/app/x/y", &["/srv/elsewhere"]);
     let pa = build(&w, &a, dir_planned(id)).expect("first set");
     assert_eq!(pa.validate(name_of(target)), Ok(()));
     if let Ok(pb) = build(&w, &b, dir_planned(id)) {
         assert!(
             pb.validate(name_of(target)).is_err(),
-            "{target} is not below any scan root of the second RootSet"
+            "{target} is an ancestor of the second RootSet's home"
         );
     }
 }

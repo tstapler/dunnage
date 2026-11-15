@@ -425,20 +425,33 @@ fn safety_below_scan_root_should_refuse_and_keep_the_tree_When_the_target_is_the
 }
 
 #[test]
-fn safety_below_scan_root_should_refuse_and_keep_the_tree_When_the_target_is_beside_the_roots() {
-    let fx = Fx::new();
-    let t = precious_fixture(&fx);
-    let grant_root = fx.p("hhh/code");
-    for roots in [vec![fx.p("hhh/other")], vec![fx.p("work")], vec![]] {
+fn safety_below_scan_root_should_delete_only_the_target_When_it_is_beside_the_roots() {
+    // Feat explore-mark-anywhere: scan roots no longer bound an explorer delete; the floor does.
+    for roots in [vec!["hhh/other"], vec!["work"], vec![]] {
+        let fx = Fx::new();
+        let t = precious_fixture(&fx);
+        let grant_root = fx.p("hhh/code");
+        let roots: Vec<PathBuf> = roots.iter().map(|r| fx.p(r)).collect();
         let refs: Vec<&Path> = roots.iter().map(PathBuf::as_path).collect();
         let a = Attempt::new(&fx, &grant_root, &t, &fx.p("hhh"), &refs);
-        assert_refused_intact(&fx, &a, &format!("roots {roots:?}"));
+        let expect = expected_freed(&t);
+        let freed = a.run().unwrap_or_else(|e| panic!("roots {roots:?}: {e:?}"));
+        assert_eq!(freed, expect);
+        assert!(fs::symlink_metadata(&t).is_err(), "roots {roots:?}");
+        for keep in [
+            "hhh/.ssh/id_ed25519",
+            "hhh/Documents/thesis.txt",
+            "hhh/code/other/keep.txt",
+            "work/w.txt",
+        ] {
+            assert!(fx.p(keep).is_file(), "{keep} must stay (roots {roots:?})");
+        }
     }
 }
 
 #[test]
-fn safety_below_scan_root_should_refuse_and_keep_the_tree_When_a_root_is_a_string_prefix_lookalike()
-{
+fn safety_below_scan_root_should_ignore_a_string_prefix_lookalike_root_and_still_delete_only_the_target(
+) {
     let fx = Fx::new();
     let t = precious_fixture(&fx);
     let grant_root = fx.p("hhh/code");
@@ -446,7 +459,11 @@ fn safety_below_scan_root_should_refuse_and_keep_the_tree_When_a_root_is_a_strin
         fs::create_dir_all(fx.p(lookalike)).unwrap();
         let r = fx.p(lookalike);
         let a = Attempt::new(&fx, &grant_root, &t, &fx.p("hhh"), &[&r]);
-        assert_refused_intact(&fx, &a, lookalike);
+        let before_keep = manifest(&fx.p("hhh/code/other"));
+        a.run().unwrap_or_else(|e| panic!("{lookalike}: {e:?}"));
+        assert!(fs::symlink_metadata(&t).is_err(), "{lookalike}");
+        assert_eq!(manifest(&fx.p("hhh/code/other")), before_keep);
+        fill(&t);
     }
 }
 

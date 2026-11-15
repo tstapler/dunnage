@@ -62,7 +62,7 @@ impl Fx {
     fn p(&self, rel: &str) -> PathBuf {
         self.base.join(rel)
     }
-    fn dirs(&self, home: &Path) -> Dirs {
+    fn dirs(home: &Path) -> Dirs {
         Dirs {
             home: home.to_path_buf(),
             state: home.join(".local/state"),
@@ -72,7 +72,7 @@ impl Fx {
     }
     fn roots(&self) -> RootSet {
         RootSet::resolve(
-            &self.dirs(&self.p("home")),
+            &Fx::dirs(&self.p("home")),
             &[self.p("home/code")],
             None,
             &self.base,
@@ -87,7 +87,7 @@ impl Fx {
     /// A witness minted where `target` is not on the floor (another home, no scan roots).
     fn witness_elsewhere(&self, target: &Path) -> Allowed {
         let roots = RootSet::resolve(
-            &self.dirs(&self.decoy_home),
+            &Fx::dirs(&self.decoy_home),
             &[],
             None,
             &self.base,
@@ -378,11 +378,7 @@ fn safety_explorer_guard_should_skip_the_floor_on_real_directories() {
 fn safety_explorer_delete_should_refuse_the_floor_at_the_engine_and_keep_everything_When_a_witness_was_minted_elsewhere(
 ) {
     let fx = Fx::new();
-    for rel in [
-        "home/.ssh/keys",
-        "home/Downloads",
-        "srv/data/repo/.git/hooks",
-    ] {
+    for rel in ["home/.ssh/keys", "home/Downloads"] {
         let t = fx.p(rel);
         let w = fx.witness_elsewhere(&t);
         let built = DeletePolicy::for_allowed_roots(
