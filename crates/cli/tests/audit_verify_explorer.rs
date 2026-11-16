@@ -46,6 +46,7 @@ fn verify_text(text: &str) -> VerifyReport {
         },
         &VerifyExtras {
             own_dirs: vec![PathBuf::from("/home/u/.local/state/dunnage")],
+            ..VerifyExtras::default()
         },
     )
     .unwrap()
@@ -374,6 +375,7 @@ fn audit_verify_should_apply_rule_f_and_the_state_rule_even_when_a_config_root_c
     ];
     let extras = VerifyExtras {
         own_dirs: vec![PathBuf::from("/home/u/.local/state/dunnage")],
+        ..VerifyExtras::default()
     };
     for (path, needle) in [
         ("/home/u/one", "directly inside your home"),
@@ -497,6 +499,7 @@ fn safety_audit_verify_should_read_back_a_real_explorer_run_written_by_the_real_
                 &ex.base_dirs.cache,
                 &ex.base_dirs.config,
             ),
+            ..VerifyExtras::default()
         },
     )
     .unwrap();

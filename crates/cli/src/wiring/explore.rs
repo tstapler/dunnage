@@ -335,7 +335,10 @@ pub fn resolve_roots_now(base: &Dirs) -> Result<RootSet, String> {
         &super::dirs::real_canon,
         &|p| dunnage_core::ports::Fs::fs_type(&super::env::RealFs, p),
     )
-    .map(|r| r.with_cargo_home(super::dirs::cargo_home_env().as_deref()))
+    .map(|r| {
+        r.with_cargo_home(super::dirs::cargo_home_env().as_deref())
+            .with_xdg_data_home(super::dirs::xdg_data_home_env().as_deref())
+    })
     .map_err(|e| e.text())
 }
 

@@ -42,7 +42,11 @@ pub fn run(
     config_roots: Option<&[PathBuf]>,
     json: bool,
 ) -> AuditRun {
-    let home = dirs.home.as_path();
+    // The engine judges against the canonical home (`RootSet::home`); so does the verifier, however the
+    // process was handed `$HOME` (a symlink, a bind mount). An unresolvable home is used as given.
+    let canonical_home = crate::wiring::dirs::real_canon(&dirs.home)
+        .map_or_else(|_| dirs.home.clone(), |(path, _)| path);
+    let home = canonical_home.as_path();
     let table = AllowedTable::embedded();
     let inputs = VerifyInputs {
         table: &table,
@@ -52,6 +56,7 @@ pub fn run(
     // The tool's own directories come from this machine now, never from the log (review 2 N6).
     let extras = VerifyExtras {
         own_dirs: dunnage_adapters::own_dirs(&dirs.state, &dirs.cache, &dirs.config),
+        cargo_home: crate::wiring::dirs::cargo_home_env(),
     };
     let report = match verify_file_with(log, &inputs, &extras) {
         Ok(r) => r,

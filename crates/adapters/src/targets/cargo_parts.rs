@@ -47,7 +47,10 @@ fn is_plain_file(p: &Path) -> bool {
 }
 
 /// `target` is a directory (not a link), sits next to a regular `Cargo.toml`, and holds cargo's
-/// `CACHEDIR.TAG` (with cargo's signature) or its `.rustc_info.json`.
+/// `CACHEDIR.TAG` with cargo's signature AND something only cargo makes: its `.rustc_info.json`, or a profile
+/// directory holding `.fingerprint/` or `deps/`. Either marker alone is a file anyone can create (a Maven or
+/// Gradle `target/` next to a `Cargo.toml`), so neither suffices. A target from a cargo too old to write the
+/// tag (before 1.29) is not offered.
 pub fn is_real_cargo_target(target: &Path) -> bool {
     if !is_plain_dir(target) || target.file_name() != Some(std::ffi::OsStr::new("target")) {
         return false;
@@ -64,12 +67,54 @@ pub fn is_real_cargo_target(target: &Path) -> bool {
             let mut buf = Vec::new();
             f.take(TAG_READ_MAX).read_to_end(&mut buf).is_ok() && tag_has_signature(&buf)
         });
-    is_cargo_target(tag_ok, is_plain_file(&target.join(".rustc_info.json")))
+    tag_ok
+        && is_cargo_target(
+            tag_ok,
+            is_plain_file(&target.join(".rustc_info.json")) || has_cargo_layout(target),
+        )
 }
 
-/// A profile directory holds cargo's `.fingerprint/` or `deps/`.
+/// A direct child of `target` (or a child of a `<triple>` directory) holds `.fingerprint/` or `deps/`. Loose on
+/// purpose: while the parts of one profile are removed one after the other, the target must stay recognised.
+fn has_cargo_layout(target: &Path) -> bool {
+    let holds_part =
+        |p: &Path| is_plain_dir(&p.join(".fingerprint")) || is_plain_dir(&p.join("deps"));
+    let subdirs = |p: &Path| -> Vec<PathBuf> {
+        fs::read_dir(p)
+            .map(|rd| {
+                rd.flatten()
+                    .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+                    .map(|e| e.path())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    subdirs(target)
+        .iter()
+        .any(|d| holds_part(d) || subdirs(d).iter().any(|k| holds_part(k)))
+}
+
+/// A profile directory is what cargo's layout makes for one profile: `.fingerprint/` and `deps/` both (cargo
+/// creates every part directory up front), so a directory with only a `deps/` is not one.
 fn is_profile_dir(p: &Path) -> bool {
-    is_plain_dir(p) && (is_plain_dir(&p.join(".fingerprint")) || is_plain_dir(&p.join("deps")))
+    is_plain_dir(p) && is_plain_dir(&p.join(".fingerprint")) && is_plain_dir(&p.join("deps"))
+}
+
+/// `deps/` holds a shared library (`lib*.so`, `lib*.so.N`, `*.dylib`, `*.dll`): Bevy `dynamic_linking` and
+/// dylib crates link a binary against `target/<profile>/deps/` at run time, and removing it breaks that binary.
+/// Listed by name only: nothing is opened. A `deps/` that cannot be listed counts as holding one.
+fn deps_hold_shared_library(deps: &Path) -> bool {
+    let Ok(rd) = fs::read_dir(deps) else {
+        return true;
+    };
+    rd.flatten().any(|e| {
+        let name = e.file_name();
+        let name = name.to_string_lossy();
+        name.ends_with(".so")
+            || name.contains(".so.")
+            || name.ends_with(".dylib")
+            || name.ends_with(".dll")
+    })
 }
 
 /// A directory below `target/` that cargo made for `--target <triple>`: it holds profiles, not parts.
@@ -143,6 +188,8 @@ pub struct ProfileProbe {
     pub parts: Vec<PartMeasure>,
     /// A part could not be read completely and nothing young was seen: "stale" is not proven.
     pub unknown: bool,
+    /// `deps/` holds a shared library a binary may load at run time: `deps/` is never offered.
+    pub dynamic_deps: bool,
 }
 
 impl ProfileProbe {
@@ -251,6 +298,7 @@ pub fn probe_profile<D: DirOps>(
         }
         Err(_) => probe.unknown = true,
     }
+    probe.dynamic_deps = deps_hold_shared_library(&profile.join("deps"));
     let order = [
         CargoPart::Fingerprint,
         CargoPart::Deps,
@@ -303,6 +351,9 @@ pub fn stale_parts(profile: &str, probe: &ProfileProbe) -> Vec<FoundPart> {
         .parts
         .iter()
         .filter_map(|pm| {
+            if pm.part == CargoPart::Deps && probe.dynamic_deps {
+                return None;
+            }
             let activity = if pm.part.follows_profile() {
                 profile_activity?
             } else if !pm.young && pm.complete {
@@ -450,6 +501,10 @@ pub fn recheck_cargo_part<D: DirOps>(
 }
 
 fn activity_of(pp: &PartPath<'_>, probe: &ProfileProbe) -> Option<i64> {
+    // `deps/` of a profile with a shared library is not stale, whatever its age says: fail closed.
+    if pp.part == CargoPart::Deps && probe.dynamic_deps {
+        return None;
+    }
     if pp.part.follows_profile() {
         return probe.profile_activity();
     }

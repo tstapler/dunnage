@@ -163,6 +163,14 @@ pub fn cargo_home_env() -> Option<std::path::PathBuf> {
         .map(std::path::PathBuf::from)
 }
 
+/// `XDG_DATA_HOME` when set to an absolute path (the XDG spec ignores anything else), for
+/// `RootSet::with_xdg_data_home`.
+pub fn xdg_data_home_env() -> Option<std::path::PathBuf> {
+    std::env::var_os("XDG_DATA_HOME")
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_absolute())
+}
+
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,

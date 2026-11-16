@@ -197,7 +197,7 @@ fn cargo_home_should_apply_without_a_plan_id_follow_cargo_home_and_pass_audit_ve
     let old = idx.join("serde-1.0.200");
     let young = idx.join("tokio-1.40.0");
     let cache = ch.join("registry/cache/index.crates.io-6f17d22bba15001f/serde-1.0.200.crate");
-    for (d, days) in [(&old, 60), (&young, 2)] {
+    for (d, days) in [(&old, 100), (&young, 2)] {
         fs::create_dir_all(d.join("src")).unwrap();
         fs::write(d.join("src/lib.rs"), vec![b'x'; 20_000]).unwrap();
         age_tree(d, days);
@@ -226,8 +226,11 @@ fn cargo_home_should_apply_without_a_plan_id_follow_cargo_home_and_pass_audit_ve
     assert!(cache.exists());
     assert!(idx.is_dir());
 
-    let verify = plain(&f, &["audit", "verify"]);
+    // The verifier accepts a moved CARGO_HOME only when it runs with it; without, the row is a violation.
+    let verify = envd(&f, &["audit", "verify"]);
     assert_eq!(verify.status.code(), Some(0), "{}", text_of(&verify).0);
+    let blind = plain(&f, &["audit", "verify"]);
+    assert_eq!(blind.status.code(), Some(2), "{}", text_of(&blind).0);
 }
 
 #[test]

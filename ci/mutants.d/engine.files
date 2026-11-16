@@ -2,3 +2,5 @@
 crates/adapters/src/delete.rs
 crates/adapters/src/dirops.rs
 crates/core/src/floor_rule.rs
+# 0.3.1: the explorer's hard floor is the one function every explorer guard calls
+crates/core/src/explorer_floor.rs

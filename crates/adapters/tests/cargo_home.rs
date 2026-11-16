@@ -190,7 +190,7 @@ fn neighbours(ch: &Path) -> Vec<PathBuf> {
         v.push(p);
     }
     for d in ["registry", "git", "bin"] {
-        age_tree(&ch.join(d), days(90));
+        age_tree(&ch.join(d), days(120));
     }
     v
 }
@@ -219,9 +219,9 @@ fn discover_should_list_old_crates_and_checkouts_and_nothing_else_below_cargo_ho
     let f = fixture();
     let ch = f.home.join(".cargo");
     let neigh = neighbours(&ch);
-    let old_crate = crate_dir(&ch, "serde-1.0.200", days(60));
+    let old_crate = crate_dir(&ch, "serde-1.0.200", days(100));
     let young_crate = crate_dir(&ch, "tokio-1.40.0", days(2));
-    let old_git = checkout(&ch, "repo-1a2b3c", "abcdef1", days(60));
+    let old_git = checkout(&ch, "repo-1a2b3c", "abcdef1", days(100));
     let hidden = ch.join("registry/src").join(INDEX).join(".cargo-ok");
     fs::write(&hidden, "").unwrap();
     let t = target(&f);
@@ -241,7 +241,7 @@ fn discover_should_list_old_crates_and_checkouts_and_nothing_else_below_cargo_ho
         KindFacts::CargoHome(h) => {
             assert_eq!(h.area, CargoHomeArea::RegistrySrc);
             assert_eq!(h.source, INDEX);
-            assert!(h.age_secs >= 59 * 86_400);
+            assert!(h.age_secs >= 99 * 86_400);
         }
         other => panic!("{other:?}"),
     }
@@ -269,7 +269,7 @@ fn discover_should_follow_min_age_and_never_go_below_one_day() {
     let env = rig.env();
     let mut s = sel();
 
-    // default 30 days: neither
+    // default 90 days: neither
     assert!(paths_of(&t.discover(&env, &s)).is_empty());
     s.min_age_secs = Some(7 * 86_400);
     assert_eq!(paths_of(&t.discover(&env, &s)), vec![a.clone()]);
@@ -286,8 +286,8 @@ fn discover_should_follow_min_age_and_never_go_below_one_day() {
 fn discover_should_follow_cargo_home_when_it_is_set_below_home() {
     let f = fixture();
     let moved = f.home.join("dev/cargo");
-    let in_moved = crate_dir(&moved, "serde-1.0.200", days(60));
-    let in_default = crate_dir(&f.home.join(".cargo"), "serde-1.0.200", days(60));
+    let in_moved = crate_dir(&moved, "serde-1.0.200", days(100));
+    let in_default = crate_dir(&f.home.join(".cargo"), "serde-1.0.200", days(100));
     let roots = roots_for(&f).with_cargo_home(Some(&moved));
     let t = target_with(&f, roots);
     let rig = Rig::new(&f);
@@ -302,7 +302,7 @@ fn discover_should_follow_cargo_home_when_it_is_set_below_home() {
 #[test]
 fn discover_should_list_nothing_and_say_why_When_cargo_home_is_outside_home() {
     let f = fixture();
-    crate_dir(&f.home.join(".cargo"), "serde-1.0.200", days(60));
+    crate_dir(&f.home.join(".cargo"), "serde-1.0.200", days(100));
     let roots = roots_for(&f).with_cargo_home(Some(Path::new("/opt/cargo")));
     let t = target_with(&f, roots);
     let rig = Rig::new(&f);
@@ -318,7 +318,7 @@ fn discover_should_not_follow_symlinks_at_any_level() {
     let f = fixture();
     let real = f.home.join("elsewhere");
     let ch_real = real.join("cargo-real");
-    let victim = crate_dir(&ch_real, "serde-1.0.200", days(60));
+    let victim = crate_dir(&ch_real, "serde-1.0.200", days(100));
     // ~/.cargo is a link
     symlink(&ch_real, f.home.join(".cargo")).unwrap();
     let t = target(&f);
@@ -350,7 +350,7 @@ fn safety_cargo_home_running_build_never_deleted() {
     for state in [RunState::Running, RunState::Unknown] {
         let f = fixture();
         let ch = f.home.join(".cargo");
-        let busy = crate_dir(&ch, "busy-1.0.0", days(60));
+        let busy = crate_dir(&ch, "busy-1.0.0", days(100));
         let probe = FakeProbe::new().run_state_of(&busy, state);
         let t = target(&f);
         let rig = Rig::with_probe(&f, probe);
@@ -374,7 +374,7 @@ fn safety_cargo_home_running_build_never_deleted() {
 fn guard_before_delete_should_skip_too_recent_When_a_file_is_written_after_planning() {
     let f = fixture();
     let ch = f.home.join(".cargo");
-    let d = crate_dir(&ch, "serde-1.0.200", days(60));
+    let d = crate_dir(&ch, "serde-1.0.200", days(100));
     let t = target(&f);
     let rig = Rig::new(&f);
     let env = rig.env();
@@ -396,7 +396,7 @@ fn guard_before_delete_should_skip_too_recent_When_a_file_is_written_after_plann
 fn guard_before_delete_should_skip_with_identity_changed_When_the_entry_was_recreated() {
     let f = fixture();
     let ch = f.home.join(".cargo");
-    let d = crate_dir(&ch, "serde-1.0.200", days(60));
+    let d = crate_dir(&ch, "serde-1.0.200", days(100));
     let t = target(&f);
     let rig = Rig::new(&f);
     let env = rig.env();
@@ -405,7 +405,7 @@ fn guard_before_delete_should_skip_with_identity_changed_When_the_entry_was_recr
 
     // moved aside, not deleted, so the new directory cannot get the old inode back
     fs::rename(&d, d.with_file_name("serde-1.0.200.old")).unwrap();
-    let again = crate_dir(&ch, "serde-1.0.200", days(60));
+    let again = crate_dir(&ch, "serde-1.0.200", days(100));
     assert_eq!(again, d);
 
     assert_eq!(
@@ -425,7 +425,7 @@ fn guard_before_delete_should_skip_with_identity_changed_When_the_entry_was_recr
 fn safety_cargo_home_symlink_swap_leaves_target_alone() {
     let f = fixture();
     let ch = f.home.join(".cargo");
-    let d = crate_dir(&ch, "serde-1.0.200", days(60));
+    let d = crate_dir(&ch, "serde-1.0.200", days(100));
     let elsewhere = f.home.join("elsewhere");
     fs::create_dir_all(&elsewhere).unwrap();
     fs::write(elsewhere.join("precious"), "p").unwrap();
@@ -452,7 +452,7 @@ fn safety_cargo_home_symlink_swap_leaves_target_alone() {
 
     // the index directory swapped for a link
     let ch2 = f.home.join("other-ch");
-    let d2 = crate_dir(&ch2, "x-1.0.0", days(60));
+    let d2 = crate_dir(&ch2, "x-1.0.0", days(100));
     let _ = d2;
     let idx = ch.join("registry/src").join(INDEX);
     fs::remove_file(&d).unwrap();
@@ -481,7 +481,7 @@ fn safety_cargo_home_symlink_swap_leaves_target_alone() {
 fn execute_should_succeed_with_nothing_freed_When_the_entry_vanished() {
     let f = fixture();
     let ch = f.home.join(".cargo");
-    let d = crate_dir(&ch, "serde-1.0.200", days(60));
+    let d = crate_dir(&ch, "serde-1.0.200", days(100));
     let t = target(&f);
     let rig = Rig::new(&f);
     let env = rig.env();
@@ -500,8 +500,8 @@ fn apply_should_remove_only_the_old_entries_and_log_the_kind() {
     let f = fixture();
     let ch = f.home.join(".cargo");
     let neigh = neighbours(&ch);
-    let old_crate = crate_dir(&ch, "serde-1.0.200", days(60));
-    let old_git = checkout(&ch, "repo-1a2b3c", "abcdef1", days(60));
+    let old_crate = crate_dir(&ch, "serde-1.0.200", days(100));
+    let old_git = checkout(&ch, "repo-1a2b3c", "abcdef1", days(100));
     let young = crate_dir(&ch, "tokio-1.40.0", days(2));
     let t = target(&f);
     let rig = Rig::new(&f);
@@ -543,7 +543,7 @@ fn apply_should_remove_only_the_old_entries_and_log_the_kind() {
 fn a_dry_run_should_plan_every_old_entry_and_delete_nothing() {
     let f = fixture();
     let ch = f.home.join(".cargo");
-    let d = crate_dir(&ch, "serde-1.0.200", days(60));
+    let d = crate_dir(&ch, "serde-1.0.200", days(100));
     let t = target(&f);
     let rig = Rig::new(&f);
     let env = rig.env();

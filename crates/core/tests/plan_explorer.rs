@@ -135,10 +135,19 @@ fn explorer_plan_should_make_one_item_per_mark_and_run_the_guards_on_fresh_data_
     assert_eq!(plan.selection.flags().matches("--only ").count(), 5);
     // Nothing was discovered: only the marks, their ancestors and `.git` probes were stat-ed.
     let seen = w.fs.lstats.lock().unwrap().clone();
+    // ... and, by identity, the tool's own directories (they are looked up, never listed).
+    let own = [
+        "/home/u/.local/state/dunnage",
+        "/home/u/.local/state/disk-cleanup",
+        "/home/u/.cache/dunnage",
+        "/home/u/.cache/disk-cleanup",
+        "/home/u/.config/dunnage",
+        "/home/u/.config/disk-cleanup",
+    ];
     assert!(
-        seen.iter()
-            .all(|s| marks5().iter().any(|m| s.starts_with(m))
-                || marks5().iter().any(|m| m.starts_with(s))),
+        seen.iter().all(|s| own.iter().any(|o| s == Path::new(o))
+            || marks5().iter().any(|m| s.starts_with(m))
+            || marks5().iter().any(|m| m.starts_with(s))),
         "{seen:?}"
     );
 }
