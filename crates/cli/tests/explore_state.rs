@@ -472,7 +472,9 @@ fn a_preview_should_save_last_plan_and_still_create_no_lock_audit_or_outcome_fil
     p.wait_for("marked ");
     p.send(b"p");
     p.wait_for("PLAN PREVIEW - nothing is deleted.");
-    p.send(b"\x1b");
+    // `q` on the preview leaves with exit 0. An Esc first would not: it can arrive in the same read as the
+    // `q` (crossterm parses the pair as Alt+q, which leaves) or alone (back to the list, where `q` with a
+    // mark asks first), so the outcome would depend on the pty's read boundaries.
     p.send(b"q");
     assert_eq!(p.exit_code(), 0);
     assert_eq!(

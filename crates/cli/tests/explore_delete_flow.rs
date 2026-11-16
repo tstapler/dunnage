@@ -40,36 +40,73 @@ use dunnage_tui::event_loop::{
     Tuning,
 };
 use dunnage_tui::terminal::{fixed_terminal, DiagQueue};
-use dunnage_tui::testing::{Buffer, TestBackend};
+use dunnage_tui::testing::{Buffer, FrameSpy};
 use explore_rig::{manifest, Ex, Knobs};
 
 // ----- the loop's harness -----
 
+/// How long a gated key waits for its screen before the run fails with the screen it did reach.
+const GATE_LIMIT: Duration = Duration::from_secs(60);
+
+/// `(index in the script, text)`: that key is delivered only once it is due and the last frame shows the text
+/// (or, with a leading `!`, no longer shows it). The planner, the review and the delete answer from worker
+/// threads, so a fixed time cannot tell that the screen a key is for has been drawn.
+type Gates = Vec<(usize, &'static str)>;
+
 struct Keys {
     start: Instant,
     queue: VecDeque<(u64, Input)>,
+    gates: Gates,
+    frame: Arc<Mutex<String>>,
+    taken: usize,
 }
 
 impl Keys {
     fn ms(&self) -> u64 {
         u64::try_from(self.start.elapsed().as_millis()).unwrap()
     }
+
+    fn open(&self) -> bool {
+        let Some((_, text)) = self.gates.iter().find(|g| g.0 == self.taken) else {
+            return true;
+        };
+        let frame = self.frame.lock().unwrap();
+        match text.strip_prefix('!') {
+            Some(gone) => !frame.is_empty() && !frame.contains(gone),
+            None => frame.contains(text),
+        }
+    }
+
+    fn due(&self) -> bool {
+        let now = self.ms();
+        self.queue.front().is_some_and(|(at, _)| *at <= now) && self.open()
+    }
 }
 
 impl EventSource for Keys {
     fn poll(&mut self, timeout: Duration) -> io::Result<bool> {
+        if self.due() {
+            return Ok(true);
+        }
+        assert!(
+            self.start.elapsed() < GATE_LIMIT,
+            "key {} never became due; the screen:\n{}",
+            self.taken,
+            self.frame.lock().unwrap()
+        );
         let now = self.ms();
         let wait = match self.queue.front() {
-            Some((at, _)) if *at <= now => return Ok(true),
-            Some((at, _)) => timeout.min(Duration::from_millis(at - now)),
+            Some((at, _)) if *at > now => timeout.min(Duration::from_millis(*at - now)),
+            // due by time but its screen is not drawn yet: look again soon
+            Some(_) => timeout.min(Duration::from_millis(5)),
             None => timeout,
         };
         std::thread::sleep(wait);
-        let now = self.ms();
-        Ok(self.queue.front().is_some_and(|(at, _)| *at <= now))
+        Ok(self.due())
     }
 
     fn read(&mut self) -> io::Result<Input> {
+        self.taken += 1;
         Ok(self.queue.pop_front().unwrap().1)
     }
 }
@@ -113,7 +150,7 @@ struct Ran {
     screen: String,
 }
 
-fn drive(ex: &Ex, actions: Arc<dyn ExplorerActions>, keys: Vec<(u64, Input)>) -> Ran {
+fn drive(ex: &Ex, actions: Arc<dyn ExplorerActions>, keys: Vec<(u64, Input)>, gates: Gates) -> Ran {
     let app = ex.code.join("app");
     let ev = |id: u64, parent: u64, name: &str, alloc: u64| NodeEvent::Dir {
         id,
@@ -165,10 +202,15 @@ fn drive(ex: &Ex, actions: Arc<dyn ExplorerActions>, keys: Vec<(u64, Input)>) ->
         actions,
         typed: Arc::new(FakeTypedCount::new(true)),
     };
-    let mut term = fixed_terminal(TestBackend::new(100, 24), 100, 24).unwrap();
+    let spy = FrameSpy::new(100, 24);
+    let frame = spy.frame();
+    let mut term = fixed_terminal(spy, 100, 24).unwrap();
     let mut keys = Keys {
         start: Instant::now(),
         queue: keys.into(),
+        gates,
+        frame,
+        taken: 0,
     };
     let (mut guard, mut sizer, clock) = (NoRestore, NoSize, SystemClock::default());
     let exit = {
@@ -267,6 +309,9 @@ fn fixture() -> (Arc<Ex>, PathBuf) {
 
 // ----- the cases -----
 
+/// The prompt line the typed count follows.
+const PROMPT_ASK: &str = "Type 1 and press Enter to delete, Esc to cancel:";
+
 #[test]
 #[cfg_attr(
     not(target_os = "linux"),
@@ -279,15 +324,24 @@ fn safety_an_explorer_delete_of_a_throwaway_directory_removes_exactly_that_direc
     let (actions, exit) = rig_actions(&ex);
     // dist is the first row (the largest): mark it, plan, review it, open the prompt, type 1, leave
     let keys = vec![
-        (200, k(' ')),
-        (500, k('d')),
-        (1500, k('d')),
-        (2500, k('1')),
-        (2700, key(Key::Enter)),
-        (4500, key(Key::Esc)),
-        (4700, k('q')),
+        (0, k(' ')),
+        (0, k('d')),
+        (0, k('d')),
+        (0, k('1')),
+        (0, key(Key::Enter)),
+        (0, key(Key::Esc)),
+        (0, k('q')),
     ];
-    let out = drive(&ex, actions, keys);
+    let gates = vec![
+        (0, "SCAN DONE"),
+        (1, "marked /"),
+        (2, "PLAN PREVIEW"),
+        (3, PROMPT_ASK),
+        (4, "to cancel: 1"),
+        (5, "DELETE RESULT"),
+        (6, "!DELETE RESULT"),
+    ];
+    let out = drive(&ex, actions, keys, gates);
 
     assert!(!dist.exists(), "the marked directory is gone");
     let after = manifest(&ex.code);
@@ -305,6 +359,11 @@ fn safety_an_explorer_delete_of_a_throwaway_directory_removes_exactly_that_direc
     assert!(has(&|r| matches!(r, AuditRecord::Intent(_))));
     assert!(has(&|r| matches!(r, AuditRecord::Result(_))));
     assert!(has(&|r| matches!(r, AuditRecord::RunEnd(_))));
+    // The worker stores the exit after it sent `Done`, which is when the loop shows the result.
+    let end = Instant::now() + Duration::from_secs(10);
+    while exit.lock().unwrap().is_none() && Instant::now() < end {
+        std::thread::sleep(Duration::from_millis(5));
+    }
     assert_eq!(*exit.lock().unwrap(), Some(0));
 
     assert_eq!(out.exit.code, 0);
@@ -332,14 +391,22 @@ fn safety_a_wrong_count_at_the_prompt_deletes_nothing_in_the_fixture() {
     let before = manifest(&ex.code);
     let (actions, exit) = rig_actions(&ex);
     let keys = vec![
-        (200, k(' ')),
-        (500, k('d')),
-        (1500, k('d')),
-        (2500, k('2')),
-        (2700, key(Key::Enter)),
-        (3300, key(Key::Ctrl('c'))),
+        (0, k(' ')),
+        (0, k('d')),
+        (0, k('d')),
+        (0, k('2')),
+        (0, key(Key::Enter)),
+        (0, key(Key::Ctrl('c'))),
     ];
-    let out = drive(&ex, actions, keys);
+    let gates = vec![
+        (0, "SCAN DONE"),
+        (1, "marked /"),
+        (2, "PLAN PREVIEW"),
+        (3, PROMPT_ASK),
+        (4, "to cancel: 2"),
+        (5, "That is not 1. Nothing was deleted."),
+    ];
+    let out = drive(&ex, actions, keys, gates);
     assert!(dist.exists());
     assert_eq!(manifest(&ex.code), before, "the fixture is untouched");
     assert!(
@@ -433,12 +500,18 @@ fn safety_in_the_default_build_d_shows_the_refusal_and_nothing_is_deleted() {
     let (ex, dist) = fixture();
     let before = manifest(&ex.code);
     let keys = vec![
-        (200, k(' ')),
-        (500, k('d')),
-        (1500, k('d')),
-        (2200, key(Key::Ctrl('c'))),
+        (0, k(' ')),
+        (0, k('d')),
+        (0, k('d')),
+        (0, key(Key::Ctrl('c'))),
     ];
-    let out = drive(&ex, Arc::new(Hybrid(real_actions(&ex))), keys);
+    let gates = vec![
+        (0, "SCAN DONE"),
+        (1, "marked /"),
+        (2, "PLAN PREVIEW"),
+        (3, DELETE_NOT_IN_BUILD),
+    ];
+    let out = drive(&ex, Arc::new(Hybrid(real_actions(&ex))), keys, gates);
     assert!(
         out.screen.contains(DELETE_NOT_IN_BUILD),
         "d must say why:\n{}",
@@ -456,14 +529,22 @@ fn safety_in_a_gate_d_build_the_real_review_opens_the_prompt_and_a_cancel_delete
     let (ex, dist) = fixture();
     let before = manifest(&ex.code);
     let keys = vec![
-        (200, k(' ')),
-        (500, k('d')),
-        (3500, k('d')),
-        (7000, key(Key::Esc)),
-        (7500, k('q')),
-        (7800, k('x')),
+        (0, k(' ')),
+        (0, k('d')),
+        (0, k('d')),
+        (0, key(Key::Esc)),
+        (0, k('q')),
+        (0, k('x')),
     ];
-    let out = drive(&ex, Arc::new(Hybrid(real_actions(&ex))), keys);
+    let gates = vec![
+        (0, "SCAN DONE"),
+        (1, "marked /"),
+        (2, "PLAN PREVIEW"),
+        (3, PROMPT_ASK),
+        (4, "!DELETE - this cannot be undone"),
+        (5, "forget marks"),
+    ];
+    let out = drive(&ex, Arc::new(Hybrid(real_actions(&ex))), keys, gates);
     assert!(dist.exists());
     assert_eq!(manifest(&ex.code), before, "the fixture is untouched");
     assert_eq!(out.exit.code, 0);
@@ -482,12 +563,18 @@ fn safety_in_a_gate_d_build_the_real_review_opens_the_prompt_and_a_cancel_delete
 fn safety_in_a_gate_d_build_the_prompt_shows_the_real_count_and_total() {
     let (ex, _dist) = fixture();
     let keys = vec![
-        (200, k(' ')),
-        (500, k('d')),
-        (3500, k('d')),
-        (7000, key(Key::Ctrl('c'))),
+        (0, k(' ')),
+        (0, k('d')),
+        (0, k('d')),
+        (0, key(Key::Ctrl('c'))),
     ];
-    let out = drive(&ex, Arc::new(Hybrid(real_actions(&ex))), keys);
+    let gates = vec![
+        (0, "SCAN DONE"),
+        (1, "marked /"),
+        (2, "PLAN PREVIEW"),
+        (3, "Type 1 and press Enter to delete, Esc to cancel: _"),
+    ];
+    let out = drive(&ex, Arc::new(Hybrid(real_actions(&ex))), keys, gates);
     assert!(
         out.screen.contains("DELETE - this cannot be undone"),
         "{}",
