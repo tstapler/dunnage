@@ -18,8 +18,9 @@ dunnage deletes files, so its path guards are the security boundary. These count
   The floor, never markable and shown with a reason (one function, `explorer_floor` in
   `crates/core/src/explorer_floor.rs`, used by the screen, the planner, the engine and `audit verify`):
   - `/`, every direct child of `/` (`/home`, `/var`, `/tmp`, `/srv`, `/opt`, `/mnt`, `/Users`, ...), and the system
-    and application trees `/usr`, `/etc`, `/boot`, `/bin`, `/sbin`, `/lib*`, `/dev`, `/proc`, `/sys`, `/run`,
-    `/System`, `/Library`, `/opt`, `/nix`, `/snap`, `/efi`, `/lost+found`, `/Applications`. Programs installed there
+    and application trees `/usr`, `/etc`, `/boot`, `/bin`, `/sbin`, `/lib*`, `/dev`, `/proc`, `/sys`, `/run`
+    (except `/run/media/<your user>/<volume>/...`, where removable media mounts), `/System`, `/Library`, `/opt`, `/nix`, `/snap`, `/efi`, `/lost+found`, `/Applications`. A `$HOME` that lives under `/opt`, `/nix` or `/snap` (for example `/opt/u`) is
+    still yours: inside it the home rules apply instead. Programs installed there
     are not yours to guess at; mark a folder in `/srv`, `/mnt`, `/media` or `/tmp` instead. Inside `/var`, only
     folders below `/var/tmp`, `/var/cache` and `/var/folders` (macOS temp and cache) can be deleted; `/var/lib`,
     `/var/log` and the like hold state that is not yours to guess at. On macOS `/private/etc`, `/private/var` and
@@ -34,7 +35,7 @@ dunnage deletes files, so its path guards are the security boundary. These count
   - Credentials, keys and browser profiles below `$HOME`, everything below them and every folder that holds one:
     `~/.ssh`, `~/.gnupg`, `~/.password-store`, `~/.aws`, `~/.kube`, `~/.1password` (1Password CLI and agent state),
     `~/.docker`, `~/.azure`, `~/.thunderbird`, `~/.local/share/kwalletd`, `~/.mozilla` (Firefox profiles hold cookies and saved logins), `~/.config/{1Password,op,gh,gcloud,Bitwarden,sops,
-    gnupg,google-chrome,chromium,BraveSoftware,vivaldi,keepassxc,rclone}`, `~/.local/share/{keyrings,gnupg}`, `~/snap/1password`,
+    gnupg,google-chrome,google-chrome-beta,chromium,microsoft-edge,BraveSoftware,vivaldi,keepassxc,rclone,Slack}`, `~/.pki`, `~/.terraform.d`, `~/snap/*/common/.mozilla`, `~/.local/share/{keyrings,gnupg}`, `~/snap/1password`,
     `~/.var/app/com.1password.1Password` and, on macOS, `~/Library/Keychains` and the 1Password group-container,
     application-support and container folders. Chosen conservatively: each is a place where losing a file means
     losing a secret or a login that cannot be re-created by a rebuild, and the cost of a refusal is renaming the
@@ -57,10 +58,13 @@ dunnage deletes files, so its path guards are the security boundary. These count
   file-level hard link or a bind mount of a single file is not a directory and is out of scope, as everywhere in the
   explorer.
 
-  Known gaps: a bind mount of a sub-directory of a secret directory, and any FUSE or network re-export (new inode numbers), are not recognised by identity; `XDG_*_HOME` outside `$HOME` is ignored; the lexical account rule treats `/home/linuxbrew` and `/Users/Shared` as other accounts; the agent-socket rule covers `/tmp/ssh-*` only.
+  Known gaps: the identity store lists the secret directories themselves (not the `~/snap/*/common/.mozilla` wildcard
+  ones, and not their first-level children), so a bind mount of a sub-directory of a secret directory (for example
+  `~/.ssh/keys`), and any FUSE or network re-export (new inode numbers), are not recognised by identity; `XDG_*_HOME` outside `$HOME` is ignored; the lexical account rule treats `/home/linuxbrew` and `/Users/Shared` as other accounts; the agent-socket rule covers `/tmp/ssh-*` only.
 
-  Limits of the floor. Names are matched ASCII case-insensitively (macOS volumes are case-insensitive), not by
-  Unicode normalisation. A folder full of work is not on the floor: the screen says `git repository: unpushed work
+  Limits of the floor. Secret and system names are matched ASCII case-insensitively (macOS volumes are case-insensitive), not by
+  Unicode normalisation. `$HOME` itself is matched exactly on Linux (`/home/U` is another account) and
+  case-insensitively on macOS, chosen at compile time by `target_os`, not by probing the volume. A folder full of work is not on the floor: the screen says `git repository: unpushed work
   is lost` but does not block it. The audit oracle (`dunnage audit verify`) applies the same lexical floor to
   `explorer-selection` rows, against the canonical `$HOME` (as the engine resolves it); it cannot test identity
   (the folder may be gone), and it no longer needs the row to be below a configured root, so it does not flag an
