@@ -1,5 +1,5 @@
 {
-  "checksum": "82ae1d3196dac44f190e1377b045f3192cf6857ce0d75e52981b81eba75c334c",
+  "checksum": "f58d8d5689e0fcfa685223c2013b70875e87a6a8e34bcecb401d7ef9dfa200de",
   "conditions": {
     "aarch64-apple-darwin": [
       "aarch64-apple-darwin"
@@ -2053,7 +2053,7 @@
       ],
       "version": "0.2.12"
     },
-    "dunnage 0.3.0": {
+    "dunnage 0.3.1": {
       "build_script_attrs": {},
       "common_attrs": {
         "crate_features": [
@@ -2122,9 +2122,9 @@
           }
         }
       ],
-      "version": "0.3.0"
+      "version": "0.3.1"
     },
-    "dunnage-adapters 0.3.0": {
+    "dunnage-adapters 0.3.1": {
       "common_attrs": {
         "crate_features": [
           "default",
@@ -2192,9 +2192,9 @@
           }
         }
       ],
-      "version": "0.3.0"
+      "version": "0.3.1"
     },
-    "dunnage-core 0.3.0": {
+    "dunnage-core 0.3.1": {
       "common_attrs": {
         "crate_features": [
           "default",
@@ -2250,9 +2250,9 @@
           }
         }
       ],
-      "version": "0.3.0"
+      "version": "0.3.1"
     },
-    "dunnage-scan 0.3.0": {
+    "dunnage-scan 0.3.1": {
       "common_attrs": {
         "deps": [
           {
@@ -2296,9 +2296,9 @@
           }
         }
       ],
-      "version": "0.3.0"
+      "version": "0.3.1"
     },
-    "dunnage-tui 0.3.0": {
+    "dunnage-tui 0.3.1": {
       "common_attrs": {
         "deps": [
           {
@@ -2346,7 +2346,7 @@
           }
         }
       ],
-      "version": "0.3.0"
+      "version": "0.3.1"
     },
     "either 1.19.0": {
       "common_attrs": {
@@ -8492,10 +8492,10 @@
     "tempfile 3.27.0"
   ],
   "workspace_members": {
-    "dunnage 0.3.0": "crates/cli",
-    "dunnage-adapters 0.3.0": "crates/adapters",
-    "dunnage-core 0.3.0": "crates/core",
-    "dunnage-scan 0.3.0": "crates/scan",
-    "dunnage-tui 0.3.0": "crates/tui"
+    "dunnage 0.3.1": "crates/cli",
+    "dunnage-adapters 0.3.1": "crates/adapters",
+    "dunnage-core 0.3.1": "crates/core",
+    "dunnage-scan 0.3.1": "crates/scan",
+    "dunnage-tui 0.3.1": "crates/tui"
   }
 }
