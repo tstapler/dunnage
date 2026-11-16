@@ -499,18 +499,9 @@ impl ExplorerActions for Hybrid {
 fn safety_in_the_default_build_d_shows_the_refusal_and_nothing_is_deleted() {
     let (ex, dist) = fixture();
     let before = manifest(&ex.code);
-    let keys = vec![
-        (0, k(' ')),
-        (0, k('d')),
-        (0, k('d')),
-        (0, key(Key::Ctrl('c'))),
-    ];
-    let gates = vec![
-        (0, "SCAN DONE"),
-        (1, "marked /"),
-        (2, "PLAN PREVIEW"),
-        (3, DELETE_NOT_IN_BUILD),
-    ];
+    // `d` is refused at once in this build: there is no plan or prompt to wait for.
+    let keys = vec![(0, k(' ')), (0, k('d')), (0, key(Key::Ctrl('c')))];
+    let gates = vec![(0, "SCAN DONE"), (1, "marked /"), (2, DELETE_NOT_IN_BUILD)];
     let out = drive(&ex, Arc::new(Hybrid(real_actions(&ex))), keys, gates);
     assert!(
         out.screen.contains(DELETE_NOT_IN_BUILD),
