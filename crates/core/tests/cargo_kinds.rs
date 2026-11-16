@@ -76,7 +76,7 @@ fn kinds_should_sit_in_the_documented_tiers_and_selectors() {
     assert!(SelectorId::BuildDirs.is_destructive());
     assert_eq!(
         default_min_age_secs(SelectorId::CargoHome),
-        Some(30 * 86_400)
+        Some(90 * 86_400)
     );
 }
 

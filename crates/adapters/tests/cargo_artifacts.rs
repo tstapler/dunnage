@@ -404,24 +404,128 @@ fn discover_should_offer_no_parts_When_the_target_is_not_cargos_own() {
 }
 
 #[test]
-fn discover_should_accept_a_target_that_has_only_the_rustc_info_cache_or_only_the_tag() {
-    for keep_tag in [true, false] {
+fn discover_should_accept_a_target_that_has_the_tag_with_cargos_signature_and_profiles() {
+    let f = fixture();
+    let (_proj, t) = project(&f, "app", &["debug", "release"]);
+    age_tree(&t.join("debug"), days(40));
+    age_target_files(&t, days(40));
+    fs::remove_file(t.join(".rustc_info.json")).unwrap();
+    let tgt = target(&f);
+    let rig = Rig::new(&f);
+    let env = rig.env();
+    assert_eq!(parts_of(&tgt.discover(&env, &sel())).len(), 5);
+}
+
+#[test]
+fn discover_should_offer_no_parts_When_only_a_forgeable_marker_is_there() {
+    // `.rustc_info.json` alone, or a tag without cargo's signature, is a file anyone can create.
+    for (tag, info) in [
+        (None, true),
+        (Some("just a file\n"), false),
+        (Some("just a file\n"), true),
+    ] {
         let f = fixture();
         let (_proj, t) = project(&f, "app", &["debug", "release"]);
         age_tree(&t.join("debug"), days(40));
         age_target_files(&t, days(40));
-        fs::remove_file(t.join(if keep_tag {
-            ".rustc_info.json"
-        } else {
-            "CACHEDIR.TAG"
-        }))
-        .unwrap();
+        fs::remove_file(t.join("CACHEDIR.TAG")).unwrap();
+        fs::remove_file(t.join(".rustc_info.json")).unwrap();
+        if let Some(text) = tag {
+            fs::write(t.join("CACHEDIR.TAG"), text).unwrap();
+        }
+        if info {
+            fs::write(t.join(".rustc_info.json"), "{}").unwrap();
+        }
+        let tgt = target(&f);
+        let rig = Rig::new(&f);
+        let env = rig.env();
+        assert_eq!(
+            parts_of(&tgt.discover(&env, &sel())),
+            Vec::new(),
+            "tag={tag:?} info={info}"
+        );
+    }
+}
+
+#[test]
+fn discover_should_offer_no_parts_When_a_directory_of_another_build_tool_has_the_signature_tag() {
+    // A Maven or Gradle `target/` next to a Cargo.toml, with the tag copied in and directories that merely
+    // contain a `deps/` of their own: no cargo profile has only one of the two directories cargo always makes.
+    let f = fixture();
+    let (proj, _t) = project(&f, "app", &[]);
+    let t = proj.join("target");
+    fs::create_dir_all(t.join("classes/deps")).unwrap();
+    fs::write(t.join("classes/deps/x.jar"), vec![1u8; 4096]).unwrap();
+    fs::create_dir_all(t.join("other/.fingerprint")).unwrap();
+    fs::write(t.join("other/.fingerprint/x"), "x").unwrap();
+    age_tree(&t, days(40));
+    // something young keeps the whole target from being offered, so only the parts path is exercised
+    fs::write(t.join("young.txt"), "now").unwrap();
+    let tgt = target(&f);
+    let rig = Rig::new(&f);
+    let env = rig.env();
+    assert_eq!(parts_of(&tgt.discover(&env, &sel())), Vec::new());
+}
+
+#[test]
+fn discover_should_keep_deps_When_the_profile_holds_a_shared_library() {
+    // Bevy `dynamic_linking` and dylib crates: a binary links `target/<profile>/deps/lib*.so` at run time.
+    for lib in [
+        "libbevy_dylib-1a2b.so",
+        "libfoo.dylib",
+        "libfoo.so.1",
+        "foo.dll",
+    ] {
+        let f = fixture();
+        let (_proj, t) = project(&f, "app", &["debug", "release"]);
+        fs::write(t.join("debug/deps").join(lib), vec![9u8; 4096]).unwrap();
+        age_tree(&t.join("debug"), days(40));
+        age_target_files(&t, days(40));
         let tgt = target(&f);
         let rig = Rig::new(&f);
         let env = rig.env();
         let cands = tgt.discover(&env, &sel());
-        assert_eq!(parts_of(&cands).len(), 5, "keep_tag={keep_tag}");
+        let got = parts_of(&cands);
+        assert!(
+            !got.contains(&("debug".to_string(), CargoPart::Deps)),
+            "{lib}: {got:?}"
+        );
+        for keep in [
+            CargoPart::Incremental,
+            CargoPart::Fingerprint,
+            CargoPart::Build,
+            CargoPart::Examples,
+        ] {
+            assert!(
+                got.contains(&("debug".to_string(), keep)),
+                "{lib}: {keep:?}"
+            );
+        }
     }
+}
+
+#[test]
+fn guard_before_delete_should_skip_deps_When_a_shared_library_appeared_after_planning() {
+    let f = fixture();
+    let (_proj, t) = project(&f, "app", &["debug", "release"]);
+    age_tree(&t.join("debug"), days(40));
+    age_target_files(&t, days(40));
+    let tgt = target(&f);
+    let rig = Rig::new(&f);
+    let env = rig.env();
+    let cands = tgt.discover(&env, &sel());
+    let deps = part(&cands, &t.join("debug/deps"));
+    fs::write(t.join("debug/deps/libbevy_dylib-1a2b.so"), vec![9u8; 4096]).unwrap();
+    age_tree(&t.join("debug"), days(40));
+    assert!(matches!(
+        tgt.guard_before_delete(deps, &env),
+        Guarded::Skip(_)
+    ));
+    let err = tgt
+        .execute(deps, &env, &ApplyToken::for_tests())
+        .unwrap_err();
+    assert_eq!(err.error, DeleteError::Refused);
+    assert!(t.join("debug/deps/libbevy_dylib-1a2b.so").exists());
 }
 
 #[test]
