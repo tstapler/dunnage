@@ -7,8 +7,10 @@
 //! filesystems, mount points and the tool's own state are separate rules (M3 to M5) because they need the
 //! filesystem.
 //!
-//! Matching is ASCII case-insensitive: macOS volumes are case-insensitive by default, so `~/.SSH` is `~/.ssh`.
-//! A refusal that is too broad on a case-sensitive volume costs a rename; a miss costs the key.
+//! Secret-directory and system names match ASCII case-insensitively: macOS volumes are case-insensitive by
+//! default, so `~/.SSH` is `~/.ssh`. A refusal that is too broad on a case-sensitive volume costs a rename; a
+//! miss costs the key. `$HOME` itself matches exactly on Linux, where `/home/U` is another account, and
+//! case-insensitively on macOS (chosen at compile time by `target_os`, not by probing the volume).
 
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
@@ -42,11 +44,22 @@ const SYSTEM_TOPS: [&str; 21] = [
     "Applications",
 ];
 
+/// System tops where a `$HOME` may legitimately live (`/opt/u`, nix and snap layouts); `/usr`, `/etc`, ... never.
+const HOME_UNDER_APP_TOPS: [&str; 3] = ["opt", "nix", "snap"];
+
+/// `/run/media/<current user>/<volume>/<dir>`: udisks mounts removable media there. The user is the last
+/// component of `$HOME`; the volume itself and its parents stay refused, as does all of the rest of `/run`
+/// (`/run/user` holds sockets and keyrings).
+fn removable_media(p: &[&OsStr], home: &Path) -> bool {
+    let user = home.file_name();
+    p.len() >= 4 && eq_ci(p[0], "run") && eq_ci(p[1], "media") && user.is_some_and(|u| p[2] == u)
+}
+
 /// Directories of secrets, relative to `$HOME`. Each one, everything below it and everything that holds it is
 /// refused: keys, keyrings, cloud and password-manager credentials, browser profiles (cookies and saved
 /// logins), and the 1Password app state and agent sockets on Linux (also snap and flatpak) and macOS.
 /// SECURITY.md says why each is on the list.
-const SECRET_DIRS: [&[&str]; 32] = [
+const SECRET_DIRS: [&[&str]; 37] = [
     &[".ssh"],
     &[".gnupg"],
     &[".1password"],
@@ -79,10 +92,20 @@ const SECRET_DIRS: [&[&str]; 32] = [
     &[".config", "vivaldi"],
     &[".config", "keepassxc"],
     &[".config", "rclone"],
+    &[".pki"],
+    &[".config", "google-chrome-beta"],
+    &[".config", "microsoft-edge"],
+    &[".config", "Slack"],
+    &[".terraform.d"],
 ];
 
+/// Secret directories with a wildcard component (`*`), which `secret_dirs` cannot list as one path: the
+/// snap-confined Firefox profile is `~/snap/<snap>/common/.mozilla`. Limit: the identity store records only
+/// the listed paths, so a bind mount of one of these is not noticed by identity.
+const WILDCARD_SECRET_DIRS: [&[&str]; 1] = [&["snap", "*", "common", ".mozilla"]];
+
 /// The secret directories that live below the XDG config home (`~/.config` unless `XDG_CONFIG_HOME` moves it).
-const CONFIG_SECRETS: [&str; 10] = [
+const CONFIG_SECRETS: [&str; 13] = [
     "1Password",
     "op",
     "gh",
@@ -93,6 +116,9 @@ const CONFIG_SECRETS: [&str; 10] = [
     "google-chrome",
     "chromium",
     "BraveSoftware",
+    "google-chrome-beta",
+    "microsoft-edge",
+    "Slack",
 ];
 
 /// The secret directories that live below the XDG data home (`~/.local/share` unless `XDG_DATA_HOME` moves it).
@@ -144,7 +170,7 @@ pub enum FloorReason {
     /// A direct child of `/` (`/home`, `/var`, `/tmp`, `/srv`, `/mnt`, `/opt`, `/Users`, ...).
     TopLevel,
     /// Inside, or equal to, a system or application directory (`/usr`, `/etc`, `/boot`, `/bin`, `/sbin`, `/lib*`,
-    /// `/dev`, `/proc`, `/sys`, `/run`, `/System`, `/Library`, `/opt`, `/nix`, `/snap`, `/efi`, `/lost+found`,
+    /// `/dev`, `/proc`, `/sys`, `/run` (but not `/run/media/<user>`), `/System`, `/Library`, `/opt`, `/nix`, `/snap`, `/efi`, `/lost+found`,
     /// `/Applications`, `/tmp/.X11-unix`).
     System,
     /// Inside `/var` but not below `/var/tmp`, `/var/cache` or `/var/folders` (macOS temp), or one of those three.
@@ -241,7 +267,11 @@ pub fn explorer_floor(path: &Path, home: &Path) -> Option<FloorReason> {
     if p.len() == 1 {
         return Some(FloorReason::TopLevel);
     }
-    if SYSTEM_TOPS.iter().any(|n| eq_ci(p[0], n)) {
+    // A `$HOME` under an application top (`/opt/u`) is the owner's own tree; the home rules decide inside it.
+    let own_home = HOME_UNDER_APP_TOPS.iter().any(|n| eq_ci(p[0], n))
+        && !matches!(rel_home, HomeRel::Outside)
+        && parts(home).is_some_and(|h| h.len() >= 2);
+    if !own_home && SYSTEM_TOPS.iter().any(|n| eq_ci(p[0], n)) && !removable_media(&p, home) {
         return Some(FloorReason::System);
     }
     if let Some(r) = tmp_rule(&p) {
@@ -285,11 +315,16 @@ fn other_account(p: &[&OsStr]) -> Option<FloorReason> {
     in_account.then_some(FloorReason::AccountHome)
 }
 
+/// `a` is a prefix of `b`, component by component, spelled the way `$HOME` is matched (see the module note).
 fn same_prefix(a: &[&OsStr], b: &[&OsStr]) -> bool {
-    a.len() <= b.len()
-        && a.iter()
-            .zip(b)
-            .all(|(x, y)| x.as_bytes().eq_ignore_ascii_case(y.as_bytes()))
+    let same = |x: &OsStr, y: &OsStr| {
+        if cfg!(target_os = "macos") {
+            x.as_bytes().eq_ignore_ascii_case(y.as_bytes())
+        } else {
+            x == y
+        }
+    };
+    a.len() <= b.len() && a.iter().zip(b).all(|(x, y)| same(x, y))
 }
 
 /// Where `path` stands against `$HOME`.
@@ -319,9 +354,12 @@ fn home_rules(path: &Path, home: &Path) -> HomeRel {
     if rel.len() < 2 {
         return HomeRel::Refused(FloorReason::ShallowInHome);
     }
-    let secret = SECRET_DIRS.iter().any(|s| {
+    let secret = SECRET_DIRS.iter().chain(&WILDCARD_SECRET_DIRS).any(|s| {
         let n = s.len().min(rel.len());
-        rel[..n].iter().zip(&s[..n]).all(|(a, b)| eq_ci(a, b))
+        rel[..n]
+            .iter()
+            .zip(&s[..n])
+            .all(|(a, b)| *b == "*" || eq_ci(a, b))
     });
     if secret {
         HomeRel::Refused(FloorReason::Secrets)
@@ -554,6 +592,75 @@ mod tests {
         }
         assert_eq!(floor("/tmp/ssh/x"), None);
         assert_eq!(floor("/tmp/sshfs/x"), None);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn explorer_floor_should_match_home_case_sensitively_on_a_case_sensitive_fs() {
+        assert_eq!(floor("/home/U/code/app"), Some(FloorReason::AccountHome));
+        assert_eq!(floor("/home/U"), Some(FloorReason::AccountHome));
+        assert_eq!(floor("/home/u/code/app"), None);
+        // Secret names stay case-insensitive.
+        assert_eq!(floor("/home/u/.SSH/x"), Some(FloorReason::Secrets));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn explorer_floor_should_match_home_case_insensitively_on_macos() {
+        let mac = |p: &str| explorer_floor(Path::new(p), Path::new("/Users/u"));
+        assert_eq!(mac("/Users/U"), Some(FloorReason::Home));
+        assert_eq!(mac("/users/U/.ssh/x"), Some(FloorReason::Secrets));
+    }
+
+    #[test]
+    fn explorer_floor_should_allow_removable_media_of_the_current_user_only() {
+        assert_eq!(floor("/run/media/u/usb/dir"), None);
+        assert_eq!(floor("/run/media/other/usb/dir"), Some(FloorReason::System));
+        assert_eq!(floor("/run/media/u"), Some(FloorReason::System));
+        assert_eq!(floor("/run/media"), Some(FloorReason::System));
+        assert_eq!(floor("/run/user/1000/x"), Some(FloorReason::System));
+        assert_eq!(floor("/run/lock/x"), Some(FloorReason::System));
+        assert_eq!(floor("/run/media/u/../x"), Some(FloorReason::NotClean));
+        for p in ["/dev/shm/x", "/proc/1/x", "/sys/fs/x"] {
+            assert_eq!(floor(p), Some(FloorReason::System), "{p}");
+        }
+    }
+
+    #[test]
+    fn explorer_floor_should_allow_a_home_below_a_system_top_only_inside_home() {
+        let opt = |p: &str| explorer_floor(Path::new(p), Path::new("/opt/u"));
+        assert_eq!(opt("/opt/u/code/app"), None);
+        assert_eq!(opt("/opt/u"), Some(FloorReason::Home));
+        assert_eq!(opt("/opt/u/code"), Some(FloorReason::ShallowInHome));
+        assert_eq!(opt("/opt/u/.ssh/x"), Some(FloorReason::Secrets));
+        assert_eq!(opt("/opt/thing/x"), Some(FloorReason::System));
+        let usr = |p: &str| explorer_floor(Path::new(p), Path::new("/usr/u"));
+        assert_eq!(usr("/usr/u/code/app"), Some(FloorReason::System));
+    }
+
+    #[test]
+    fn explorer_floor_should_refuse_browser_and_tool_credential_dirs() {
+        for p in [
+            "/home/u/.pki/nssdb",
+            "/home/u/.config/google-chrome-beta/Default",
+            "/home/u/.config/microsoft-edge/Default",
+            "/home/u/snap/firefox/common/.mozilla/firefox",
+            "/home/u/snap/firefox/common/.mozilla",
+            "/home/u/snap/firefox/common",
+            "/home/u/.config/Slack/Cookies",
+            "/home/u/.terraform.d/credentials.tfrc.json",
+        ] {
+            assert_eq!(floor(p), Some(FloorReason::Secrets), "{p}");
+        }
+        assert_eq!(floor("/home/u/snap/firefox/common/cache"), None);
+        assert_eq!(floor("/home/u/snap/firefox/current/x"), None);
+        let moved = secret_dirs(Path::new(HOME), Some(Path::new("/home/u/cfg")), None);
+        for n in ["Slack", "microsoft-edge", "google-chrome-beta"] {
+            assert!(
+                moved.contains(&PathBuf::from(format!("/home/u/cfg/{n}"))),
+                "{n}"
+            );
+        }
     }
 
     #[test]
