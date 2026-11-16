@@ -413,7 +413,7 @@ fn safety_for_allowed_roots_should_return_protected_path_When_the_witness_is_a_s
 #[test]
 fn safety_for_allowed_roots_should_return_protected_path_for_every_scan_root_When_the_list_order_changes(
 ) {
-    let all = [CODE, WORK, "/opt/data"];
+    let all = [CODE, WORK, "/srv/data"];
     for order in permutations(&all) {
         let rs = roots_with(HOME, &order);
         for root in all {
@@ -435,9 +435,9 @@ fn safety_for_allowed_roots_should_return_protected_path_for_every_scan_root_Whe
                 ),
             }
         }
-        let below = "/opt/data/x";
+        let below = "/srv/data/x";
         let id = ident_of(below);
-        let w = explorer_witness(below, id, "/opt/data");
+        let w = explorer_witness(below, id, "/srv/data");
         assert_why(
             &build(&w, &rs, dir_planned(id)),
             None,
@@ -498,7 +498,7 @@ fn home_chain_should_start_with_home_and_list_every_ancestor_in_order_When_roots
 #[test]
 fn home_chain_should_not_depend_on_the_scan_root_order_When_roots_are_permuted() {
     let base = expected_chain();
-    for order in permutations(&[CODE, WORK, "/opt/data"]) {
+    for order in permutations(&[CODE, WORK, "/srv/data"]) {
         let rs = roots_with(HOME, &order);
         assert_eq!(rs.home_chain(), base.as_slice(), "order {order:?}");
         assert_eq!(rs.home_id(), ident_of(HOME), "order {order:?}");
@@ -617,7 +617,7 @@ fn decide_path_common_should_allow_siblings_and_descendants_of_home_When_their_i
 #[test]
 fn safety_decide_path_common_should_skip_protected_path_for_every_chain_member_When_scan_root_order_changes(
 ) {
-    for order in permutations(&[CODE, WORK, "/opt/data"]) {
+    for order in permutations(&[CODE, WORK, "/srv/data"]) {
         let rs = roots_with(HOME, &order);
         for id in expected_chain() {
             let d = decision(Kind::ExplorerSelection, "/srv/work/alias", id, &rs);

@@ -92,7 +92,7 @@ const OUTSIDE_THE_ROOTS_BUT_FINE: [&str; 9] = [
     "/h/a/b/c/.cache/thing/deeper",
     "/h/a/b/c/media/photos/2019",
     "/srv/data/old",
-    "/opt/vendor/thing",
+    "/srv/vendor/thing",
     "/mnt/disk/stuff",
     "/tmp/scratch",
     "/var/tmp/build",

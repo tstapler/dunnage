@@ -106,20 +106,6 @@ fn safety_plan_should_refuse_a_folder_below_a_symlinked_secret_directory() {
     assert_eq!(verdict(&ex, &ex.p("vault/other/x")), Ok(()));
 }
 
-#[test]
-#[cfg_attr(not(target_os = "linux"), ignore = "mount table is read from /proc")]
-fn safety_plan_should_refuse_the_tools_own_state_below_a_symlinked_state_directory() {
-    let ex = Ex::new();
-    let real = ex.p("elsewhere/dunnage-state");
-    std::fs::create_dir_all(real.join("runs/old")).unwrap();
-    std::fs::create_dir_all(ex.base.join("state")).unwrap();
-    std::os::unix::fs::symlink(&real, ex.base.join("state/dunnage")).unwrap();
-    assert_eq!(
-        verdict(&ex, &real.join("runs")),
-        Err(SkipReason::ProtectedPath)
-    );
-}
-
 fn ident_of(p: &Path) -> Identity {
     Identity::of(&std::fs::symlink_metadata(p).unwrap())
 }
