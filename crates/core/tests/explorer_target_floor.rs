@@ -149,7 +149,7 @@ fn below_scan_root_should_accept_depth_one_When_the_root_is_outside_home() {
 
 #[test]
 fn below_scan_root_should_accept_depth_one_When_home_is_only_a_string_prefix_of_the_path() {
-    assert_accepted("/home/user2/a", &["/home/user2"], "/home/u");
+    assert_accepted("/data/u2/a", &["/data/u2"], "/data/u");
 }
 
 #[test]
