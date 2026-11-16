@@ -217,6 +217,7 @@ impl DeletePolicy {
             return Err(ForAllowedError::ChangedSincePlan);
         }
         if roots.in_home_chain(seen)
+            || roots.is_extra_secret(scope.path())
             || roots.is_scan_root(scope.path())
             || roots.root_identities().iter().any(|r| r.ident == seen)
         {
@@ -316,6 +317,19 @@ mod explorer_tests {
             Err(DeleteError::ProtectedPath)
         );
         assert_eq!(check("/home/u/code/.gitx"), Ok(()));
+    }
+
+    #[test]
+    fn validate_should_refuse_a_dot_git_component_below_any_path_not_only_below_a_scan_root() {
+        // A `.git` path has no witness (the guard refuses it), so this reaches `validate` only through the
+        // bare scope: the engine's own refusal, whatever the roots and the home are.
+        for t in [
+            "/srv/data/repo/.git/hooks",
+            "/h/a/b/c/code/app/.git/hooks",
+            "/tmp/x/.GIT/y",
+        ] {
+            assert_eq!(check(t), Err(DeleteError::ProtectedPath), "{t}");
+        }
     }
 
     #[test]

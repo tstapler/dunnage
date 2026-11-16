@@ -14,24 +14,118 @@ use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Component, Path, PathBuf};
 
-/// Top-level directories that hold the operating system, whatever lies below them.
-const SYSTEM_TOPS: [&str; 15] = [
-    "usr", "etc", "boot", "bin", "sbin", "lib", "lib32", "lib64", "libx32", "dev", "proc", "sys",
-    "run", "System", "Library",
+use crate::roots::lexically_clean;
+
+/// Top-level directories that hold the operating system or installed applications, whatever lies below them.
+/// `/opt`, `/nix`, `/snap`, `/efi`, `/lost+found` and `/Applications` hold programs, not the owner's work.
+const SYSTEM_TOPS: [&str; 21] = [
+    "usr",
+    "etc",
+    "boot",
+    "bin",
+    "sbin",
+    "lib",
+    "lib32",
+    "lib64",
+    "libx32",
+    "dev",
+    "proc",
+    "sys",
+    "run",
+    "System",
+    "Library",
+    "opt",
+    "nix",
+    "snap",
+    "efi",
+    "lost+found",
+    "Applications",
 ];
 
 /// Directories of secrets, relative to `$HOME`. Each one, everything below it and everything that holds it is
-/// refused: the 1Password desktop app and CLI state, and the agent socket directories on Linux and macOS.
-const SECRET_DIRS: [&[&str]; 8] = [
+/// refused: keys, keyrings, cloud and password-manager credentials, browser profiles (cookies and saved
+/// logins), and the 1Password app state and agent sockets on Linux (also snap and flatpak) and macOS.
+/// SECURITY.md says why each is on the list.
+const SECRET_DIRS: [&[&str]; 25] = [
     &[".ssh"],
     &[".gnupg"],
     &[".1password"],
+    &[".password-store"],
+    &[".aws"],
+    &[".kube"],
+    &[".mozilla"],
     &[".config", "1Password"],
     &[".config", "op"],
+    &[".config", "gh"],
+    &[".config", "gcloud"],
+    &[".config", "Bitwarden"],
+    &[".config", "sops"],
+    &[".config", "gnupg"],
+    &[".config", "google-chrome"],
+    &[".config", "chromium"],
+    &[".config", "BraveSoftware"],
+    &[".local", "share", "keyrings"],
+    &[".local", "share", "gnupg"],
+    &["snap", "1password"],
+    &[".var", "app", "com.1password.1Password"],
     &["Library", "Group Containers", "2BUA8C4S2C.com.1password"],
     &["Library", "Application Support", "1Password"],
     &["Library", "Containers", "com.1password.1password"],
+    &["Library", "Keychains"],
 ];
+
+/// The secret directories that live below the XDG config home (`~/.config` unless `XDG_CONFIG_HOME` moves it).
+const CONFIG_SECRETS: [&str; 10] = [
+    "1Password",
+    "op",
+    "gh",
+    "gcloud",
+    "Bitwarden",
+    "sops",
+    "gnupg",
+    "google-chrome",
+    "chromium",
+    "BraveSoftware",
+];
+
+/// The secret directories that live below the XDG data home (`~/.local/share` unless `XDG_DATA_HOME` moves it).
+const DATA_SECRETS: [&str; 2] = ["keyrings", "gnupg"];
+
+/// Every secret directory below `$HOME` by its default spelling, plus the ones below `config_home` and
+/// `data_home` when those are given and lie strictly below `home` (a moved `XDG_CONFIG_HOME` or
+/// `XDG_DATA_HOME`). Absolute and lexical: nothing is read.
+pub fn secret_dirs(
+    home: &Path,
+    config_home: Option<&Path>,
+    data_home: Option<&Path>,
+) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = SECRET_DIRS
+        .iter()
+        .map(|rel| rel.iter().fold(home.to_path_buf(), |p, c| p.join(c)))
+        .collect();
+    let below_home = |p: &Path| p.starts_with(home) && p != home && lexically_clean(p);
+    if let Some(c) = config_home.filter(|c| below_home(c)) {
+        out.extend(CONFIG_SECRETS.iter().map(|n| c.join(n)));
+    }
+    if let Some(d) = data_home.filter(|d| below_home(d)) {
+        out.extend(DATA_SECRETS.iter().map(|n| d.join(n)));
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// `secret` is `path`, below it, or holds it, comparing names ASCII case-insensitively.
+pub fn touches_secret(path: &Path, secret: &Path) -> bool {
+    let (Some(p), Some(s)) = (parts(path), parts(secret)) else {
+        return false;
+    };
+    let n = p.len().min(s.len());
+    p[..n]
+        .iter()
+        .zip(&s[..n])
+        .all(|(a, b)| a.as_bytes().eq_ignore_ascii_case(b.as_bytes()))
+}
 
 /// Why a path is on the floor. [`FloorReason::text`] is the line the screen and `audit verify` print.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,12 +136,14 @@ pub enum FloorReason {
     FilesystemRoot,
     /// A direct child of `/` (`/home`, `/var`, `/tmp`, `/srv`, `/mnt`, `/opt`, `/Users`, ...).
     TopLevel,
-    /// Inside, or equal to, a system directory (`/usr`, `/etc`, `/boot`, `/bin`, `/sbin`, `/lib*`, `/dev`,
-    /// `/proc`, `/sys`, `/run`, `/System`, `/Library`).
+    /// Inside, or equal to, a system or application directory (`/usr`, `/etc`, `/boot`, `/bin`, `/sbin`, `/lib*`,
+    /// `/dev`, `/proc`, `/sys`, `/run`, `/System`, `/Library`, `/opt`, `/nix`, `/snap`, `/efi`, `/lost+found`,
+    /// `/Applications`, `/tmp/.X11-unix`).
     System,
     /// Inside `/var` but not below `/var/tmp`, `/var/cache` or `/var/folders` (macOS temp), or one of those three.
     VarState,
-    /// Another account's home directory (`/home/<user>`, `/Users/<user>`, `/var/home/<user>`).
+    /// Another account's home directory or anything below it (`/home/<user>`, `/Users/<user>`,
+    /// `/var/home/<user>`, `/root`) that is not below the real `$HOME`.
     AccountHome,
     /// `$HOME` itself.
     Home,
@@ -55,7 +151,8 @@ pub enum FloorReason {
     HomeAncestor,
     /// Fewer than two components below `$HOME` (rule F of the delete engine).
     ShallowInHome,
-    /// A key or credential directory, or a directory that holds one.
+    /// A key, credential or browser-profile directory, an ssh-agent socket directory in `/tmp`, or a directory
+    /// that holds one.
     Secrets,
     /// A `.git` component anywhere in the path.
     Git,
@@ -74,7 +171,7 @@ impl FloorReason {
             FloorReason::VarState => {
                 "only folders below /var/tmp, /var/cache and /var/folders can be deleted from /var"
             }
-            FloorReason::AccountHome => "a user's home directory is never deleted",
+            FloorReason::AccountHome => "another account's home directory and what is in it are never deleted from here",
             FloorReason::Home => "your home directory is never deleted",
             FloorReason::HomeAncestor => "a folder that holds your home directory is never deleted",
             FloorReason::ShallowInHome => {
@@ -130,9 +227,9 @@ pub fn explorer_floor(path: &Path, home: &Path) -> Option<FloorReason> {
     {
         p.remove(0);
     }
-    let in_home = home_rules(path, home);
-    if matches!(in_home, Some(FloorReason::Home | FloorReason::HomeAncestor)) {
-        return in_home;
+    let rel_home = home_rules(path, home);
+    if let HomeRel::Refused(r @ (FloorReason::Home | FloorReason::HomeAncestor)) = rel_home {
+        return Some(r);
     }
     if p.len() == 1 {
         return Some(FloorReason::TopLevel);
@@ -140,21 +237,45 @@ pub fn explorer_floor(path: &Path, home: &Path) -> Option<FloorReason> {
     if SYSTEM_TOPS.iter().any(|n| eq_ci(p[0], n)) {
         return Some(FloorReason::System);
     }
+    if let Some(r) = tmp_rule(&p) {
+        return Some(r);
+    }
     if eq_ci(p[0], "var") {
         let var_home = p.len() >= 3 && eq_ci(p[1], "home");
-        if var_home && p.len() == 3 {
-            return Some(FloorReason::AccountHome);
-        }
         // `folders` is macOS's per-user temp and cache area (`/var/folders/xx/<hash>/T`).
         let scratch = p.len() >= 3 && ["tmp", "cache", "folders"].iter().any(|n| eq_ci(p[1], n));
         if !(scratch || var_home) {
             return Some(FloorReason::VarState);
         }
     }
-    if p.len() == 2 && (eq_ci(p[0], "home") || eq_ci(p[0], "Users")) {
-        return Some(FloorReason::AccountHome);
+    match rel_home {
+        HomeRel::Refused(r) => Some(r),
+        HomeRel::Inside => None,
+        HomeRel::Outside => other_account(&p),
     }
-    in_home
+}
+
+/// `/tmp/ssh-*` holds ssh-agent sockets; `/tmp/.X11-unix` holds the X server's.
+fn tmp_rule(p: &[&OsStr]) -> Option<FloorReason> {
+    if p.len() < 2 || !eq_ci(p[0], "tmp") {
+        return None;
+    }
+    let name = p[1].as_bytes();
+    if name.len() >= 4 && name[..4].eq_ignore_ascii_case(b"ssh-") {
+        return Some(FloorReason::Secrets);
+    }
+    eq_ci(p[1], ".X11-unix").then_some(FloorReason::System)
+}
+
+/// Something in another account's tree: `/home/<user>/...`, `/Users/<user>/...`, `/var/home/<user>/...` or
+/// `/root/...`, for a path that is not below the real `$HOME`.
+fn other_account(p: &[&OsStr]) -> Option<FloorReason> {
+    let in_account = match p {
+        [top, _, ..] if eq_ci(top, "home") || eq_ci(top, "Users") || eq_ci(top, "root") => true,
+        [var, home, _, ..] => eq_ci(var, "var") && eq_ci(home, "home"),
+        _ => false,
+    };
+    in_account.then_some(FloorReason::AccountHome)
 }
 
 fn same_prefix(a: &[&OsStr], b: &[&OsStr]) -> bool {
@@ -164,28 +285,53 @@ fn same_prefix(a: &[&OsStr], b: &[&OsStr]) -> bool {
             .all(|(x, y)| x.as_bytes().eq_ignore_ascii_case(y.as_bytes()))
 }
 
-fn home_rules(path: &Path, home: &Path) -> Option<FloorReason> {
+/// Where `path` stands against `$HOME`.
+enum HomeRel {
+    /// Not below `$HOME` (and not `$HOME` or an ancestor).
+    Outside,
+    /// Below `$HOME`, deep enough and not a secret.
+    Inside,
+    /// `$HOME`, an ancestor, shallow, or a secret.
+    Refused(FloorReason),
+}
+
+fn home_rules(path: &Path, home: &Path) -> HomeRel {
     let (Some(h), Some(p)) = (parts(home), parts(path)) else {
-        return None;
+        return HomeRel::Outside;
     };
     if p.len() == h.len() && same_prefix(&h, &p) {
-        return Some(FloorReason::Home);
+        return HomeRel::Refused(FloorReason::Home);
     }
     if same_prefix(&p, &h) {
-        return Some(FloorReason::HomeAncestor);
+        return HomeRel::Refused(FloorReason::HomeAncestor);
     }
     if !same_prefix(&h, &p) {
-        return None;
+        return HomeRel::Outside;
     }
     let rel = &p[h.len()..];
     if rel.len() < 2 {
-        return Some(FloorReason::ShallowInHome);
+        return HomeRel::Refused(FloorReason::ShallowInHome);
     }
     let secret = SECRET_DIRS.iter().any(|s| {
         let n = s.len().min(rel.len());
         rel[..n].iter().zip(&s[..n]).all(|(a, b)| eq_ci(a, b))
     });
-    secret.then_some(FloorReason::Secrets)
+    if secret {
+        HomeRel::Refused(FloorReason::Secrets)
+    } else {
+        HomeRel::Inside
+    }
+}
+
+/// [`explorer_floor`], and also `Secrets` for a path that is, is below or holds one of `extra` (the secret
+/// directories a moved `XDG_*_HOME` or a symlinked secret directory put elsewhere: `RootSet::extra_secrets`).
+pub fn explorer_floor_with(path: &Path, home: &Path, extra: &[PathBuf]) -> Option<FloorReason> {
+    explorer_floor(path, home).or_else(|| {
+        extra
+            .iter()
+            .any(|s| touches_secret(path, s))
+            .then_some(FloorReason::Secrets)
+    })
 }
 
 /// The directory a delete opens first and walks down from: the longest scan root that holds `path`, else the
@@ -231,7 +377,6 @@ mod tests {
             "/home/u/a/b/c/d",
             "/tmp/scratch",
             "/srv/data/old",
-            "/opt/thing",
             "/mnt/disk/stuff",
             "/var/tmp/x",
             "/var/cache/x",
@@ -365,6 +510,86 @@ mod tests {
             explorer_floor(p, Path::new(HOME)),
             Some(FloorReason::NotClean)
         );
+    }
+
+    #[test]
+    fn explorer_floor_should_refuse_everything_below_another_accounts_home() {
+        for p in [
+            "/home/other/code",
+            "/home/other/.ssh/x",
+            "/Users/o/Documents/x",
+            "/var/home/other/code/app",
+            "/root/x",
+            "/root/a/b",
+        ] {
+            assert_eq!(floor(p), Some(FloorReason::AccountHome), "{p}");
+        }
+        let root = |p: &str| explorer_floor(Path::new(p), Path::new("/root"));
+        assert_eq!(root("/root/code/app"), None);
+        assert_eq!(root("/root/.ssh/x"), Some(FloorReason::Secrets));
+    }
+
+    #[test]
+    fn explorer_floor_should_refuse_application_trees_and_agent_sockets() {
+        for p in [
+            "/opt/thing",
+            "/nix/store/x",
+            "/snap/core/1",
+            "/efi/x",
+            "/lost+found/x",
+            "/Applications/A.app/x",
+            "/tmp/.X11-unix/X0",
+        ] {
+            assert_eq!(floor(p), Some(FloorReason::System), "{p}");
+        }
+        for p in ["/tmp/ssh-abc/agent.1", "/private/tmp/SSH-abc/agent.1"] {
+            assert_eq!(floor(p), Some(FloorReason::Secrets), "{p}");
+        }
+        assert_eq!(floor("/tmp/ssh/x"), None);
+        assert_eq!(floor("/tmp/sshfs/x"), None);
+    }
+
+    #[test]
+    fn secret_dirs_should_list_every_default_and_follow_a_moved_xdg_home_below_home_only() {
+        let home = Path::new("/home/u");
+        let default = secret_dirs(home, None, None);
+        assert_eq!(default.len(), SECRET_DIRS.len());
+        assert!(default.contains(&PathBuf::from("/home/u/.aws")));
+        let moved = secret_dirs(
+            home,
+            Some(Path::new("/home/u/cfg")),
+            Some(Path::new("/home/u/data")),
+        );
+        assert!(moved.contains(&PathBuf::from("/home/u/cfg/gh")));
+        assert!(moved.contains(&PathBuf::from("/home/u/data/keyrings")));
+        let outside = secret_dirs(
+            home,
+            Some(Path::new("/srv/cfg")),
+            Some(Path::new("/home/u")),
+        );
+        assert_eq!(outside, default);
+        let unclean = secret_dirs(home, Some(Path::new("/home/u/../x")), None);
+        assert_eq!(unclean, default);
+    }
+
+    #[test]
+    fn touches_secret_should_match_the_directory_what_is_below_it_and_what_holds_it() {
+        let s = Path::new("/mnt/vault/Keys");
+        assert!(touches_secret(Path::new("/mnt/vault/keys/x/y"), s));
+        assert!(touches_secret(Path::new("/mnt/vault"), s));
+        assert!(touches_secret(Path::new("/mnt/vault/KEYS"), s));
+        assert!(!touches_secret(Path::new("/mnt/vault/keys2/x"), s));
+        assert!(!touches_secret(Path::new("/mnt/other"), s));
+        assert!(!touches_secret(Path::new("relative"), s));
+    }
+
+    #[test]
+    fn explorer_floor_with_should_add_the_extra_secret_directories() {
+        let extra = [PathBuf::from("/mnt/vault/ssh")];
+        let f = |p: &str| explorer_floor_with(Path::new(p), Path::new(HOME), &extra);
+        assert_eq!(f("/mnt/vault/ssh/keys"), Some(FloorReason::Secrets));
+        assert_eq!(f("/mnt/vault/other/x"), None);
+        assert_eq!(f("/usr/x"), Some(FloorReason::System));
     }
 
     #[test]

@@ -27,7 +27,7 @@ use dunnage_core::delete_types::FileKind;
 use dunnage_core::explore::confirm::ReviewedItem;
 use dunnage_core::explore::mark_check::OwnState;
 use dunnage_core::explorer_floor::explorer_anchor;
-use dunnage_core::explorer_plan::{judge_fresh, mount_facts, FreshCheck};
+use dunnage_core::explorer_plan::{judge_fresh, mount_facts, protected_by_identity, FreshCheck};
 use dunnage_core::floor_rule::ForAllowedError;
 use dunnage_core::plan::ItemIdentity;
 use dunnage_core::ports::Env;
@@ -41,7 +41,7 @@ use dunnage_core::{
 };
 
 use crate::delete_tree;
-use crate::dirops::{open_parent, open_verified_root, DirOps};
+use crate::dirops::{open_parent, open_verified_root, DirOps, VerifiedRoot};
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -147,6 +147,34 @@ impl<D: DirOps> ExplorerSelectionTarget<D> {
         Ok((root.to_path_buf(), planned.ident))
     }
 
+    /// The `(dev, ino)` of `root` and of each directory below it on the way to `rel_parent`, opened
+    /// component by component with `O_NOFOLLOW` (the walk `open_parent` does again right after).
+    fn chain_idents(
+        &self,
+        root: &VerifiedRoot<D::Dir>,
+        rel_parent: &Path,
+    ) -> Result<Vec<Identity>, DeleteError> {
+        let fstat = |d: &D::Dir| {
+            self.ops
+                .fstat(d)
+                .map(|st| st.ident)
+                .map_err(|e| crate::dirops::map_open_error(&e))
+        };
+        let mut chain = vec![fstat(root.dir())?];
+        let mut cur: Option<D::Dir> = None;
+        for c in rel_parent.components() {
+            let next = {
+                let from = cur.as_ref().unwrap_or_else(|| root.dir());
+                self.ops
+                    .open_dir(from, c.as_os_str())
+                    .map_err(|e| crate::dirops::map_open_error(&e))?
+            };
+            chain.push(fstat(&next)?);
+            cur = Some(next);
+        }
+        Ok(chain)
+    }
+
     /// The full, fresh decision for `c`: planned, root unchanged, same thing behind the path, rules M1 to M5.
     fn recheck(&self, c: &Candidate, env: &Env) -> Result<Allowed, SkipReason> {
         let Locator::Path(path) = c.locator() else {
@@ -194,6 +222,10 @@ impl<D: DirOps> ExplorerSelectionTarget<D> {
             .and_then(|p| p.strip_prefix(&base).ok())
             .ok_or_else(|| failure(DeleteError::OutsideScope))?;
         let root = open_verified_root(&self.ops, &base, base_id).map_err(failure)?;
+        // The identity of every directory opened on the way down, the starting directory included: a secret
+        // directory or the tool's own state reached under another spelling is refused here, by what was
+        // opened, not by what the path says.
+        let chain = self.chain_idents(&root, rel_parent).map_err(failure)?;
         let parent = open_parent(&self.ops, &root, rel_parent).map_err(failure)?;
         let opened_root = self
             .ops
@@ -230,7 +262,9 @@ impl<D: DirOps> ExplorerSelectionTarget<D> {
         if !planned.still_matches(&ItemIdentity::of(&opened)) {
             return Err(failure(DeleteError::IdentityMismatch));
         }
-        if self.roots.in_home_chain(opened.ident) {
+        if self.roots.in_home_chain(opened.ident)
+            || protected_by_identity(&self.roots, &self.own_state, env.fs, &chain, opened.ident)
+        {
             return Err(failure(DeleteError::ProtectedPath));
         }
 

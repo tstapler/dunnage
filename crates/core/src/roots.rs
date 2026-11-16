@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use crate::audit_types::RunRoots;
 use crate::delete_types::{AllowedTarget, NamePattern};
 use crate::dirs::Dirs;
-use crate::explorer_floor::explorer_floor;
+use crate::explorer_floor::{explorer_floor_with, secret_dirs, touches_secret, FloorReason};
 use crate::ids::Identity;
 use crate::kind::Kind;
 use crate::outcome::SkipReason;
@@ -174,6 +174,61 @@ pub struct RootSet {
     /// `CARGO_HOME` when it names a directory strictly below `$HOME` (default `~/.cargo`); `None` otherwise,
     /// and then the `cargo-home` kind has no root.
     cargo_home: Option<PathBuf>,
+    /// The secret directories of `explorer_floor` that exist, by the `(dev, ino)` `canon` reported (it follows
+    /// links): the explorer refuses them, and anything below them, whatever path it is reached by (a symlinked
+    /// `~/.ssh`, a bind mount, a btrfs top-level mount). Resolved once, like `home_chain`.
+    secret_idents: Vec<Identity>,
+    /// The directories strictly between `$HOME` and a secret directory (`~/.local/share` holds
+    /// `~/.local/share/keyrings`), by identity: refused themselves, not what lies below them.
+    holder_idents: Vec<Identity>,
+    /// Secret directories the lexical floor cannot know: where a moved `XDG_*_HOME` puts them and the real
+    /// location of a symlinked one.
+    extra_secrets: Vec<PathBuf>,
+}
+
+struct Protected {
+    secrets: Vec<Identity>,
+    holders: Vec<Identity>,
+    extra: Vec<PathBuf>,
+}
+
+/// The identities of the secret directories that exist below `home`, of the directories that hold them, and the
+/// real location of a symlinked one. A directory that cannot be resolved does not exist as far as this goes.
+fn resolve_secrets(home: &Path, config: &Path, canon: Canon<'_>) -> Protected {
+    // The lexical floor already knows the default spellings; only a moved XDG config home adds to it.
+    let default = secret_dirs(home, None, None);
+    let all = secret_dirs(home, Some(config), None);
+    let mut out = Protected {
+        secrets: Vec::new(),
+        holders: Vec::new(),
+        extra: all
+            .iter()
+            .filter(|s| !default.contains(s))
+            .cloned()
+            .collect(),
+    };
+    for s in all {
+        if let Ok((real, id)) = canon(&s) {
+            if !out.secrets.contains(&id) {
+                out.secrets.push(id);
+            }
+            if real != s && !out.extra.contains(&real) {
+                out.extra.push(real);
+            }
+        }
+        for a in s
+            .ancestors()
+            .skip(1)
+            .take_while(|a| *a != home && a.starts_with(home))
+        {
+            if let Ok((_, id)) = canon(a) {
+                if !out.holders.contains(&id) {
+                    out.holders.push(id);
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Absolute, no `.` or `..`, no empty component, no trailing `/` (except `/` itself). The string-level rule of
@@ -333,6 +388,7 @@ impl RootSet {
         }
         let cache_paths = CACHE_PATHS.iter().map(|p| home.join(p)).collect();
         let cargo_home = Some(home.join(".cargo"));
+        let protected = resolve_secrets(&home, &dirs.config, canon);
         Ok(RootSet {
             home,
             home_id,
@@ -342,7 +398,42 @@ impl RootSet {
             cache_paths,
             steam_libraries: Vec::new(),
             cargo_home,
+            secret_idents: protected.secrets,
+            holder_idents: protected.holders,
+            extra_secrets: protected.extra,
         })
+    }
+
+    /// Adds where `XDG_DATA_HOME` puts the keyring and gnupg directories when it is a clean path strictly
+    /// below `$HOME` (lexical only; the default `~/.local/share` is always covered). Anything else is ignored.
+    #[must_use]
+    pub fn with_xdg_data_home(mut self, data_home: Option<&Path>) -> RootSet {
+        for s in secret_dirs(&self.home, None, data_home) {
+            if !self.extra_secrets.contains(&s) {
+                self.extra_secrets.push(s);
+            }
+        }
+        self
+    }
+
+    /// `explorer_floor` for this machine: the lexical floor plus the secret directories this root set knows
+    /// about (a moved `XDG_*_HOME`, the real location of a symlinked secret directory).
+    pub fn explorer_floor(&self, path: &Path) -> Option<FloorReason> {
+        explorer_floor_with(path, &self.home, &self.extra_secrets)
+    }
+
+    /// `path` is, is below or holds a secret directory that only this root set knows (not the lexical floor).
+    pub fn is_extra_secret(&self, path: &Path) -> bool {
+        self.extra_secrets.iter().any(|s| touches_secret(path, s))
+    }
+
+    /// `true` when `item` is a secret directory or what holds one, or one of `ancestors` (the identities of the
+    /// directories on the way to it) is a secret directory: the same directory under another spelling.
+    pub fn protected_by_identity(&self, ancestors: &[Identity], item: Identity) -> bool {
+        self.secret_idents
+            .iter()
+            .any(|s| *s == item || ancestors.contains(s))
+            || self.holder_idents.contains(&item)
     }
 
     /// Points the `cargo-home` kind at `CARGO_HOME`. Accepted only when it is lexically clean and strictly
@@ -499,7 +590,7 @@ impl RootSet {
             return false;
         }
         if kind == Kind::ExplorerSelection {
-            return explorer_floor(path, &self.home).is_none();
+            return self.explorer_floor(path).is_none();
         }
         self.allowed(kind).iter().any(|t| match t {
             AllowedTarget::Exact(p) => p == path,

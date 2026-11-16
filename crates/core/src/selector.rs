@@ -212,10 +212,9 @@ impl KindSelector {
 pub fn default_min_age_secs(id: SelectorId) -> Option<u64> {
     match id {
         SelectorId::Worktrees | SelectorId::BuildDirs => Some(14 * DAY),
-        SelectorId::CargoHome
-        | SelectorId::DockerImages
-        | SelectorId::DockerVolumes
-        | SelectorId::Steam => Some(30 * DAY),
+        // Unpacked sources age from extraction, not from use: 90 days, not 30 (see the kind's reason text).
+        SelectorId::CargoHome => Some(90 * DAY),
+        SelectorId::DockerImages | SelectorId::DockerVolumes | SelectorId::Steam => Some(30 * DAY),
         SelectorId::Caches
         | SelectorId::CacheApt
         | SelectorId::Docker

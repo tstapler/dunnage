@@ -210,7 +210,23 @@ fn m1_should_ignore_the_explore_path_and_see_only_the_roots_resolve_returned_Whe
         &canon,
     )
     .unwrap();
-    let asked: HashSet<PathBuf> = seen.borrow().iter().cloned().collect();
+    // `resolve` also looks up the secret directories (and what holds them) to protect them by identity.
+    let secrets = dunnage_core::explorer_floor::secret_dirs(
+        Path::new("/home/u"),
+        Some(Path::new("/home/u/.config")),
+        None,
+    );
+    let secret_side = |p: &PathBuf| {
+        p.starts_with("/home/u")
+            && p != Path::new("/home/u")
+            && secrets.iter().any(|s| s.starts_with(p))
+    };
+    let asked: HashSet<PathBuf> = seen
+        .borrow()
+        .iter()
+        .filter(|p| !secret_side(p))
+        .cloned()
+        .collect();
     let allowed: HashSet<PathBuf> = ["/home/u", "/home", "/", "/home/u/work"]
         .iter()
         .map(PathBuf::from)
@@ -239,7 +255,7 @@ fn m2_should_refuse_home_its_ancestors_and_anything_under_two_components_below_h
     }
     assert!(w.check("/home/u/Documents/x").is_ok()); // two components below home: rule F lets it through
     assert_eq!(w.refusal("/"), Some(PROTECTED));
-    assert!(w.check("/opt/app/node_modules").is_ok());
+    assert!(w.check("/srv/app/node_modules").is_ok());
 }
 
 #[test]
@@ -438,7 +454,7 @@ fn m5_should_refuse_every_file_of_the_tools_own_state_its_directories_ancestors_
             cache: "/home/u/.cache".into(),
             config: "/home/u/.config".into(),
         },
-        "/opt/dunnage/bin/dunnage".into(),
+        "/srv/dunnage/bin/dunnage".into(),
     );
     let state = "/home/u/.local/state/dunnage";
     let cache = "/home/u/.cache/dunnage";
@@ -466,7 +482,7 @@ fn m5_should_refuse_every_file_of_the_tools_own_state_its_directories_ancestors_
             cache,
             config,
             "/home/u/.local/state",
-            "/opt/dunnage/bin/dunnage",
+            "/srv/dunnage/bin/dunnage",
         ]
         .map(String::from),
     );
@@ -475,7 +491,7 @@ fn m5_should_refuse_every_file_of_the_tools_own_state_its_directories_ancestors_
         assert_eq!(w.refusal(p), Some(MarkRefusal::OwnState), "{p}");
     }
     assert!(w.check("/home/u/.cache/other").is_ok()); // beside the state, not inside it
-    assert!(w.check("/opt/app/target").is_ok());
+    assert!(w.check("/srv/app/target").is_ok());
 }
 
 #[test]
@@ -631,10 +647,10 @@ fn mark_check_should_call_the_engines_own_functions_not_copies() {
     );
     let roots = include_str!("../src/roots.rs");
     assert!(roots.contains("strictly_below(root, path)"));
-    assert!(roots.contains("explorer_floor(path, &self.home)"));
+    assert!(roots.contains("self.explorer_floor(path).is_none()"));
     let guard = include_str!("../src/guard.rs");
     assert!(guard.contains("protected_position(path, roots.scan_roots())"));
-    assert!(guard.contains("explorer_floor(path, roots.home())"));
+    assert!(guard.contains("roots.explorer_floor(path)"));
 }
 
 fn comp() -> impl Strategy<Value = &'static str> {

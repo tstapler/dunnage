@@ -109,6 +109,12 @@ impl OwnState {
         own
     }
 
+    /// The state, cache and config directories of the tool, in both spellings when [`OwnState::canonical`] built
+    /// this: what the plan and the apply also compare by identity.
+    pub fn dirs(&self) -> &[PathBuf] {
+        &self.dirs
+    }
+
     pub fn covers(&self, path: &Path) -> bool {
         self.binaries.iter().any(|b| b.starts_with(path))
             || self
@@ -226,8 +232,12 @@ fn mount_rule(path: &Path, env: &MarkEnv<'_>) -> Result<Option<String>, MarkRefu
     if facts.is_boundary(path) || env.mounts.at(path).is_some() {
         return Err(MarkRefusal::MountPoint);
     }
-    if matches!((dev, root_dev), (Some(a), Some(b)) if a != b) {
-        return Err(MarkRefusal::Engine(SkipReason::CrossDevice));
+    // A starting directory whose device cannot be read is not "the same device". (An unreadable `dev` of the
+    // path itself is a path that is gone: `is_dir` below says so.)
+    match (dev, root_dev) {
+        (Some(a), Some(b)) if a == b => {}
+        (Some(_), _) => return Err(MarkRefusal::Engine(SkipReason::CrossDevice)),
+        (None, _) => {}
     }
     let mut other_devices: Vec<&str> = Vec::new();
     for m in env.mounts.below(path) {

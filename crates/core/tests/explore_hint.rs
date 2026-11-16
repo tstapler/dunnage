@@ -405,7 +405,23 @@ fn marking_should_use_the_cleaners_roots_never_the_explore_path_and_the_home_def
     // `RootSet::resolve`; the recording canon sees only HOME, its ancestors and the configured root.
     let fs = FakeCanon::new(&["/", "/h", "/h/code", "/h/Documents", "/data/x"]);
     let r = resolve(&fs, Some(&["~/code"]));
-    let seen = fs.calls.borrow().clone();
+    // plus the secret directories below HOME (and what holds them), which `resolve` protects by identity
+    let secrets = dunnage_core::explorer_floor::secret_dirs(
+        std::path::Path::new("/h"),
+        Some(std::path::Path::new("/h/.config")),
+        None,
+    );
+    let seen: Vec<_> = fs
+        .calls
+        .borrow()
+        .iter()
+        .filter(|p| {
+            !(p.starts_with("/h")
+                && p.as_path() != std::path::Path::new("/h")
+                && secrets.iter().any(|s| s.starts_with(p)))
+        })
+        .cloned()
+        .collect();
     assert!(
         seen.iter()
             .all(|p| ["/h", "/", "/h/code"].contains(&p.to_str().unwrap())),

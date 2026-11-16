@@ -3,7 +3,6 @@
 use std::path::PathBuf;
 
 use crate::allowed::Allowed;
-use crate::explorer_floor::explorer_floor;
 use crate::ids::{Identity, RootDev};
 use crate::kind::Kind;
 use crate::outcome::SkipReason;
@@ -58,7 +57,7 @@ pub fn decide_path_common(facts: &Facts, roots: &RootSet) -> GuardDecision {
         return Skip(SkipReason::ProtectedPath);
     }
     // An explorer mark may be anywhere the owner may delete, except the floor (`explorer_floor`).
-    if facts.kind == Kind::ExplorerSelection && explorer_floor(path, roots.home()).is_some() {
+    if facts.kind == Kind::ExplorerSelection && roots.explorer_floor(path).is_some() {
         return Skip(SkipReason::ProtectedPath);
     }
     if !facts.ident.on_dev(facts.root_dev) {

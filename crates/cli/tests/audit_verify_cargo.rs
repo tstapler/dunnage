@@ -4,7 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
-use dunnage_adapters::audit_verify::{verify_audit, AllowedTable, VerifyInputs};
+use dunnage_adapters::audit_verify::{
+    verify_audit, verify_audit_with, AllowedTable, VerifyExtras, VerifyInputs,
+};
 use serde_json::json;
 
 const HOME: &str = "/home/u";
@@ -73,11 +75,10 @@ fn audit_verify_should_accept_a_cargo_part_below_a_configured_root() {
 }
 
 #[test]
-fn audit_verify_should_accept_a_cargo_home_entry_below_home_wherever_cargo_home_is() {
+fn audit_verify_should_accept_a_cargo_home_entry_below_the_default_cargo_home_only() {
     let ok = [
         "/home/u/.cargo/registry/src/index.crates.io-6f17d22bba15001f/serde-1.0.200",
         "/home/u/.cargo/git/checkouts/repo-1a2b3c/abcdef1",
-        "/home/u/dev/cargo/registry/src/index.crates.io-6f17d22bba15001f/serde-1.0.200",
     ];
     assert!(violations("cargo-home", &ok, None).is_empty());
     let bad = [
@@ -92,6 +93,57 @@ fn audit_verify_should_accept_a_cargo_home_entry_below_home_wherever_cargo_home_
         "/home/u/.cargo/registry/src/idx/serde-1.0.200/src",
         "/home/u/.cargo/registry/src/idx/.git",
         "/home/u/x/.git/registry/src/idx/serde-1.0.200",
+        // a moved CARGO_HOME is only known when the verifier is told
+        "/home/u/dev/cargo/registry/src/index.crates.io-6f17d22bba15001f/serde-1.0.200",
     ];
     assert_eq!(violations("cargo-home", &bad, None), bad);
+}
+
+fn violations_with_cargo_home(paths: &[&str], cargo_home: &str) -> Vec<String> {
+    let mut lines = vec![start("r")];
+    lines.extend(paths.iter().map(|p| removed("r", "cargo-home", p)));
+    let table = AllowedTable::embedded();
+    verify_audit_with(
+        lines.join("\n").as_bytes(),
+        &VerifyInputs {
+            table: &table,
+            home: Path::new(HOME),
+            config_roots: None,
+        },
+        &VerifyExtras {
+            cargo_home: Some(PathBuf::from(cargo_home)),
+            ..VerifyExtras::default()
+        },
+    )
+    .unwrap()
+    .violations
+    .into_iter()
+    .map(|v| v.path)
+    .collect()
+}
+
+#[test]
+fn audit_verify_should_accept_a_cargo_home_entry_below_the_cargo_home_the_verifier_was_given() {
+    let moved = "/home/u/dev/cargo/registry/src/index.crates.io-6f17d22bba15001f/serde-1.0.200";
+    let default = "/home/u/.cargo/git/checkouts/repo-1a2b3c/abcdef1";
+    assert!(violations_with_cargo_home(&[moved, default], "/home/u/dev/cargo").is_empty());
+    // a CARGO_HOME that is $HOME, outside it, unclean or relative adds nothing
+    for bad in [
+        "/home/u",
+        "/opt/cargo",
+        "/home/u/../u/dev/cargo",
+        "dev/cargo",
+    ] {
+        assert_eq!(
+            violations_with_cargo_home(&[moved], bad),
+            [moved],
+            "CARGO_HOME={bad}"
+        );
+    }
+    // and nothing else below home is widened by it
+    let other = "/home/u/Documents/registry/src/a/b";
+    assert_eq!(
+        violations_with_cargo_home(&[other], "/home/u/dev/cargo"),
+        [other]
+    );
 }

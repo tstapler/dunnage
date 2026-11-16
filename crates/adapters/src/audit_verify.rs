@@ -26,9 +26,9 @@ enum Rule {
     ToolOwned(String),
     UnderRoots(Vec<String>),
     UnderLibrary(Vec<String>),
-    /// Strictly below `$HOME`, with at least one directory above the pattern (`CARGO_HOME` is moveable but
-    /// never `$HOME` itself) and no `.git` component.
-    UnderHome(Vec<String>),
+    /// Exactly the pattern below the cargo home (`~/.cargo`, or the `CARGO_HOME` the verifier was run with when
+    /// it is a clean path strictly below `$HOME`), no `.git` component.
+    UnderCargoHome(Vec<String>),
 }
 
 /// The parsed `ci/allowed-roots.txt`.
@@ -63,7 +63,7 @@ impl AllowedTable {
                 "tool-owned" => Rule::ToolOwned(value),
                 "under-roots" => Rule::UnderRoots(segments(&value)),
                 "under-library" => Rule::UnderLibrary(segments(&value)),
-                "under-home" => Rule::UnderHome(segments(&value)),
+                "under-cargo-home" => Rule::UnderCargoHome(segments(&value)),
                 _ => return Err(bad()),
             };
             t.rules.entry(kind.to_string()).or_default().push(rule);
@@ -219,6 +219,9 @@ pub struct VerifyInputs<'a> {
 #[derive(Debug, Clone, Default)]
 pub struct VerifyExtras {
     pub own_dirs: Vec<PathBuf>,
+    /// `CARGO_HOME` of the verifying shell. `~/.cargo` is always accepted; this adds one more base, and only
+    /// when it is a clean absolute path strictly below `$HOME`.
+    pub cargo_home: Option<PathBuf>,
 }
 
 pub(crate) fn show(bytes: &[u8]) -> String {
@@ -280,15 +283,28 @@ fn matches_under(pat: &[String], roots: &[Vec<u8>], p: &[&[u8]]) -> bool {
     })
 }
 
-fn matches_home(pat: &[String], home: &[&[u8]], p: &[&[u8]]) -> bool {
-    under(p, home).is_some_and(|rel| {
-        rel.len() > pat.len()
-            && rel.iter().all(|c| *c != b".git")
-            && rel[rel.len() - pat.len()..]
-                .iter()
-                .zip(pat)
-                .all(|(c, s)| seg_matches(s, c))
-    })
+/// `p` is `<base>/<pat>` for one of the cargo homes: `~/.cargo` and, when given, the verifier's `CARGO_HOME`.
+fn matches_cargo_home(
+    pat: &[String],
+    home: &[&[u8]],
+    cargo_home: Option<&Path>,
+    p: &[&[u8]],
+) -> bool {
+    use std::os::unix::ffi::OsStrExt;
+    let default: Vec<&[u8]> = home.iter().copied().chain([&b".cargo"[..]]).collect();
+    let moved_parts = cargo_home
+        .and_then(|c| components(c.as_os_str().as_bytes()))
+        .filter(|c| under(c, home).is_some_and(|rel| !rel.is_empty()));
+    [Some(default), moved_parts]
+        .into_iter()
+        .flatten()
+        .any(|base| {
+            under(p, &base).is_some_and(|rel| {
+                rel.len() == pat.len()
+                    && rel.iter().all(|c| *c != b".git")
+                    && rel.iter().zip(pat).all(|(c, s)| seg_matches(s, c))
+            })
+        })
 }
 
 fn matches_library(pat: &[String], libraries: &[Vec<u8>], p: &[&[u8]]) -> bool {
@@ -306,7 +322,13 @@ enum Verdict {
     Outside(String),
 }
 
-fn judge(kind: &str, path: &[u8], inp: &VerifyInputs, rec: &Recorded) -> Verdict {
+fn judge(
+    kind: &str,
+    path: &[u8],
+    inp: &VerifyInputs,
+    extras: &VerifyExtras,
+    rec: &Recorded,
+) -> Verdict {
     let Some(p) = components(path) else {
         return Verdict::Outside(
             "path is relative or not lexically clean (a '..', '.', or empty component)".into(),
@@ -339,7 +361,9 @@ fn judge(kind: &str, path: &[u8], inp: &VerifyInputs, rec: &Recorded) -> Verdict
             }),
             Rule::UnderRoots(pat) => matches_under(pat, &roots, &p),
             Rule::UnderLibrary(pat) => matches_library(pat, &rec.steam_libraries, &p),
-            Rule::UnderHome(pat) => matches_home(pat, &home, &p),
+            Rule::UnderCargoHome(pat) => {
+                matches_cargo_home(pat, &home, extras.cargo_home.as_deref(), &p)
+            }
         };
         if ok {
             return Verdict::Inside;
@@ -525,7 +549,7 @@ fn judge_line(
             Some(reason) => Verdict::Outside(reason),
         };
     }
-    judge(kind, bytes, inp, rec)
+    judge(kind, bytes, inp, extras, rec)
 }
 
 /// A `Partial` result or an `intent` whose path the table does not allow. It is not a counted deletion.

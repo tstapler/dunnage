@@ -17,7 +17,7 @@ use crate::explore::marks::Marks;
 use crate::explore::msg::MarkRefusal;
 use crate::explorer_floor::explorer_anchor;
 use crate::guard::{decide_path_common, Facts, GuardDecision};
-use crate::ids::{AllocatedBytes, RootDev};
+use crate::ids::{AllocatedBytes, Identity, RootDev};
 use crate::kind::Kind;
 use crate::outcome::SkipReason;
 use crate::plan::{not_an_item_text, ItemIdentity, OnlyMode, Plan, PlanId, Planned};
@@ -263,9 +263,26 @@ pub fn judge_fresh(
             };
         }
     }
-    let root_dev = anchor
-        .and_then(|r| fc.fs.lstat(r).ok())
-        .map_or(RootDev(st.ident.dev), |s| RootDev(s.ident.dev));
+    // The starting directory's device is what every other directory is compared with: when it cannot be read
+    // now, nothing is. (Without an anchor `mark_check` refuses below; the item's device is only a placeholder.)
+    let root_dev = match anchor {
+        Some(r) => match fc.fs.lstat(r) {
+            Ok(s) => RootDev(s.ident.dev),
+            Err(_) => {
+                return FreshVerdict {
+                    allowed: Err(SkipReason::ProtectedPath),
+                    note: None,
+                };
+            }
+        },
+        None => RootDev(st.ident.dev),
+    };
+    if second_path_to_protected(path, st.ident, fc) {
+        return FreshVerdict {
+            allowed: Err(SkipReason::ProtectedPath),
+            note: None,
+        };
+    }
     let facts = Facts {
         kind: Kind::ExplorerSelection,
         path: path.to_path_buf(),
@@ -310,6 +327,55 @@ pub fn judge_fresh(
                 .then(|| "not a folder: the explorer deletes folders only".to_string()),
         },
     }
+}
+
+/// The identities of the directories on the way to `path` (outermost first, `/` left out), read now with
+/// `lstat`. `None` when one cannot be read: a directory whose parent cannot be read cannot be judged.
+fn ancestor_idents(path: &Path, fs: &dyn Fs) -> Option<Vec<Identity>> {
+    let mut chain: Vec<Identity> = Vec::new();
+    for a in path.ancestors().skip(1) {
+        if a == Path::new("/") {
+            continue;
+        }
+        chain.push(fs.lstat(a).ok()?.ident);
+    }
+    chain.reverse();
+    Some(chain)
+}
+
+/// The same directory under another spelling (a symlinked or bind-mounted `~/.ssh`, a btrfs top-level mount of
+/// the home subvolume): `path` or an ancestor of it has the identity of a secret directory, `path` is a
+/// directory that holds one, or `path` is or holds one of the tool's own directories.
+/// `item` is the identity of `path` itself.
+fn second_path_to_protected(path: &Path, item: Identity, fc: &FreshCheck<'_>) -> bool {
+    let Some(ancestors) = ancestor_idents(path, fc.fs) else {
+        return true;
+    };
+    protected_by_identity(fc.roots, fc.own_state, fc.fs, &ancestors, item)
+}
+
+/// [`RootSet::protected_by_identity`] plus the tool's own state: `item` is, holds, or lies below one of the
+/// `own_state` directories (compared by the identity `fs` reports for them now).
+pub fn protected_by_identity(
+    roots: &RootSet,
+    own_state: &OwnState,
+    fs: &dyn Fs,
+    ancestors: &[Identity],
+    item: Identity,
+) -> bool {
+    if roots.protected_by_identity(ancestors, item) {
+        return true;
+    }
+    own_state.dirs().iter().any(|d| {
+        let Ok(own) = fs.lstat(d) else {
+            return false;
+        };
+        if own.ident == item || ancestors.contains(&own.ident) {
+            return true;
+        }
+        // `item` holds the directory: it is one of the directories above it.
+        ancestor_idents(d, fs).is_some_and(|above| above.contains(&item))
+    })
 }
 
 struct Judged {
