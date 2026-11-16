@@ -33,13 +33,13 @@ dunnage deletes files, so its path guards are the security boundary. These count
     `sudo`) could otherwise delete another account's files; the explorer is for your own.
   - Credentials, keys and browser profiles below `$HOME`, everything below them and every folder that holds one:
     `~/.ssh`, `~/.gnupg`, `~/.password-store`, `~/.aws`, `~/.kube`, `~/.1password` (1Password CLI and agent state),
-    `~/.mozilla` (Firefox profiles hold cookies and saved logins), `~/.config/{1Password,op,gh,gcloud,Bitwarden,sops,
-    gnupg,google-chrome,chromium,BraveSoftware}`, `~/.local/share/{keyrings,gnupg}`, `~/snap/1password`,
+    `~/.docker`, `~/.azure`, `~/.thunderbird`, `~/.local/share/kwalletd`, `~/.mozilla` (Firefox profiles hold cookies and saved logins), `~/.config/{1Password,op,gh,gcloud,Bitwarden,sops,
+    gnupg,google-chrome,chromium,BraveSoftware,vivaldi,keepassxc,rclone}`, `~/.local/share/{keyrings,gnupg}`, `~/snap/1password`,
     `~/.var/app/com.1password.1Password` and, on macOS, `~/Library/Keychains` and the 1Password group-container,
     application-support and container folders. Chosen conservatively: each is a place where losing a file means
     losing a secret or a login that cannot be re-created by a rebuild, and the cost of a refusal is renaming the
     folder you meant. `XDG_CONFIG_HOME` and `XDG_DATA_HOME` are honoured when they name a folder strictly below
-    `$HOME`: the same names are refused below them. Other browsers' profiles (Vivaldi, Edge, Opera) and
+    `$HOME`: the same names are refused below them. Other browsers' profiles (Edge, Opera) and
     application data not listed here are not on the floor.
   - any path with a `.git` component, a scan root itself, the tool's own state, cache and config folders (and the
     folders that hold them), mount points, other filesystems and anything that is not a plain absolute UTF-8
@@ -56,6 +56,8 @@ dunnage deletes files, so its path guards are the security boundary. These count
   resolved is not known by identity (the lexical list still names it); `XDG_DATA_HOME` is lexical only; and a
   file-level hard link or a bind mount of a single file is not a directory and is out of scope, as everywhere in the
   explorer.
+
+  Known gaps: a bind mount of a sub-directory of a secret directory, and any FUSE or network re-export (new inode numbers), are not recognised by identity; `XDG_*_HOME` outside `$HOME` is ignored; the lexical account rule treats `/home/linuxbrew` and `/Users/Shared` as other accounts; the agent-socket rule covers `/tmp/ssh-*` only.
 
   Limits of the floor. Names are matched ASCII case-insensitively (macOS volumes are case-insensitive), not by
   Unicode normalisation. A folder full of work is not on the floor: the screen says `git repository: unpushed work

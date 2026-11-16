@@ -46,7 +46,7 @@ const SYSTEM_TOPS: [&str; 21] = [
 /// refused: keys, keyrings, cloud and password-manager credentials, browser profiles (cookies and saved
 /// logins), and the 1Password app state and agent sockets on Linux (also snap and flatpak) and macOS.
 /// SECURITY.md says why each is on the list.
-const SECRET_DIRS: [&[&str]; 25] = [
+const SECRET_DIRS: [&[&str]; 32] = [
     &[".ssh"],
     &[".gnupg"],
     &[".1password"],
@@ -72,6 +72,13 @@ const SECRET_DIRS: [&[&str]; 25] = [
     &["Library", "Application Support", "1Password"],
     &["Library", "Containers", "com.1password.1password"],
     &["Library", "Keychains"],
+    &[".local", "share", "kwalletd"],
+    &[".docker"],
+    &[".azure"],
+    &[".thunderbird"],
+    &[".config", "vivaldi"],
+    &[".config", "keepassxc"],
+    &[".config", "rclone"],
 ];
 
 /// The secret directories that live below the XDG config home (`~/.config` unless `XDG_CONFIG_HOME` moves it).
