@@ -153,8 +153,6 @@ dc_integration_tests(
             "env": {"DC_SKIP_COMPILE_FAIL": "1"},
             "tags": ["requires-cargo"],
         },
-        # Interactive pty session on real time: on a loaded shared runner the scan screen can outlast its 20 s wait.
-        "explore_state": {"flaky": True},
         "e2e_apply_caches": {
             "env": {"DC_SKIP_PROFILE_BUILDS": "1"},
             "env_inherit": ["DC_REPO_ROOT"],
@@ -213,8 +211,6 @@ dc_integration_tests(
         },
         # Task 6.5.6d: the live delete over a nested tmpfs mount, in `unshare -rm`.
         "explore_delete_pty": {"tags": ["requires-unshare"]},
-        # Task 6.6.4c: the TUI loop on a real-time key script over the explorer-apply rig.
-        "explore_delete_flow": {"flaky": True},
         "canary_home": {"tags": ["requires-strace"]},
     },
 )

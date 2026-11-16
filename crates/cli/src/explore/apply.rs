@@ -14,9 +14,9 @@
 //! 6. `mint`           : the capability, as late as possible: every refusal above leaves none in existence
 //! 7. `execute`        : per item: M1 to M5 again, fd-relative open, `fstat` against the planned identity,
 //!    `intent`, `delete_tree`, `result`
-//! 8. `settle`, 9. `run_end`
+//! 8. `run_end`, 9. `settle` (skipped once the abort flag is set)
 //!
-//! Steps 2, 3, 4 (`run_start`), 7 and 9 are the cleaner's `run_lock`, `audit_open`, `execute`
+//! Steps 2, 3, 4 (`run_start`), 7 and 8 are the cleaner's `run_lock`, `audit_open`, `execute`
 //! and `run_end` of `wiring/compose.rs:1-8` and run the same ports; step 1 is the explorer's form of the
 //! cleaner's `plan_id_gate` (the same `destructive_gate`). The cleaner's `parse_args`, `kind_availability`,
 //! `unclean_notice`, `marker`, `ensure_reserves`, `starvation_preflight`, `header_rest`, `summary` and `closing`
@@ -493,10 +493,6 @@ fn sequence<D: DirOps + 'static>(
         pause_unless_aborted(env);
     }
 
-    trace.push("settle");
-    let meter = env.dirs.home.as_path();
-    let _ = env.space.settle(meter, Duration::from_secs(30));
-
     trace.push("run_end");
     // A signal or Esc that arrived after the last item finished interrupted nothing.
     let stopped_early = books
@@ -525,6 +521,14 @@ fn sequence<D: DirOps + 'static>(
         .run_end(&end_record(env, &w.run_id, bytes, interrupted, None))
         .err()
         .map(|e| e.raw_os_error().unwrap_or(5));
+    // After `run_end`: `syncfs` can outlast the loop's abort wait, and a signal must not lose the closing line.
+    // Nothing reads the result, so a run that is being stopped skips the wait.
+    trace.push("settle");
+    if !env.guard.abort_flag().is_set() {
+        let _ = env
+            .space
+            .settle(env.dirs.home.as_path(), Duration::from_secs(30));
+    }
     let any_error = books
         .outcomes
         .iter()

@@ -30,8 +30,8 @@ const ORDER: [&str; 10] = [
     "resolve_roots",
     "mint",
     "execute",
-    "settle",
     "run_end",
+    "settle",
 ];
 
 fn two_marks(ex: &Ex) -> (PathBuf, PathBuf) {
