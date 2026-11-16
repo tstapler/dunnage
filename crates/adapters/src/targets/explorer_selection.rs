@@ -227,6 +227,15 @@ impl<D: DirOps> ExplorerSelectionTarget<D> {
         // opened, not by what the path says.
         let chain = self.chain_idents(&root, rel_parent).map_err(failure)?;
         let parent = open_parent(&self.ops, &root, rel_parent).map_err(failure)?;
+        // The walk above and this one are separate: the directory actually used must be the one checked.
+        let parent_id = self
+            .ops
+            .fstat(parent.dir())
+            .map_err(|e| failure(crate::dirops::map_open_error(&e)))?
+            .ident;
+        if chain.last() != Some(&parent_id) {
+            return Err(failure(DeleteError::IdentityMismatch));
+        }
         let opened_root = self
             .ops
             .fstat(root.dir())

@@ -19,7 +19,7 @@ use std::time::{Duration, SystemTime};
 
 use dunnage_core::targets::build_dir::effective_min_age;
 use dunnage_core::targets::cargo::{
-    decide_cargo_part, is_cargo_target, profile_selected, tag_has_signature, CargoPartFacts,
+    decide_cargo_part, profile_selected, tag_has_signature, CargoPartFacts,
 };
 use dunnage_core::{
     AllocatedBytes, CargoPart, DeleteError, FileKind, Identity, Kind, RootDev, SkipReason,
@@ -50,7 +50,7 @@ fn is_plain_file(p: &Path) -> bool {
 /// `CACHEDIR.TAG` with cargo's signature AND something only cargo makes: its `.rustc_info.json`, or a profile
 /// directory holding `.fingerprint/` or `deps/`. Either marker alone is a file anyone can create (a Maven or
 /// Gradle `target/` next to a `Cargo.toml`), so neither suffices. A target from a cargo too old to write the
-/// tag (before 1.29) is not offered.
+/// tag is not offered.
 pub fn is_real_cargo_target(target: &Path) -> bool {
     if !is_plain_dir(target) || target.file_name() != Some(std::ffi::OsStr::new("target")) {
         return false;
@@ -67,11 +67,7 @@ pub fn is_real_cargo_target(target: &Path) -> bool {
             let mut buf = Vec::new();
             f.take(TAG_READ_MAX).read_to_end(&mut buf).is_ok() && tag_has_signature(&buf)
         });
-    tag_ok
-        && is_cargo_target(
-            tag_ok,
-            is_plain_file(&target.join(".rustc_info.json")) || has_cargo_layout(target),
-        )
+    tag_ok && (is_plain_file(&target.join(".rustc_info.json")) || has_cargo_layout(target))
 }
 
 /// A direct child of `target` (or a child of a `<triple>` directory) holds `.fingerprint/` or `deps/`. Loose on
