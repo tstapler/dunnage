@@ -493,10 +493,6 @@ fn sequence<D: DirOps + 'static>(
         pause_unless_aborted(env);
     }
 
-    trace.push("settle");
-    let meter = env.dirs.home.as_path();
-    let _ = env.space.settle(meter, Duration::from_secs(30));
-
     trace.push("run_end");
     // A signal or Esc that arrived after the last item finished interrupted nothing.
     let stopped_early = books
@@ -525,6 +521,14 @@ fn sequence<D: DirOps + 'static>(
         .run_end(&end_record(env, &w.run_id, bytes, interrupted, None))
         .err()
         .map(|e| e.raw_os_error().unwrap_or(5));
+    // After `run_end`: `syncfs` can outlast the loop's abort wait, and a signal must not lose the closing line.
+    // Nothing reads the result, so a run that is being stopped skips the wait.
+    trace.push("settle");
+    if !env.guard.abort_flag().is_set() {
+        let _ = env
+            .space
+            .settle(env.dirs.home.as_path(), Duration::from_secs(30));
+    }
     let any_error = books
         .outcomes
         .iter()
