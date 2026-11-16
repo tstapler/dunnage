@@ -1,0 +1,18 @@
+# 0.3.1 hardening of the explorer's floor and the cargo kinds (review findings 1-11)
+safety_explorer_floor_should_refuse_everything_inside_another_accounts_home   # hardening-0.3.1
+safety_explorer_floor_should_refuse_the_credential_and_browser_trees_what_holds_them_and_case_variants   # hardening-0.3.1
+safety_explorer_floor_should_refuse_system_application_trees_and_agent_sockets   # hardening-0.3.1
+safety_judge_fresh_should_refuse_a_secret_directory_reached_by_a_second_path   # hardening-0.3.1
+safety_judge_fresh_should_refuse_a_folder_that_holds_a_secret_directory_by_identity   # hardening-0.3.1
+safety_judge_fresh_should_refuse_the_tools_own_state_reached_by_a_second_path   # hardening-0.3.1
+safety_guard_should_refuse_a_secret_below_a_moved_xdg_config_home   # hardening-0.3.1
+safety_guard_should_refuse_keyrings_and_gnupg_below_a_moved_xdg_data_home   # hardening-0.3.1
+safety_guard_should_refuse_a_git_component_below_any_path_for_an_explorer_mark   # hardening-0.3.1
+safety_mark_check_should_refuse_when_the_device_of_the_starting_directory_is_unreadable   # hardening-0.3.1
+safety_judge_fresh_should_refuse_when_the_starting_directory_cannot_be_read_now   # hardening-0.3.1
+safety_plan_should_refuse_a_folder_below_a_symlinked_secret_directory   # hardening-0.3.1
+safety_plan_should_refuse_the_tools_own_state_below_a_symlinked_state_directory   # hardening-0.3.1
+safety_apply_should_refuse_when_an_ancestor_opened_on_the_way_is_a_secret_directory   # hardening-0.3.1
+safety_apply_should_refuse_when_an_ancestor_opened_on_the_way_is_the_tools_own_state   # hardening-0.3.1
+safety_audit_verify_should_judge_explorer_rows_against_the_canonical_home   # hardening-0.3.1
+safety_audit_verify_should_not_accept_a_cargo_home_entry_in_an_unrelated_home_folder   # hardening-0.3.1
