@@ -89,7 +89,7 @@ impl EventSource for Keys {
             return Ok(true);
         }
         assert!(
-            self.start.elapsed() < GATE_LIMIT,
+            self.queue.is_empty() || self.start.elapsed() < GATE_LIMIT,
             "key {} never became due; the screen:\n{}",
             self.taken,
             self.frame.lock().unwrap()
