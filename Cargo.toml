@@ -39,7 +39,7 @@ anyhow = "1"
 thiserror = "2"
 rustix = { version = "1", features = ["fs", "process"] }
 libc = "0.2"
-toml = "0.8"
+toml = "1.2"
 
 # The block `dist init` writes; check-release-features.sh builds with it.
 [profile.dist]
